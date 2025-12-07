@@ -1,0 +1,175 @@
+import React, { useState } from 'react';
+import {
+    X,
+    FileText,
+    CheckSquare,
+    MessageSquare,
+    AlertTriangle,
+    CheckCircle
+} from 'lucide-react';
+import { Modal, Button, FormField } from '../ui';
+import { api } from '../../services/api';
+
+const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
+    const [checklist, setChecklist] = useState({
+        format: false,
+        wordCount: false,
+        anonymity: false,
+        bibliography: false
+    });
+    const [feedback, setFeedback] = useState('');
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    if (!work) return null;
+
+    const handleCheck = (key) => {
+        setChecklist(prev => ({ ...prev, [key]: !prev[key] }));
+    };
+
+    const allChecked = Object.values(checklist).every(Boolean);
+
+    const handleSubmit = async (status) => {
+        setIsSubmitting(true);
+        try {
+            await api.works.update({
+                ...work,
+                status,
+                feedback: status === 'Observado' ? feedback : null,
+                checklist: status === 'Aceptado' ? checklist : null
+            });
+            onUpdate(); // Refresh parent list
+            onClose();
+        } catch (error) {
+            console.error("Error updating work:", error);
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <Modal isOpen={isOpen} onClose={onClose} title="Revisión de Trabajo" size="lg">
+            <div className="space-y-6">
+                {/* Work Header */}
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <h3 className="font-bold text-lg text-gray-900 mb-1">{work.title}</h3>
+                    <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                        <span className="flex items-center gap-1"><FileText size={14} /> {work.type}</span>
+                        <span className="font-mono text-xs bg-gray-200 px-2 py-0.5 rounded">{work.id}</span>
+                    </div>
+                </div>
+
+                {/* Abstract */}
+                <div className="space-y-2">
+                    <h4 className="font-bold text-gray-800 border-b pb-1">Resumen Estructurado</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                        <div className="space-y-1">
+                            <span className="font-semibold block text-gray-700">Introducción:</span>
+                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.intro}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="font-semibold block text-gray-700">Métodos:</span>
+                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.methods}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="font-semibold block text-gray-700">Resultados:</span>
+                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.results}</p>
+                        </div>
+                        <div className="space-y-1">
+                            <span className="font-semibold block text-gray-700">Conclusiones:</span>
+                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.conclusions}</p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Validation Checklist */}
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                        <CheckSquare size={18} /> Validación de Requisitos
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={checklist.format}
+                                onChange={() => handleCheck('format')}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm">Formato Correcto (Título, Estructura)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={checklist.wordCount}
+                                onChange={() => handleCheck('wordCount')}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm">Límite de Palabras (300-500)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={checklist.anonymity}
+                                onChange={() => handleCheck('anonymity')}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm">Anonimato (Sin nombres en cuerpo)</span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
+                            <input
+                                type="checkbox"
+                                checked={checklist.bibliography}
+                                onChange={() => handleCheck('bibliography')}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm">Bibliografía / Referencias</span>
+                        </label>
+                    </div>
+                </div>
+
+                {/* Feedback Section */}
+                <div>
+                    <FormField
+                        label="Observaciones Generales (Solo si se rechaza)"
+                        type="textarea"
+                        rows={3}
+                        placeholder="Indique las correcciones necesarias..."
+                        value={feedback}
+                        onChange={(e) => setFeedback(e.target.value)}
+                        icon={MessageSquare}
+                    />
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3 pt-4 border-t">
+                    <Button
+                        variant="ghost"
+                        onClick={onClose}
+                        disabled={isSubmitting}
+                        className="flex-1"
+                    >
+                        Cancelar
+                    </Button>
+                    <Button
+                        variant="secondary"
+                        className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200"
+                        onClick={() => handleSubmit('Observado')}
+                        disabled={isSubmitting || !feedback} // Require feedback to reject
+                    >
+                        <AlertTriangle size={18} className="mr-2" />
+                        Solicitar Correcciones
+                    </Button>
+                    <Button
+                        className="flex-1"
+                        onClick={() => handleSubmit('Aceptado')}
+                        disabled={isSubmitting || !allChecked} // Require all checks to approve
+                    >
+                        <CheckCircle size={18} className="mr-2" />
+                        Dar Visto Bueno
+                    </Button>
+                </div>
+            </div>
+        </Modal>
+    );
+};
+
+export default WorkReviewModal;

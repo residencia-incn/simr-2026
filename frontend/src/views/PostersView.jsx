@@ -1,0 +1,38 @@
+import React, { useState } from 'react';
+import { Search, Eye, X, Minimize2, Maximize2, MapPin, Mail, Download, Share2 } from 'lucide-react';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import SectionHeader from '../components/ui/SectionHeader';
+import { INITIAL_POSTERS, SPECIALTIES } from '../data/mockData';
+
+const PostersView = () => {
+    const [searchTerm, setSearchTerm] = useState("");
+    const [selectedSpecialty, setSelectedSpecialty] = useState("Todas");
+    const [selectedPoster, setSelectedPoster] = useState(null);
+
+    const filteredPosters = INITIAL_POSTERS.filter(p => (selectedSpecialty === "Todas" || p.specialty === selectedSpecialty) && (p.title.toLowerCase().includes(searchTerm.toLowerCase()) || p.author.toLowerCase().includes(searchTerm.toLowerCase())));
+
+    return (
+        <div className="animate-fadeIn space-y-8">
+            <SectionHeader title="Sala de Pósters Digitales" subtitle="Explora las investigaciones de nuestros residentes." />
+            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row gap-4 items-center justify-between"><div className="flex gap-2 overflow-x-auto w-full md:w-auto pb-2 md:pb-0"><button onClick={() => setSelectedSpecialty("Todas")} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedSpecialty === "Todas" ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>Todas</button>{SPECIALTIES.map(s => (<button key={s} onClick={() => setSelectedSpecialty(s)} className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${selectedSpecialty === s ? 'bg-blue-700 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>{s}</button>))}</div><div className="relative w-full md:w-64"><Search className="absolute left-3 top-2.5 text-gray-500 w-4 h-4" /><input type="text" placeholder="Buscar por título o autor..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800" /></div></div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">{filteredPosters.map((poster) => (<div key={poster.id} onClick={() => setSelectedPoster(poster)} className="group bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-lg transition-all cursor-pointer overflow-hidden flex flex-col h-full"><div className="relative aspect-[3/4] overflow-hidden bg-gray-100"><img src={poster.thumb} alt={poster.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" /><div className="absolute top-2 left-2"><Badge>{poster.specialty}</Badge></div><div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors flex items-center justify-center"><div className="bg-white/90 p-3 rounded-full opacity-0 group-hover:opacity-100 transform translate-y-4 group-hover:translate-y-0 transition-all duration-300"><Eye className="text-blue-700 w-6 h-6" /></div></div></div><div className="p-4 flex flex-col flex-grow"><div className="text-xs font-mono text-gray-500 mb-1">{poster.id}</div><h3 className="font-bold text-gray-900 text-sm mb-2 line-clamp-2 leading-snug group-hover:text-blue-800 transition-colors">{poster.title}</h3><div className="mt-auto pt-3 border-t border-gray-50 flex items-center gap-2"><div className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center text-xs font-bold">{poster.author.charAt(4)}</div><span className="text-xs text-gray-700 truncate">{poster.author}</span></div></div></div>))}</div>
+            {filteredPosters.length === 0 && (<div className="text-center py-12"><p className="text-gray-500">No se encontraron pósters con esos criterios.</p></div>)}
+            {selectedPoster && (
+                <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 animate-fadeIn">
+                    <div className="bg-white rounded-2xl w-full max-w-6xl h-[90vh] flex flex-col md:flex-row overflow-hidden shadow-2xl relative">
+                        <button onClick={() => setSelectedPoster(null)} className="absolute top-4 right-4 md:hidden z-10 p-2 bg-white rounded-full shadow-md text-gray-600"><X size={20} /></button>
+                        <div className="w-full md:w-2/3 bg-gray-100 flex items-center justify-center p-4 md:p-8 relative overflow-hidden group"><div className="w-full h-full flex items-center justify-center overflow-auto custom-scrollbar"><img src={selectedPoster.thumb} alt={selectedPoster.title} className="max-w-full max-h-full object-contain shadow-lg rounded-sm transform transition-transform group-hover:scale-105 cursor-zoom-in" /></div><div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-md px-4 py-2 rounded-full flex gap-4 text-white opacity-0 group-hover:opacity-100 transition-opacity duration-300"><button className="hover:text-blue-300"><Minimize2 size={18} /></button><span className="text-xs font-mono border-l border-r border-white/20 px-3">100%</span><button className="hover:text-blue-300"><Maximize2 size={18} /></button></div></div>
+                        <div className="w-full md:w-1/3 bg-white flex flex-col h-full border-l border-gray-200">
+                            <div className="p-6 border-b border-gray-100 flex justify-between items-start"><div><div className="flex gap-2 mb-2"><Badge type="info">{selectedPoster.specialty}</Badge><span className="text-xs font-mono text-gray-500 py-0.5">{selectedPoster.id}</span></div><h2 className="text-xl font-bold text-gray-900 leading-tight">{selectedPoster.title}</h2></div><button onClick={() => setSelectedPoster(null)} className="hidden md:block p-1 hover:bg-gray-100 rounded-full transition-colors text-gray-400 hover:text-gray-600"><X size={24} /></button></div>
+                            <div className="p-6 overflow-y-auto flex-1 space-y-6"><div><h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Autores</h4><div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-full bg-blue-700 text-white flex items-center justify-center font-bold shadow-sm">{selectedPoster.author.charAt(4)}</div><div><div className="font-bold text-gray-900 text-sm">{selectedPoster.author}</div><div className="text-xs text-blue-700">Autor Principal</div></div></div><div className="pl-13 text-sm text-gray-700"><span className="font-semibold text-gray-800">Coautores:</span> {selectedPoster.coauthors}</div><div className="mt-2 text-xs text-gray-600 flex items-center gap-1"><MapPin size={12} />{selectedPoster.institution}</div></div><div><h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Resumen</h4><p className="text-sm text-gray-800 leading-relaxed text-justify">{selectedPoster.abstract}</p></div></div>
+                            <div className="p-6 bg-gray-50 border-t border-gray-200 space-y-3"><Button className="w-full justify-center bg-blue-700 text-white hover:bg-blue-800"><Mail size={16} /> Contactar al Autor</Button><div className="flex gap-3"><Button variant="outline" className="flex-1 justify-center text-xs"><Download size={14} /> Descargar PDF</Button><Button variant="outline" className="flex-1 justify-center text-xs"><Share2 size={14} /> Compartir</Button></div></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default PostersView;
