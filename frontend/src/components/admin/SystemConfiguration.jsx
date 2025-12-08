@@ -17,6 +17,9 @@ const SystemConfiguration = () => {
 
     // Subspecialty state
     const [newSpecialty, setNewSpecialty] = useState("");
+    const [newOccupation, setNewOccupation] = useState("");
+    const [newParticipantSpecialty, setNewParticipantSpecialty] = useState("");
+    const [newResidencyYear, setNewResidencyYear] = useState("");
 
     useEffect(() => {
         const loadConfig = async () => {
@@ -27,8 +30,10 @@ const SystemConfiguration = () => {
                 startDate: data.startDate,
                 theme: "blue", // This is local UI state for now, or could be in config
                 showHeroCountdown: data.showHeroCountdown,
-                showHeroCountdown: data.showHeroCountdown,
                 specialties: data.specialties || [],
+                occupations: data.occupations || ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
+                participantSpecialties: data.participantSpecialties || ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"],
+                residencyYears: data.residencyYears || ["R1", "R2", "R3", "R4"],
                 prices: data.prices || {
                     incn: 50,
                     external_resident: 80,
@@ -91,6 +96,39 @@ const SystemConfiguration = () => {
 
     const handleRemoveSpecialty = (spec) => {
         setConfig({ ...config, specialties: config.specialties.filter(s => s !== spec) });
+    };
+
+    const handleAddOccupation = () => {
+        if (newOccupation.trim() && !config.occupations.includes(newOccupation.trim())) {
+            setConfig({ ...config, occupations: [...config.occupations, newOccupation.trim()] });
+            setNewOccupation("");
+        }
+    };
+
+    const handleRemoveOccupation = (occ) => {
+        setConfig({ ...config, occupations: config.occupations.filter(o => o !== occ) });
+    };
+
+    const handleAddParticipantSpecialty = () => {
+        if (newParticipantSpecialty.trim() && !config.participantSpecialties.includes(newParticipantSpecialty.trim())) {
+            setConfig({ ...config, participantSpecialties: [...config.participantSpecialties, newParticipantSpecialty.trim()] });
+            setNewParticipantSpecialty("");
+        }
+    };
+
+    const handleRemoveParticipantSpecialty = (spec) => {
+        setConfig({ ...config, participantSpecialties: config.participantSpecialties.filter(s => s !== spec) });
+    };
+
+    const handleAddResidencyYear = () => {
+        if (newResidencyYear.trim() && !config.residencyYears.includes(newResidencyYear.trim())) {
+            setConfig({ ...config, residencyYears: [...config.residencyYears, newResidencyYear.trim()] });
+            setNewResidencyYear("");
+        }
+    };
+
+    const handleRemoveResidencyYear = (year) => {
+        setConfig({ ...config, residencyYears: config.residencyYears.filter(y => y !== year) });
     };
 
     const handleDurationChange = (e) => {
@@ -271,6 +309,105 @@ const SystemConfiguration = () => {
                             {(!config.specialties || config.specialties.length === 0) && (
                                 <span className="text-gray-400 text-xs italic">No hay subespecialidades definidas.</span>
                             )}
+                        </div>
+                    </Card>
+
+                    <Card className="p-6">
+                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
+                            <Settings size={20} className="text-gray-500" />
+                            Gestión de Ocupaciones
+                        </h4>
+                        <p className="text-sm text-gray-500 mb-4">Define las opciones para el campo Ocupación en la inscripción.</p>
+
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={newOccupation}
+                                onChange={(e) => setNewOccupation(e.target.value)}
+                                placeholder="Nueva ocupación..."
+                                className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddOccupation()}
+                            />
+                            <Button onClick={handleAddOccupation} disabled={!newOccupation.trim()} size="sm">
+                                <Plus size={16} /> Agregar
+                            </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {config.occupations?.map((occ, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
+                                    {occ}
+                                    <button onClick={() => handleRemoveOccupation(occ)} className="hover:text-red-500 transition-colors">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </Card>
+
+                    <Card className="p-6">
+                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
+                            <Settings size={20} className="text-gray-500" />
+                            Años de Residencia
+                        </h4>
+                        <p className="text-sm text-gray-500 mb-4">Opciones desplegables para el año de residencia.</p>
+
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={newResidencyYear}
+                                onChange={(e) => setNewResidencyYear(e.target.value)}
+                                placeholder="Nuevo año (ej. R5)..."
+                                className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddResidencyYear()}
+                            />
+                            <Button onClick={handleAddResidencyYear} disabled={!newResidencyYear.trim()} size="sm">
+                                <Plus size={16} /> Agregar
+                            </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {config.residencyYears?.map((year, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
+                                    {year}
+                                    <button onClick={() => handleRemoveResidencyYear(year)} className="hover:text-red-500 transition-colors">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
+                        </div>
+                    </Card>
+
+                    <Card className="p-6">
+                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
+                            <Settings size={20} className="text-gray-500" />
+                            Gestión de Especialidades (Participantes)
+                        </h4>
+                        <p className="text-sm text-gray-500 mb-4">Opciones de especialidad para Médicos Especialistas.</p>
+
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={newParticipantSpecialty}
+                                onChange={(e) => setNewParticipantSpecialty(e.target.value)}
+                                placeholder="Nueva especialidad..."
+                                className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                onKeyDown={(e) => e.key === 'Enter' && handleAddParticipantSpecialty()}
+                            />
+                            <Button onClick={handleAddParticipantSpecialty} disabled={!newParticipantSpecialty.trim()} size="sm">
+                                <Plus size={16} /> Agregar
+                            </Button>
+                        </div>
+
+                        <div className="flex flex-wrap gap-2">
+                            {config.participantSpecialties?.map((spec, idx) => (
+                                <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100">
+                                    {spec}
+                                    <button onClick={() => handleRemoveParticipantSpecialty(spec)} className="hover:text-red-500 transition-colors">
+                                        <X size={12} />
+                                    </button>
+                                </span>
+                            ))}
                         </div>
                     </Card>
 

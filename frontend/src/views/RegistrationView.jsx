@@ -40,30 +40,35 @@ const RegistrationView = () => {
     const { values: form, handleChange, setValues, reset: resetForm } = useForm({
         dni: '',
         cmp: '',
-        name: '',
-        specialty: '',
+        rne: '',
+        firstName: '',
+        lastName: '',
+        birthDate: '',
+        occupation: '',
+        participantSpecialty: '',
         year: '',
         institution: '',
         email: '',
         phone: '',
         modalidad: 'Presencial',
-        category: '' // New explicit category
     });
 
     const verifyINCNResident = () => {
         const resident = MOCK_INCN_RESIDENTS.find(r => r.dni === verificationDni);
         if (resident) {
             setVerifiedResident(resident);
+            const names = resident.name.split(' ');
             setValues({
                 ...form,
                 dni: resident.dni,
-                name: resident.name,
-                specialty: resident.specialty,
+                firstName: names[0],
+                lastName: names.slice(1).join(' '),
+                birthDate: '', // Mock data doesn't have this, user must fill
+                occupation: 'Médico Residente',
                 year: resident.year,
                 email: resident.email,
                 institution: 'Instituto Nacional de Ciencias Neurológicas',
                 modalidad: 'Presencial',
-                category: 'resident_incn'
             });
         } else {
             alert('DNI no encontrado en el padrón de residentes INCN. Por favor verifique o regístrese como externo.');
@@ -90,18 +95,12 @@ const RegistrationView = () => {
 
         if (isVirtual) {
             // Virtual pricing based on explicit category
-            switch (form.category) {
-                case 'specialist':
-                    return config.prices.specialist || 120;
-                case 'external_resident':
-                    return config.prices.external_resident || 80;
-                case 'student':
-                    return config.prices.student || 30;
-                case 'other':
-                    return config.prices.student || 30; // Assuming 'other' pays student rate or similar
-                default:
-                    return 0;
-            }
+            // Virtual pricing based on occupation
+            const occupation = form.occupation;
+            if (occupation === 'Médico Especialista') return config?.prices?.specialist || 120;
+            if (occupation === 'Médico Residente') return config?.prices?.external_resident || 80;
+            if (occupation === 'Estudiante de Medicina') return config?.prices?.student || 30;
+            return config?.prices?.student || 30; // Default/Other
         }
 
         return 0;
@@ -122,8 +121,10 @@ const RegistrationView = () => {
         try {
             const registrationData = {
                 ...form,
+                name: `${form.lastName} ${form.firstName}`.trim(),
+                specialty: form.occupation === 'Médico Especialista' ? form.participantSpecialty : form.occupation,
                 amount,
-                role: userType === 'incn' ? 'Residente INCN' : (form.year ? 'Residente Externo' : 'Asistente'),
+                role: userType === 'incn' ? 'Residente INCN' : (form.occupation === 'Médico Residente' ? 'Residente Externo' : 'Asistente'),
                 voucherData: requiresPayment ? voucherBase64 : null,
                 wantsCertification: requiresPayment // Implicitly true if paying
             };
@@ -207,7 +208,38 @@ const RegistrationView = () => {
                         <Card>
                             <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><FileText className="text-blue-700" /> Ficha de Inscripción</h3>
                             <form className="space-y-5" onSubmit={handleSubmit}>
+                                {/* 1. Datos Personales */}
                                 <div className="grid md:grid-cols-2 gap-5">
+                                    <FormField
+                                        label="Apellidos"
+                                        name="lastName"
+                                        value={form.lastName}
+                                        onChange={handleChange}
+                                        placeholder="Apellidos Completos"
+                                        required
+                                        readOnly={!!verifiedResident}
+                                    />
+                                    <FormField
+                                        label="Nombres"
+                                        name="firstName"
+                                        value={form.firstName}
+                                        onChange={handleChange}
+                                        placeholder="Nombres Completos"
+                                        required
+                                        readOnly={!!verifiedResident}
+                                    />
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-5">
+                                    <FormField
+                                        label="Fecha de Nacimiento"
+                                        name="birthDate"
+                                        type="date"
+                                        value={form.birthDate}
+                                        onChange={handleChange}
+                                        required
+                                        readOnly={!!verifiedResident}
+                                    />
                                     <FormField
                                         label="DNI / Pasaporte"
                                         name="dni"
@@ -217,82 +249,19 @@ const RegistrationView = () => {
                                         required
                                         readOnly={!!verifiedResident}
                                     />
-                                    <FormField
-                                        label="N° CMP (Colegiatura)"
-                                        name="cmp"
-                                        value={form.cmp}
-                                        onChange={handleChange}
-                                        placeholder="Si aplica"
-                                    />
                                 </div>
 
-                                <FormField
-                                    label="Nombre Completo"
-                                    name="name"
-                                    value={form.name}
-                                    onChange={handleChange}
-                                    placeholder="Apellidos y Nombres"
-                                    required
-                                    readOnly={!!verifiedResident}
-                                />
-
+                                {/* 2. Datos Profesionales */}
                                 <div className="grid md:grid-cols-2 gap-5">
                                     <FormField
-                                        label="Especialidad / Profesión"
-                                        name="specialty"
-                                        value={form.specialty}
+                                        label="Ocupación"
+                                        name="occupation"
+                                        type="select"
+                                        value={form.occupation}
                                         onChange={handleChange}
-                                        placeholder="Ej. Neurología, Estudiante..."
+                                        options={[{ value: "", label: "Seleccione..." }, ...(config?.occupations?.map(o => ({ value: o, label: o })) || [])]}
                                         required
                                         readOnly={!!verifiedResident}
-                                    />
-                                    <FormField
-                                        label="Año de Residencia"
-                                        name="year"
-                                        type="select"
-                                        value={form.year}
-                                        onChange={handleChange}
-                                        options={[
-                                            { value: "", label: "No aplica" },
-                                            { value: "R1", label: "R1" },
-                                            { value: "R2", label: "R2" },
-                                            { value: "R3", label: "R3" },
-                                            { value: "R4", label: "R4" }
-                                        ]}
-                                        readOnly={!!verifiedResident}
-                                    />
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Categoría"
-                                        name="category"
-                                        type="select"
-                                        value={form.category}
-                                        onChange={handleChange}
-                                        options={[
-                                            { value: "", label: "Seleccione..." },
-                                            { value: "specialist", label: "Médico Especialista" },
-                                            { value: "external_resident", label: "Residente (Externo)" },
-                                            { value: "student", label: "Estudiante / Interno" },
-                                            { value: "other", label: "Otro Profesional Salud" }
-                                        ]}
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Modalidad"
-                                        name="modalidad"
-                                        type="select"
-                                        value={form.modalidad}
-                                        onChange={handleChange}
-                                        options={config?.eventType === 'Híbrido' ? [
-                                            { value: "Presencial", label: "Presencial" },
-                                            { value: "Virtual", label: "Virtual" }
-                                        ] : (config?.eventType === 'Virtual' ? [{ value: "Virtual", label: "Virtual" }] : [{ value: "Presencial", label: "Presencial" }])}
                                     />
                                     <FormField
                                         label="Institución Laboral / Universidad"
@@ -302,6 +271,69 @@ const RegistrationView = () => {
                                         placeholder="Hospital, Clínica o Universidad"
                                         required
                                         readOnly={!!verifiedResident}
+                                    />
+                                </div>
+
+                                {/* Conditional Specialist Field */}
+                                {form.occupation === 'Médico Especialista' && (
+                                    <div className="grid md:grid-cols-1 gap-5 animate-fadeIn">
+                                        <FormField
+                                            label="Especialidad (Participante)"
+                                            name="participantSpecialty"
+                                            type="select"
+                                            value={form.participantSpecialty}
+                                            onChange={handleChange}
+                                            options={[{ value: "", label: "Seleccione su especialidad..." }, ...(config?.participantSpecialties?.map(s => ({ value: s, label: s })) || [])]}
+                                            required
+                                        />
+                                    </div>
+                                )}
+
+                                <div className="grid md:grid-cols-3 gap-5">
+                                    <FormField
+                                        label="N° CMP"
+                                        name="cmp"
+                                        value={form.cmp}
+                                        onChange={handleChange}
+                                        placeholder="Si aplica"
+                                        disabled={form.occupation === 'Estudiante de Medicina'}
+                                    />
+                                    <FormField
+                                        label="N° RNE"
+                                        name="rne"
+                                        value={form.rne}
+                                        onChange={handleChange}
+                                        placeholder="Si aplica"
+                                        disabled={form.occupation !== 'Médico Especialista'}
+                                    />
+                                    {form.occupation === 'Médico Residente' ? (
+                                        <FormField
+                                            label="Año de Residencia"
+                                            name="year"
+                                            type="select"
+                                            value={form.year}
+                                            onChange={handleChange}
+                                            options={[{ value: "", label: "No aplica" }, ...(config?.residencyYears?.map(y => ({ value: y, label: y })) || [])]}
+                                            readOnly={!!verifiedResident}
+                                            required
+                                        />
+                                    ) : (
+                                        <div className="hidden md:block"></div> /* Spacer to keep grid alignment if needed, or just let it flow */
+                                    )}
+                                </div>
+
+                                {/* 3. Datos de Contacto y Modalidad */}
+                                <div className="grid md:grid-cols-2 gap-5">
+                                    <FormField
+                                        label="Modalidad de Participación"
+                                        name="modalidad"
+                                        type="select"
+                                        value={form.modalidad}
+                                        onChange={handleChange}
+                                        options={config?.eventType === 'Híbrido' ? [
+                                            { value: "Presencial", label: "Presencial" },
+                                            { value: "Virtual", label: "Virtual" }
+                                        ] : (config?.eventType === 'Virtual' ? [{ value: "Virtual", label: "Virtual" }] : [{ value: "Presencial", label: "Presencial" }])}
                                     />
                                 </div>
 

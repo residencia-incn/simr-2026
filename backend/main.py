@@ -68,6 +68,12 @@ MOCK_WORKS = [
   }
 ]
 
+# In-memory storage for fallbacks (Stateful Mock)
+mock_db = {
+    "config": {},
+    "hero_slides": []
+}
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to SIMR 2026 API", "status": "running"}
@@ -93,6 +99,78 @@ def create_work(work: Work):
         except Exception as e:
             raise HTTPException(status_code=500, detail=str(e))
     return {"message": "Work created (Mock)", "id": work.id}
+
+# --- Configuration Endpoints ---
+
+@app.get("/config")
+def get_config():
+    if db:
+        try:
+            doc = db.collection('settings').document('global_config').get()
+            if doc.exists:
+                return doc.to_dict()
+        except Exception as e:
+            print(f"Firestore config error: {e}")
+    
+    # Fallback to in-memory state or empty (frontend handles defaults)
+    return mock_db["config"]
+
+@app.post("/config")
+def save_config(config: dict):
+    # Update in-memory state first (for immediate consistency if DB fails)
+    mock_db["config"] = config
+    
+    if db:
+        try:
+            db.collection('settings').document('global_config').set(config)
+            return {"message": "Config saved to Firestore"}
+        except Exception as e:
+            print(f"Firestore save error: {e}")
+            return {"message": "Config saved to Memory (DB Failed)"}
+    
+    return {"message": "Config saved to Memory"}
+
+@app.get("/hero-slides")
+def get_hero_slides():
+    if db:
+        try:
+            docs = db.collection('hero_slides').stream()
+            # Sort might be needed, here assume insertion order or manage an 'order' field
+            return [doc.to_dict() for doc in docs]
+        except Exception as e:
+            print(f"Firestore slides error: {e}")
+            
+    return mock_db["hero_slides"]
+
+@app.post("/hero-slides")
+def save_hero_slides(slides: List[dict]):
+    mock_db["hero_slides"] = slides
+    
+    if db:
+        try:
+            # Batch write or delete all and rewrite is simpler for this list
+            # For simplicity, we'll assume the client sends the full list
+            batch = db.batch()
+            
+            # Delete existing (naive approach for sync)
+            old_docs = db.collection('hero_slides').list_documents()
+            for doc in old_docs:
+                batch.delete(doc)
+            
+            # Write new
+            collection = db.collection('hero_slides')
+            for i, slide in enumerate(slides):
+                # Use ID from slide or generate one
+                doc_ref = collection.document(slide.get('id', f'slide_{i}'))
+                batch.set(doc_ref, slide)
+                
+            batch.commit()
+            return {"message": "Slides saved to Firestore"}
+        except Exception as e:
+            print(f"Firestore slides save error: {e}")
+            return {"message": "Slides saved to Memory (DB Failed)"}
+            
+    return {"message": "Slides saved to Memory"}
 
 if __name__ == "__main__":
     import uvicorn

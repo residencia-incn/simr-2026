@@ -31,6 +31,9 @@ export const EVENT_CONFIG = {
         { day: 3, open: "09:00", close: "13:00" }
     ],
     specialties: ["Neurología", "Neuropediatría", "Neurocirugía"],
+    participantSpecialties: ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"],
+    occupations: ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
+    residencyYears: ["R1", "R2", "R3", "R4"],
     eventAcronym: "SIMR 2026",
     eventType: "Híbrido",
     showHeroCountdown: true,

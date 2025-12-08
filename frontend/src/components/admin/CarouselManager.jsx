@@ -174,7 +174,7 @@ const CarouselManager = () => {
 
     return (
         <>
-            <Card className="p-6 h-full">
+            <Card className="p-6">
                 <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
                     <Layout size={20} className="text-gray-500" />
                     Carrusel Interactivo
