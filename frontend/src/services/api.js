@@ -36,19 +36,10 @@ export const api = {
 
     // --- 1. Registrations ---
     registrations: {
-        /**
-         * Get all pending registrations
-         * @returns {Promise<Array>} List of registrations
-         */
         getAll: async () => {
             await delay();
             return storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
         },
-
-        /**
-         * Add a new registration
-         * @param {Object} registration 
-         */
         add: async (registration) => {
             await delay();
             const current = storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
@@ -61,11 +52,6 @@ export const api = {
             storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, [newReg, ...current]);
             return newReg;
         },
-
-        /**
-         * Remove registration by ID
-         * @param {string} id 
-         */
         remove: async (id) => {
             await delay();
             const current = storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
@@ -80,7 +66,6 @@ export const api = {
         getAll: async () => {
             await delay();
             const local = storage.get(STORAGE_KEYS.ATTENDEES, []);
-            // Merge mock attendees with local ones
             return [...MOCK_ATTENDEES, ...local];
         },
         add: async (attendee) => {
@@ -98,7 +83,6 @@ export const api = {
             await delay();
             return storage.get(STORAGE_KEYS.TREASURY, []);
         },
-
         addTransaction: async (tx) => {
             await delay();
             const current = storage.get(STORAGE_KEYS.TREASURY, []);
@@ -110,7 +94,6 @@ export const api = {
             storage.set(STORAGE_KEYS.TREASURY, [newTx, ...current]);
             return newTx;
         },
-
         deleteTransaction: async (id) => {
             await delay();
             const current = storage.get(STORAGE_KEYS.TREASURY, []);
@@ -118,23 +101,19 @@ export const api = {
             storage.set(STORAGE_KEYS.TREASURY, updated);
             return true;
         },
-
         getCategories: async () => {
             await delay();
             const stored = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES);
             if (!stored) return DEFAULT_CATEGORIES;
-            // Ensure structure integrity in case of partial saves
             return {
                 income: stored.income || DEFAULT_CATEGORIES.income,
                 expense: stored.expense || DEFAULT_CATEGORIES.expense
             };
         },
-
         addCategory: async (type, name) => {
             await delay();
             const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
             const list = categories[type] || [];
-
             if (!list.includes(name)) {
                 const updated = {
                     ...categories,
@@ -144,7 +123,6 @@ export const api = {
             }
             return name;
         },
-
         deleteCategory: async (type, name) => {
             await delay();
             const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
@@ -157,16 +135,11 @@ export const api = {
             }
             return true;
         },
-
         getStats: async () => {
             await delay();
             const transactions = storage.get(STORAGE_KEYS.TREASURY, []);
-            const localAttendees = storage.get(STORAGE_KEYS.ATTENDEES, []);
-
-            // Manual transactions
             const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
             const manualExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-
             return {
                 income: manualIncome,
                 expense: manualExpense,
@@ -276,10 +249,7 @@ export const api = {
         getAll: async () => {
             await delay();
             const local = storage.get(STORAGE_KEYS.WORKS, []);
-            // Always show INITIAL_WORKS (mock data) + any locally created works
-            // INITIAL_WORKS comes last so it overwrites any old localStorage data with same IDs
             const allWorks = [...local, ...INITIAL_WORKS];
-            // Deduplicate by ID (later entries win, so INITIAL_WORKS data is preferred)
             const uniqueWorks = Array.from(new Map(allWorks.map(item => [item.id, item])).values());
             return uniqueWorks;
         },
@@ -337,18 +307,74 @@ export const api = {
 
     // --- 10. Users ---
     users: {
+        getAll: async () => {
+            await delay();
+            const localUsers = storage.get(STORAGE_KEYS.USERS, []);
+            return [...MOCK_USERS, ...localUsers];
+        },
         search: async (query) => {
             await delay(200);
             if (!query || query.length < 2) return [];
             const q = query.toLowerCase();
-            // Allow searching mostly in MOCK_USERS but technically could extend to stored users if needed
             const localUsers = storage.get(STORAGE_KEYS.USERS, []);
             const allUsers = [...MOCK_USERS, ...localUsers];
 
             return allUsers.filter(u =>
-                u.name.toLowerCase().includes(q) ||
-                u.email.toLowerCase().includes(q)
+                u.name?.toLowerCase().includes(q) ||
+                u.email?.toLowerCase().includes(q)
             );
+        },
+        delete: async (id) => {
+            await delay();
+            const local = storage.get(STORAGE_KEYS.USERS, []);
+            if (local.find(u => u.id === id)) {
+                storage.set(STORAGE_KEYS.USERS, local.filter(u => u.id !== id));
+            }
+            return true;
+        },
+        resetPassword: async (id) => {
+            await delay();
+            return true; // Mock success
+        },
+        update: async (user) => {
+            await delay();
+            const local = storage.get(STORAGE_KEYS.USERS, []);
+            const updatedLocal = local.map(u => u.id === user.id ? user : u);
+            // If not in local, it might be mock, so we save it to local to "override" it
+            if (!local.find(u => u.id === user.id)) {
+                updatedLocal.push(user);
+            }
+            storage.set(STORAGE_KEYS.USERS, updatedLocal);
+            return user;
+        }
+    },
+
+    // --- 11. Authentication ---
+    auth: {
+        login: async (email, password) => {
+            await delay(600); // Simulate network latency
+
+            // Allow "admin" generic login
+            if (email === 'admin' && password === 'admin') {
+                return {
+                    id: 'admin_master',
+                    name: 'Super Usuario',
+                    email: 'admin@simr.pe',
+                    role: 'superadmin',
+                    roles: ['superadmin', 'admin', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission']
+                };
+            }
+
+            const allUsers = await api.users.getAll();
+            const user = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
+
+            if (user) {
+                return {
+                    ...user,
+                    roles: user.roles || [user.role]
+                };
+            }
+            throw new Error('Credenciales inválidas');
         }
     }
 };

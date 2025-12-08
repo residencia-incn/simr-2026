@@ -28,8 +28,8 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                             <div>
                                 <h4 className="font-bold text-gray-900">{reg.name}</h4>
                                 <div className="text-sm text-gray-600 space-y-1 mt-1">
-                                    <p className="flex items-center gap-2"><CreditCard size={14} /> DNI: {reg.dni} {reg.cmp ? `| CMP: ${reg.cmp}` : ''}</p>
-                                    <p className="flex items-center gap-2"><Calendar size={14} /> {reg.role} - {reg.specialty}</p>
+                                    <p className="flex items-center gap-2"><CreditCard size={14} /> DNI: {reg.dni} {reg.cmp && `| CMP: ${reg.cmp}`} {reg.rne && `| RNE: ${reg.rne}`}</p>
+                                    <p className="flex items-center gap-2"><Calendar size={14} /> {reg.occupation} {reg.specialty && reg.specialty !== reg.occupation && `- ${reg.specialty}`}</p>
                                     <p className="text-xs text-gray-400">Registrado: {new Date(reg.timestamp).toLocaleString()}</p>
                                 </div>
                             </div>

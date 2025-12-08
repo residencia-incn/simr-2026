@@ -10,12 +10,14 @@ import SystemConfiguration from '../components/admin/SystemConfiguration';
 import GalleryManager from '../components/admin/GalleryManager';
 import ProgramManager from '../components/admin/ProgramManager';
 import CommitteeManager from '../components/admin/CommitteeManager';
+import UserManagement from '../components/admin/UserManagement';
 import VerificationList from '../components/common/VerificationList';
 import { api } from '../services/api';
 
-const AdminDashboard = () => {
+const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [admissionTab, setAdmissionTab] = useState('list'); // 'list' or 'verification'
+    const isSuperAdmin = user?.role === 'superadmin';
 
     // State - Data
     const [registrations, setRegistrations] = useState([]);
@@ -66,7 +68,10 @@ const AdminDashboard = () => {
                 const newAttendee = {
                     id: Date.now(),
                     name: reg.name,
-                    role: reg.role,
+                    firstName: reg.firstName,
+                    lastName: reg.lastName,
+                    role: 'Asistente',
+                    occupation: reg.occupation,
                     specialty: reg.specialty,
                     modality: reg.modalidad,
                     date: new Date().toISOString().split('T')[0],
@@ -77,6 +82,7 @@ const AdminDashboard = () => {
                     certificationApproved: false,
                     dni: reg.dni,
                     cmp: reg.cmp,
+                    rne: reg.rne,
                     email: reg.email
                 };
 
@@ -123,7 +129,8 @@ const AdminDashboard = () => {
                         { id: 'committee', label: 'Comité' },
                         { id: 'certification', label: 'Certificación' },
                         { id: 'config', label: 'Configuración' },
-                        { id: 'gallery', label: 'Galería' }
+                        { id: 'gallery', label: 'Galería' },
+                        ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios' }] : [])
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -276,6 +283,12 @@ const AdminDashboard = () => {
             {activeTab === 'gallery' && (
                 <div className="animate-fadeIn">
                     <GalleryManager />
+                </div>
+            )}
+
+            {activeTab === 'users' && isSuperAdmin && (
+                <div className="animate-fadeIn">
+                    <UserManagement />
                 </div>
             )}
         </div>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown } from 'lucide-react';
+import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown, Shield, Award, BookOpen, DollarSign, User } from 'lucide-react';
 import { api } from './services/api';
 import Button from './components/ui/Button';
 import ChatWidget from './components/layout/ChatWidget';
@@ -25,7 +25,9 @@ export default function SIMRApp() {
   const [currentView, setCurrentView] = useState('home');
   const [basesTab, setBasesTab] = useState('bases');
   const [user, setUser] = useState(null);
+  const [activeRole, setActiveRole] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [config, setConfig] = useState(null);
 
   useEffect(() => {
@@ -40,19 +42,24 @@ export default function SIMRApp() {
     loadConfig();
   }, []);
 
-  const handleLogin = (role) => {
-    const mockUsers = {
-      resident: { name: "Dr. Carlos Ruiz", role: "resident", year: "R2", specialty: "Neurología" },
-      jury: { name: "Dra. Sofia Mendez", role: "jury", specialty: "Neuropediatría" },
-      admin: { name: "Comité Organizador", role: "admin" },
-      academic: { name: "Dr. Luis Trujillo", role: "academic", specialty: "Neurología" },
-      admission: { name: "Personal Admisión", role: "admission" },
-      treasurer: { name: "Dr. Juan Perez", role: "treasurer" },
-      participant: { name: "Dra. Elena Quispe", role: "participant", type: "Asistente" }
-    };
-    setUser(mockUsers[role]);
+  const handleLogin = (userData) => {
+    setUser(userData);
+    // Default to the primary role or the first one in the list
+    const initialRole = userData.role || userData.roles[0];
+    setActiveRole(initialRole);
+    updateViewForRole(initialRole);
+    setIsMobileMenuOpen(false);
+  };
+
+  const handleRoleSwitch = (newRole) => {
+    setActiveRole(newRole);
+    updateViewForRole(newRole);
+    setIsRoleMenuOpen(false);
+  };
+
+  const updateViewForRole = (role) => {
     setCurrentView(
-      role === 'admin' ? 'admin-dashboard' :
+      role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
         role === 'academic' ? 'academic-dashboard' :
           role === 'admission' ? 'admission-dashboard' :
             role === 'jury' ? 'jury-dashboard' :
@@ -64,6 +71,7 @@ export default function SIMRApp() {
 
   const handleLogout = () => {
     setUser(null);
+    setActiveRole(null);
     setCurrentView('home');
   };
 
@@ -76,6 +84,28 @@ export default function SIMRApp() {
 
   const eventName = config?.eventAcronym || 'SIMR 2026';
   const eventYear = config?.year || '2026';
+
+  const ROLE_LABELS = {
+    superadmin: 'Super Admin',
+    admin: 'Comité Org.',
+    academic: 'Académico',
+    admission: 'Admisión',
+    jury: 'Jurado',
+    treasurer: 'Tesorero',
+    participant: 'Asistente',
+    resident: 'Residente'
+  };
+
+  const ROLE_ICONS = {
+    superadmin: Shield,
+    admin: Users,
+    academic: BookOpen,
+    admission: Users, // Or another icon if preferred
+    jury: Award,
+    treasurer: DollarSign,
+    participant: Users,
+    resident: User
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
@@ -104,25 +134,49 @@ export default function SIMRApp() {
             {user && <NotificationMenu user={user} />}
 
             {user ? (
-              <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200">
-                <div className="text-right">
-                  <div className="text-xs text-gray-600 uppercase">
-                    {user.role === 'admin' ? 'Admin' :
-                      user.role === 'academic' ? 'Académico' :
-                        user.role === 'admission' ? 'Admisión' :
-                          user.role === 'jury' ? 'Jurado' :
-                            user.role === 'treasurer' ? 'Tesorero' :
-                              user.role === 'participant' ? 'Asistente' :
-                                'Residente'}
+              <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative">
+                <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
+                  <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
+                    {ROLE_LABELS[activeRole] || activeRole}
+                    {user.roles && user.roles.length > 1 && <ChevronDown size={10} />}
                   </div>
                   <div className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</div>
                 </div>
+
+                {/* Role Switcher Dropdown */}
+                {isRoleMenuOpen && user.roles && user.roles.length > 1 && (
+                  <div className="absolute top-12 right-0 bg-white border border-gray-100 rounded-xl shadow-xl w-56 py-2 z-50 animate-fadeIn overflow-hidden">
+                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100 mb-1">Cambiar Perfil</div>
+                    {user.roles.map(role => {
+                      const Icon = ROLE_ICONS[role] || Users;
+                      return (
+                        <button
+                          key={role}
+                          onClick={() => handleRoleSwitch(role)}
+                          className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
+                            ${activeRole === role ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
+                            `}
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className={`p-1.5 rounded-lg ${activeRole === role ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                              <Icon size={16} />
+                            </div>
+                            {ROLE_LABELS[role] || role}
+                          </div>
+                          {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+
                 <button onClick={handleLogout} className="p-2 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-full transition-colors" title="Cerrar Sesión">
                   <LogOut size={18} />
                 </button>
               </div>
             ) : (
-              <Button size="sm" onClick={() => navigate('login')}>Area Privada</Button>
+              <Button size="sm" onClick={() => navigate('login')}>Login</Button>
             )}
           </div>
 
@@ -142,9 +196,23 @@ export default function SIMRApp() {
             <button onClick={() => navigate('posters')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">E-Posters</button>
             <button onClick={() => navigate('registration')} className="block w-full text-left font-medium py-2 text-blue-700">Inscripción</button>
             {user ? (
-              <button onClick={handleLogout} className="block w-full text-left font-medium py-2 text-red-600">Cerrar Sesión</button>
+              <>
+                <div className="border-t border-gray-100 pt-2 mt-2">
+                  <div className="text-xs text-gray-500 uppercase mb-2">Cambiar Perfil ({ROLE_LABELS[activeRole]})</div>
+                  {user.roles && user.roles.map(role => (
+                    <button
+                      key={role}
+                      onClick={() => handleRoleSwitch(role)}
+                      className={`block w-full text-left py-2 text-sm ${activeRole === role ? 'font-bold text-blue-700' : 'text-gray-600'}`}
+                    >
+                      {ROLE_LABELS[role]}
+                    </button>
+                  ))}
+                </div>
+                <button onClick={handleLogout} className="block w-full text-left font-medium py-2 text-red-600 mt-2 border-t border-gray-100 pt-2">Cerrar Sesión</button>
+              </>
             ) : (
-              <button onClick={() => navigate('login')} className="block w-full text-left font-medium py-2 text-blue-700">Area Privada</button>
+              <button onClick={() => navigate('login')} className="block w-full text-left font-medium py-2 text-blue-700">Ingresar</button>
             )}
           </div>
         )}
@@ -163,7 +231,7 @@ export default function SIMRApp() {
         {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} />}
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
         {currentView === 'jury-dashboard' && <JuryDashboard user={user} />}
-        {currentView === 'admin-dashboard' && <AdminDashboard />}
+        {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}

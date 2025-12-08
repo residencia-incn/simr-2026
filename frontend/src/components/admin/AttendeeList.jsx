@@ -29,13 +29,16 @@ const AttendeeList = ({ attendees }) => {
         isOpen: isModalOpen,
         data: selectedAttendee,
         open: openPrintModal,
-        onClose: closeModal
+        close: closeModal
     } = useModal();
 
     const columns = [
-        { header: 'Nombre', key: 'name', sortable: true, className: 'font-medium text-gray-900' },
+        { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || item.name.split(' ').slice(0, 2).join(' ') }, // Fallback logic
+        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') },
         { header: 'DNI', key: 'dni', sortable: true },
         { header: 'CMP', key: 'cmp', sortable: true },
+        { header: 'RNE', key: 'rne', sortable: true },
+        { header: 'Ocupación', key: 'occupation' },
         {
             header: 'Rol',
             key: 'role',
@@ -44,7 +47,8 @@ const AttendeeList = ({ attendees }) => {
                 const colors = {
                     'Comité Organizador': 'purple',
                     'Ponente': 'amber',
-                    'Residente': 'blue',
+                    'Jurado': 'cyan',
+                    'Asistente': 'gray',
                     'default': 'gray'
                 };
                 return <Badge variant={colors[item.role] || colors.default}>{item.role}</Badge>;
@@ -77,10 +81,9 @@ const AttendeeList = ({ attendees }) => {
                         onChange={(e) => setFilterRole(e.target.value)}
                         options={[
                             { value: "All", label: "Todos los Roles" },
-                            { value: "Residente", label: "Residentes" },
-                            { value: "Especialista", label: "Especialistas" },
-                            { value: "Estudiante", label: "Estudiantes" },
+                            { value: "Asistente", label: "Asistentes" },
                             { value: "Ponente", label: "Ponentes" },
+                            { value: "Jurado", label: "Jurados" },
                             { value: "Comité Organizador", label: "Comité" }
                         ]}
                         className="mb-0 min-w-[180px]"
@@ -111,11 +114,13 @@ const AttendeeList = ({ attendees }) => {
             </div>
 
             {/* Modal */}
-            <PhotocheckModal
-                isOpen={isModalOpen}
-                onClose={closeModal}
-                attendee={selectedAttendee}
-            />
+            {isModalOpen && (
+                <PhotocheckModal
+                    isOpen={isModalOpen}
+                    onClose={closeModal}
+                    attendee={selectedAttendee}
+                />
+            )}
         </div>
     );
 };
