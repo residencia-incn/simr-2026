@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, ArrowRight, FileText, Activity, Microscope, 
 import Button from '../../components/ui/Button';
 import Countdown from '../../components/ui/Countdown';
 import { api } from '../../services/api';
+import CreditBadge from './CreditBadge';
 
 const INITIAL_SLIDES = [
     {
@@ -19,7 +20,7 @@ const INITIAL_SLIDES = [
             { label: 'Ver Programa', action: 'program', variant: 'outline' }
         ],
         gradient: 'from-blue-900 via-indigo-900 to-blue-800',
-        content: 'specialties'
+        content: 'credits'
     },
     {
         id: 'contest',
@@ -58,22 +59,22 @@ const HeroCarousel = ({ navigate, user }) => {
     useEffect(() => {
         const loadData = async () => {
             try {
-                // Parallel fetching
-                const [savedSlides, config, specialtiesList] = await Promise.all([
-                    api.content.getHeroSlides(),
-                    api.content.getConfig(),
-                    api.content.getSpecialties()
-                ]);
-
-                if (savedSlides && savedSlides.length > 0) {
-                    setSlides(savedSlides);
-                }
-
+                // Load critical config first
+                const config = await api.content.getConfig();
                 if (config) {
                     setEventConfig(config);
                     setShowCountdown(config.showHeroCountdown);
                 }
 
+                // Load optional data separately to prevent config load failure
+                const [savedSlides, specialtiesList] = await Promise.all([
+                    api.content.getHeroSlides().catch(() => null),
+                    api.content.getSpecialties().catch(() => [])
+                ]);
+
+                if (savedSlides && savedSlides.length > 0) {
+                    setSlides(savedSlides);
+                }
                 if (specialtiesList) {
                     setSpecialties(specialtiesList);
                 }
@@ -137,7 +138,7 @@ const HeroCarousel = ({ navigate, user }) => {
                     <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-white rounded-full mix-blend-overlay filter blur-[80px] opacity-10 animate-blob animation-delay-2000"></div>
 
                     {/* Content Container - Split Grid */}
-                    <div className="relative z-10 p-8 md:p-12 h-full flex flex-col lg:flex-row gap-8 items-center">
+                    <div className="relative z-10 px-16 py-8 md:px-24 md:py-12 h-full flex flex-col lg:flex-row gap-8 items-center">
 
                         {/* Left Column: Text */}
                         <div className="flex-1 flex flex-col justify-center items-start text-white w-full">
@@ -171,12 +172,30 @@ const HeroCarousel = ({ navigate, user }) => {
                         <div className="flex-1 w-full h-full flex flex-col justify-between items-center lg:pl-12">
 
                             {/* Top: Countdown (Centered and higher) */}
-                            <div className="h-1/3 w-full flex justify-center items-start pt-2 lg:pt-6">
+                            <div className="h-1/3 w-full flex justify-center items-start pt-0 -mt-2 lg:-mt-4">
                                 {showCountdown && (
                                     <div className="transform scale-90 md:scale-75 origin-top">
                                         <div className="bg-black/20 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg py-2 px-6">
                                             {/* Fallback date if config not yet loaded */}
-                                            <Countdown targetDate={eventConfig?.startDate || '2026-10-22T08:00:00'} darkMode={true} showLabel={false} />
+                                            {(() => {
+                                                const baseDate = eventConfig?.startDate;
+                                                const openTime = eventConfig?.schedule?.[0]?.open?.replace(' a.m.', '').replace(' p.m.', '') || '08:00';
+
+                                                // Function to convert 12h to 24h format if needed
+                                                const formatTime = (timeStr) => {
+                                                    // Simple heuristic for "08:00", "08:00 AM", or "20:00"
+                                                    if (timeStr.includes(':')) return timeStr.trim();
+                                                    return '08:00';
+                                                };
+
+                                                // If date is "2026-10-22" make it "2026-10-22T08:00:00"
+                                                // Handle potential 12h formats from the new schedule UI just in case
+                                                const target = baseDate
+                                                    ? `${baseDate}T${formatTime(openTime)}:00`
+                                                    : '2026-10-22T08:00:00';
+
+                                                return <Countdown key={target} targetDate={target} darkMode={true} showLabel={false} />;
+                                            })()}
                                         </div>
                                     </div>
                                 )}
@@ -184,6 +203,16 @@ const HeroCarousel = ({ navigate, user }) => {
 
                             {/* Bottom: Dynamic Content (Icons/Grid) */}
                             <div className="h-2/3 w-full flex justify-center items-center pb-8">
+                                {slide.content === 'custom-image' && slide.image && (
+                                    <div className="hidden md:flex bg-white/5 backdrop-blur-md rounded-full p-8 border border-white/10 shadow-2xl animate-float">
+                                        <img
+                                            src={slide.image}
+                                            alt={slide.title}
+                                            className="w-48 h-48 object-contain drop-shadow-glow"
+                                        />
+                                    </div>
+                                )}
+
                                 {slide.content === 'specialties' && (
                                     <div className="hidden md:grid grid-cols-2 sm:grid-cols-3 gap-3 w-full max-w-lg bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/10">
                                         {specialties.slice(0, 6).map((spec, idx) => {

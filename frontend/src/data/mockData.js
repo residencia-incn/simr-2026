@@ -22,23 +22,65 @@ export const WORK_TYPES = ["Reporte de Caso", "Trabajo Original", "Revisión Sis
 export const ROOMS = ["Auditorio Principal", "Sala 1 (Talleres)", "Sala Virtual"];
 
 export const EVENT_CONFIG = {
-    startDate: "2026-10-22T09:00:00",
-    specialties: ["Neurología", "Neuropediatría", "Neurocirugía"]
+    year: "2026",
+    startDate: "2026-10-22",
+    duration: 3,
+    schedule: [
+        { day: 1, open: "08:00", close: "18:00" },
+        { day: 2, open: "09:00", close: "18:00" },
+        { day: 3, open: "09:00", close: "13:00" }
+    ],
+    specialties: ["Neurología", "Neuropediatría", "Neurocirugía"],
+    eventAcronym: "SIMR 2026",
+    eventType: "Híbrido",
+    showHeroCountdown: true,
+    credits: {
+        presencialValue: "5.0 Créditos",
+        virtualValue: "2.0 Créditos",
+        resolution: "Resolución Nº 0285-22 SISTCERE/CMP",
+        points: "5"
+    },
+    contact: {
+        phone: "999 888 777",
+        email: "inscripciones@simr.pe"
+    },
+    prices: {
+        incn: 50,
+        external_resident: 80,
+        specialist: 120,
+        student: 30,
+        certification: 50
+    }
 };
+
+export const MOCK_INCN_RESIDENTS = [
+    { dni: "12345678", name: "Juan Pérez", specialty: "Neurología", year: "R1", email: "juan.perez@incn.gob.pe" },
+    { dni: "87654321", name: "Maria Garcia", specialty: "Neuropediatría", year: "R2", email: "maria.garcia@incn.gob.pe" },
+    { dni: "11223344", name: "Carlos Lopez", specialty: "Neurocirugía", year: "R3", email: "carlos.lopez@incn.gob.pe" }
+];
 
 export const ACADEMIC_CONFIG = {
     titleWordLimit: 20,
     sections: [
-        { id: 'introduction', label: 'Introducción', limit: 300, active: true },
-        { id: 'objective', label: 'Objetivo', limit: 100, active: true },
-        { id: 'methodology', label: 'Materiales y Métodos', limit: 400, active: true },
-        { id: 'results', label: 'Resultados', limit: 400, active: true },
-        { id: 'conclusions', label: 'Conclusiones', limit: 200, active: true }
+        { id: 'introduction', label: 'Introducción', limit: 300, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'objective', label: 'Objetivo', limit: 100, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'methodology', label: 'Materiales y Métodos', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
+        { id: 'results', label: 'Resultados', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
+        { id: 'conclusions', label: 'Conclusiones', limit: 200, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'case_description', label: 'Descripción del Caso', limit: 500, active: true, workTypes: ["Reporte de Caso"] }
     ],
     workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"],
     declarations: [
         { id: 'd1', text: 'Declaración de Conflicto de Intereses', required: true },
         { id: 'd2', text: 'Aprobación de Comité de Ética', required: true }
+    ],
+    rubrics: [
+        { id: 'rub1', name: "Originalidad del trabajo", description: "Evalúa si el trabajo presenta ideas novedosas, enfoques creativos o aportes únicos al campo de estudio.", active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'rub2', name: "Relevancia clínica / científica", description: "Considera el impacto potencial de los hallazgos en la práctica clínica o en el avance del conocimiento científico.", active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'rub3', name: "Claridad de metodología", description: "Analiza si el diseño del estudio, los métodos y los procedimientos están descritos de manera clara, lógica y reproducible.", active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
+        { id: 'rub4', name: "Calidad de resultados", description: "Valora la precisión, validez y presentación de los datos obtenidos, así como su coherencia con los objetivos.", active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
+        { id: 'rub5', name: "Calidad de presentación", description: "Evalúa la redacción, ortografía, estructura lógica y la calidad visual de los gráficos o tablas presentados.", active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
+        { id: 'rub6', name: "Descripción del Caso", description: "Precisión y detalle en la descripción cronológica y sintomatológica del caso clínico.", active: true, workTypes: ["Reporte de Caso"] }
     ]
 };
 
@@ -230,6 +272,60 @@ export const INITIAL_WORKS = [
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
         scores: [],
         observations: "Favor aclarar la metodología quirúrgica empleada y ampliar la discusión sobre las complicaciones post-operatorias."
+    },
+    {
+        id: "TRB-008",
+        title: "Uso de estimulación cerebral profunda en Parkinson avanzado",
+        author: "Dra. María González (R4)",
+        type: "Trabajo Original",
+        specialty: "Neurocirugía",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: {
+            introduction: "La estimulación cerebral profunda (ECP) ha demostrado ser efectiva en pacientes con enfermedad de Parkinson avanzada que no responden adecuadamente al tratamiento farmacológico.",
+            objective: "Evaluar los resultados clínicos de la ECP bilateral del núcleo subtalámico en 25 pacientes con Parkinson avanzado.",
+            methodology: "Estudio prospectivo de 25 pacientes sometidos a ECP bilateral. Se evaluó la escala UPDRS pre y post-operatoria a los 6 y 12 meses.",
+            results: "Se observó una mejoría significativa del 65% en la escala UPDRS-III en estado off a los 12 meses. Las complicaciones fueron mínimas.",
+            conclusions: "La ECP bilateral del NST es una opción terapéutica efectiva y segura para pacientes con Parkinson avanzado."
+        },
+        scores: []
+    },
+    {
+        id: "TRB-009",
+        title: "Biomarcadores en líquido cefalorraquídeo para diagnóstico temprano de Alzheimer",
+        author: "Dr. Roberto Sánchez (R3)",
+        type: "Trabajo Original",
+        specialty: "Neurología",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: {
+            introduction: "El diagnóstico temprano de la enfermedad de Alzheimer es crucial para el manejo adecuado de los pacientes.",
+            objective: "Determinar la utilidad de los biomarcadores Aβ42, tau total y p-tau en LCR para el diagnóstico temprano de Alzheimer.",
+            methodology: "Estudio de casos y controles con 40 pacientes con deterioro cognitivo leve y 30 controles sanos. Se midieron niveles de biomarcadores mediante ELISA.",
+            results: "Los pacientes con DCL que progresaron a Alzheimer mostraron niveles significativamente menores de Aβ42 y mayores de tau y p-tau.",
+            conclusions: "Los biomarcadores en LCR son útiles para predecir la conversión de DCL a Alzheimer con una sensibilidad del 85%."
+        },
+        scores: []
+    },
+    {
+        id: "TRB-010",
+        title: "Manejo endovascular del aneurisma cerebral roto: experiencia institucional",
+        author: "Dr. Luis Fernández (R4)",
+        type: "Trabajo Original",
+        specialty: "Neurocirugía",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: {
+            introduction: "El tratamiento endovascular de aneurismas cerebrales rotos ha ganado popularidad en las últimas décadas.",
+            objective: "Reportar los resultados del tratamiento endovascular de aneurismas cerebrales rotos en nuestra institución durante los últimos 3 años.",
+            methodology: "Estudio retrospectivo de 45 pacientes con aneurisma cerebral roto tratados mediante coiling. Se evaluó la escala de Glasgow al ingreso y al alta, complicaciones y mortalidad.",
+            results: "La tasa de oclusión completa fue del 82%. La mortalidad fue del 11% y las complicaciones mayores del 15%.",
+            conclusions: "El tratamiento endovascular de aneurismas rotos es seguro y efectivo, con resultados comparables a la cirugía abierta."
+        },
+        scores: []
     }
 ];
 
@@ -302,9 +398,9 @@ export const ADMIN_STATS = [
 ];
 
 export const INITIAL_JURORS = [
-    { id: 'J-001', name: 'Dr. Alejandro Rabinstein', specialty: 'Neurología', institution: 'Mayo Clinic', email: 'rabinstein@mayo.edu' },
-    { id: 'J-002', name: 'Dr. Luis Trujillo', specialty: 'Neurología', institution: 'INCN', email: 'ltrujillo@incn.gob.pe' },
-    { id: 'J-003', name: 'Dra. Carmen Betancur', specialty: 'Neuropediatría', institution: 'INCN', email: 'cbetancur@incn.gob.pe' },
-    { id: 'J-004', name: 'Dr. Henderson Vasquez', specialty: 'Neurocirugía', institution: 'INCN', email: 'hvasquez@incn.gob.pe' },
-    { id: 'J-005', name: 'Dr. Carlos Gutierrez', specialty: 'Neurología', institution: 'INCN', email: 'cgutierrez@incn.gob.pe' }
+    { id: 'J-001', name: 'Dr. Alejandro Rabinstein', specialty: 'Neurología', institution: 'Mayo Clinic', email: 'rabinstein@mayo.edu', active: true },
+    { id: 'J-002', name: 'Dr. Luis Trujillo', specialty: 'Neurología', institution: 'INCN', email: 'ltrujillo@incn.gob.pe', active: true },
+    { id: 'J-003', name: 'Dra. Carmen Betancur', specialty: 'Neuropediatría', institution: 'INCN', email: 'cbetancur@incn.gob.pe', active: true },
+    { id: 'J-004', name: 'Dr. Henderson Vasquez', specialty: 'Neurocirugía', institution: 'INCN', email: 'hvasquez@incn.gob.pe', active: true },
+    { id: 'J-005', name: 'Dr. Carlos Gutiérrez', specialty: 'Neurología', institution: 'INCN', email: 'cgutierrez@incn.gob.pe', active: true }
 ];

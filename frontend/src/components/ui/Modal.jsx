@@ -25,6 +25,8 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', className = '' }
         md: 'max-w-lg',
         lg: 'max-w-2xl',
         xl: 'max-w-4xl',
+        '2xl': 'max-w-6xl',
+        '3xl': 'max-w-7xl',
         full: 'max-w-full m-4'
     };
 

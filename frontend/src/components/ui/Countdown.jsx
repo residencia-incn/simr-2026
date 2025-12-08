@@ -19,12 +19,13 @@ const Countdown = ({ targetDate, darkMode = false, showLabel = true }) => {
     const [timeLeft, setTimeLeft] = useState(calculateTimeLeft());
 
     useEffect(() => {
-        const timer = setTimeout(() => {
+        setTimeLeft(calculateTimeLeft());
+        const timer = setInterval(() => {
             setTimeLeft(calculateTimeLeft());
         }, 1000);
 
-        return () => clearTimeout(timer);
-    });
+        return () => clearInterval(timer);
+    }, [targetDate]);
 
     const timerComponents = [];
 

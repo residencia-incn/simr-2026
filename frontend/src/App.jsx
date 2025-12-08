@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown } from 'lucide-react';
+import { api } from './services/api';
 import Button from './components/ui/Button';
 import ChatWidget from './components/layout/ChatWidget';
 import HomeView from './views/HomeView';
@@ -25,6 +26,19 @@ export default function SIMRApp() {
   const [basesTab, setBasesTab] = useState('bases');
   const [user, setUser] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [config, setConfig] = useState(null);
+
+  useEffect(() => {
+    const loadConfig = async () => {
+      try {
+        const data = await api.content.getConfig();
+        setConfig(data);
+      } catch (error) {
+        console.error("Error loading config:", error);
+      }
+    };
+    loadConfig();
+  }, []);
 
   const handleLogin = (role) => {
     const mockUsers = {
@@ -60,6 +74,9 @@ export default function SIMRApp() {
     window.scrollTo(0, 0);
   };
 
+  const eventName = config?.eventAcronym || 'SIMR 2026';
+  const eventYear = config?.year || '2026';
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
 
@@ -68,7 +85,7 @@ export default function SIMRApp() {
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('home')}>
             <div className="bg-blue-900 text-white font-bold p-1.5 rounded text-lg">INCN</div>
-            <span className="font-bold text-gray-900 text-lg hidden sm:block">SIMR 2026</span>
+            <span className="font-bold text-gray-900 text-lg hidden sm:block">{eventName}</span>
           </div>
 
           {/* Desktop Menu */}
@@ -160,7 +177,7 @@ export default function SIMRApp() {
       <footer className="bg-white border-t border-gray-200 mt-12 py-12">
         <div className="max-w-7xl mx-auto px-4 md:px-8 text-center md:text-left grid md:grid-cols-4 gap-8">
           <div className="col-span-1 md:col-span-2">
-            <h3 className="font-bold text-gray-900 mb-4">SIMR 2026</h3>
+            <h3 className="font-bold text-gray-900 mb-4">{eventName}</h3>
             <p className="text-gray-600 text-sm leading-relaxed max-w-sm">
               Instituto Nacional de Ciencias Neurológicas.<br />
               Jr. Ancash 1271, Barrios Altos, Lima - Perú.<br />
@@ -171,20 +188,20 @@ export default function SIMRApp() {
             <h4 className="font-bold text-gray-900 mb-4">Enlaces</h4>
             <ul className="space-y-2 text-sm text-gray-600">
               <li><a href="#" className="hover:text-blue-700">Bases del Concurso</a></li>
-              <li><a href="#" className="hover:text-blue-700">Libro de Resúmenes (2025)</a></li>
+              <li><a href="#" className="hover:text-blue-700">Libro de Resúmenes ({parseInt(eventYear) - 1})</a></li>
               <li><a href="#" className="hover:text-blue-700">Preguntas Frecuentes</a></li>
             </ul>
           </div>
           <div>
             <h4 className="font-bold text-gray-900 mb-4">Soporte</h4>
             <ul className="space-y-2 text-sm text-gray-600">
-              <li>comite.simr@incn.gob.pe</li>
-              <li>+51 1 411-7700 (Anexo 234)</li>
+              <li>{config?.contact?.email || 'comite.simr@incn.gob.pe'}</li>
+              <li>{config?.contact?.phone || '+51 1 411-7700 (Anexo 234)'}</li>
             </ul>
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 md:px-8 mt-12 pt-8 border-t border-gray-100 text-center text-xs text-gray-500">
-          © 2026 Comité Organizador de Residentes INCN. Todos los derechos reservados.
+          © {eventYear} Comité Organizador de Residentes INCN. Todos los derechos reservados.
         </div>
       </footer>
     </div>

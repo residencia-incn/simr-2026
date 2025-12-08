@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useModal } from '../hooks';
 import { FileText } from 'lucide-react';
 import { Button, Card, Badge, Modal, FormField } from '../components/ui';
+import { api } from '../services/api';
 import { INITIAL_WORKS } from '../data/mockData';
 
 const JuryDashboard = ({ user }) => {
@@ -12,13 +13,32 @@ const JuryDashboard = ({ user }) => {
     const { isOpen: showModal, open: openModal, close: closeModal } = useModal();
     const [error, setError] = useState("");
 
-    const criteriaList = [
-        { name: "Originalidad del trabajo", description: "Evalúa si el trabajo presenta ideas novedosas, enfoques creativos o aportes únicos al campo de estudio." },
-        { name: "Relevancia clínica / científica", description: "Considera el impacto potencial de los hallazgos en la práctica clínica o en el avance del conocimiento científico." },
-        { name: "Claridad de metodología", description: "Analiza si el diseño del estudio, los métodos y los procedimientos están descritos de manera clara, lógica y reproducible." },
-        { name: "Calidad de resultados", description: "Valora la precisión, validez y presentación de los datos obtenidos, así como su coherencia con los objetivos." },
-        { name: "Calidad de presentación", description: "Evalúa la redacción, ortografía, estructura lógica y la calidad visual de los gráficos o tablas presentados." }
+    // Config loading
+    const [academicConfig, setAcademicConfig] = useState(null);
+
+    useEffect(() => {
+        const loadConfig = async () => {
+            const config = await api.academic.getConfig();
+            setAcademicConfig(config);
+        };
+        loadConfig();
+    }, []);
+
+    // Derived criteria based on selected work type
+    const selectedWork = works.find(w => w.id === selectedWorkId);
+
+    // Default criteria if config not loaded or rubrics empty (fallback)
+    const defaultCriteria = [
+        { name: "Originalidad del trabajo", description: "Evalúa si el trabajo presenta ideas novedosas." },
+        { name: "Relevancia clínica / científica", description: "Impacto potencial de los hallazgos." },
+        { name: "Claridad de metodología", description: "Diseño claro y reproducible." },
+        { name: "Calidad de resultados", description: "Precisión y validez de datos." },
+        { name: "Calidad de presentación", description: "Redacción y estructura." }
     ];
+
+    const criteriaList = (selectedWork && academicConfig?.rubrics)
+        ? academicConfig.rubrics.filter(r => r.active && (!r.workTypes || r.workTypes.includes(selectedWork.type)))
+        : defaultCriteria;
 
     const handleScoreChange = (criteriaName, score) => {
         setScores(prev => ({

@@ -162,16 +162,10 @@ export const api = {
             await delay();
             const transactions = storage.get(STORAGE_KEYS.TREASURY, []);
             const localAttendees = storage.get(STORAGE_KEYS.ATTENDEES, []);
-            const attendees = [...MOCK_ATTENDEES, ...localAttendees];
 
             // Manual transactions
             const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
             const manualExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-
-            // Note: If transactions include "Inscripciones" added via approval, 
-            // valid attendee income might be double counted if we sum both.
-            // Assumption: Attendees list tracks membership, Transactions tracks money. 
-            // We'll return them separately or consumers should choose one source.
 
             return {
                 income: manualIncome,
@@ -232,11 +226,21 @@ export const api = {
         },
         getNews: async () => {
             await delay();
-            return MOCK_NEWS;
+            return storage.get(STORAGE_KEYS.NEWS, MOCK_NEWS);
+        },
+        saveNews: async (newsList) => {
+            await delay();
+            storage.set(STORAGE_KEYS.NEWS, newsList);
+            return true;
         },
         getSponsors: async () => {
             await delay();
-            return SPONSORS;
+            return storage.get(STORAGE_KEYS.SPONSORS, SPONSORS);
+        },
+        saveSponsors: async (sponsorsList) => {
+            await delay();
+            storage.set(STORAGE_KEYS.SPONSORS, sponsorsList);
+            return true;
         },
         getHeroSlides: async () => {
             await delay();
@@ -250,23 +254,32 @@ export const api = {
         },
         getConfig: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.CONFIG, EVENT_CONFIG);
+            const local = storage.get(STORAGE_KEYS.CONFIG, EVENT_CONFIG);
+            return { ...EVENT_CONFIG, ...local };
         },
         saveConfig: async (config) => {
             await delay();
             storage.set(STORAGE_KEYS.CONFIG, config);
+            window.dispatchEvent(new Event('config-updated'));
             return true;
+        },
+        getSpecialties: async () => {
+            await delay();
+            const config = storage.get(STORAGE_KEYS.CONFIG, EVENT_CONFIG);
+            const mergedConfig = { ...EVENT_CONFIG, ...config };
+            return mergedConfig.specialties || [];
         }
     },
+
     // --- 7. Works (Academic) ---
     works: {
         getAll: async () => {
             await delay();
             const local = storage.get(STORAGE_KEYS.WORKS, []);
-            // Merge mocks if not present (simplified for demo)
-            // In a real app we'd just fetch from DB
-            const allWorks = [...INITIAL_WORKS, ...local];
-            // Deduplicate by ID
+            // Always show INITIAL_WORKS (mock data) + any locally created works
+            // INITIAL_WORKS comes last so it overwrites any old localStorage data with same IDs
+            const allWorks = [...local, ...INITIAL_WORKS];
+            // Deduplicate by ID (later entries win, so INITIAL_WORKS data is preferred)
             const uniqueWorks = Array.from(new Map(allWorks.map(item => [item.id, item])).values());
             return uniqueWorks;
         },
@@ -280,10 +293,6 @@ export const api = {
             const currentWorks = await api.works.getAll();
             const newWorks = currentWorks.map(w => w.id === updatedWork.id ? updatedWork : w);
             storage.set(STORAGE_KEYS.WORKS, newWorks);
-            // Also update INITIAL_WORKS for runtime persistance in this session mock
-            const idx = INITIAL_WORKS.findIndex(w => w.id === updatedWork.id);
-            if (idx !== -1) INITIAL_WORKS[idx] = updatedWork;
-
             return updatedWork;
         },
         create: async (newWork) => {
@@ -304,7 +313,12 @@ export const api = {
     jurors: {
         getAll: async () => {
             await delay();
-            return INITIAL_JURORS;
+            return storage.get(STORAGE_KEYS.JURORS, INITIAL_JURORS);
+        },
+        save: async (jurors) => {
+            await delay();
+            storage.set(STORAGE_KEYS.JURORS, jurors);
+            return true;
         }
     },
 
@@ -327,7 +341,11 @@ export const api = {
             await delay(200);
             if (!query || query.length < 2) return [];
             const q = query.toLowerCase();
-            return MOCK_USERS.filter(u =>
+            // Allow searching mostly in MOCK_USERS but technically could extend to stored users if needed
+            const localUsers = storage.get(STORAGE_KEYS.USERS, []);
+            const allUsers = [...MOCK_USERS, ...localUsers];
+
+            return allUsers.filter(u =>
                 u.name.toLowerCase().includes(q) ||
                 u.email.toLowerCase().includes(q)
             );

@@ -9,6 +9,7 @@ const Table = ({
     sortConfig,
     emptyMessage = "No hay datos para mostrar",
     actions,
+    onRowClick,
     className = ""
 }) => {
     if (!data || data.length === 0) {
@@ -46,14 +47,18 @@ const Table = ({
                 </thead>
                 <tbody className="divide-y divide-gray-100 bg-white">
                     {data.map((item, rowIndex) => (
-                        <tr key={item.id || rowIndex} className="hover:bg-gray-50 transition-colors">
+                        <tr
+                            key={item.id || rowIndex}
+                            className={`hover:bg-gray-50 transition-colors ${onRowClick ? 'cursor-pointer' : ''}`}
+                            onClick={() => onRowClick && onRowClick(item)}
+                        >
                             {columns.map((col, colIndex) => (
                                 <td key={colIndex} className={`px-4 py-3 ${col.tdClassName || ''}`}>
                                     {col.render ? col.render(item) : item[col.key]}
                                 </td>
                             ))}
                             {actions && (
-                                <td className="px-4 py-3 text-right whitespace-nowrap">
+                                <td className="px-4 py-3 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                     {actions(item)}
                                 </td>
                             )}

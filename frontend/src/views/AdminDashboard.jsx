@@ -4,7 +4,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import StatsOverview from '../components/admin/StatsOverview';
 import AttendeeList from '../components/admin/AttendeeList';
-import JuryResults from '../components/admin/JuryResults';
+
 import CertificationManager from '../components/admin/CertificationManager';
 import SystemConfiguration from '../components/admin/SystemConfiguration';
 import GalleryManager from '../components/admin/GalleryManager';
@@ -118,7 +118,7 @@ const AdminDashboard = () => {
                     {[
                         { id: 'overview', label: 'Resumen' },
                         { id: 'admission', label: 'Admisión', badge: registrations.length },
-                        { id: 'results', label: 'Resultados' },
+
                         { id: 'program', label: 'Programa' },
                         { id: 'committee', label: 'Comité' },
                         { id: 'certification', label: 'Certificación' },
@@ -247,15 +247,7 @@ const AdminDashboard = () => {
                 </div>
             )}
 
-            {activeTab === 'results' && (
-                <div className="space-y-4 animate-fadeIn">
-                    <div className="flex justify-between items-center">
-                        <h3 className="text-xl font-bold text-gray-900">Resultados de Evaluación</h3>
-                        <div className="text-sm text-gray-500">Actualizado en tiempo real</div>
-                    </div>
-                    <JuryResults works={works} />
-                </div>
-            )}
+
 
             {activeTab === 'program' && (
                 <div className="animate-fadeIn h-[600px]">

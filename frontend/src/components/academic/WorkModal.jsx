@@ -178,7 +178,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
             isOpen={isOpen}
             onClose={onClose}
             title={isEditing ? "Editar Trabajo" : "Detalles del Trabajo"}
-            size="2xl"
+            size="3xl"
         >
             <div className={`flex flex-col lg:flex-row gap-6 ${isEditing ? 'h-[70vh]' : ''}`}>
 

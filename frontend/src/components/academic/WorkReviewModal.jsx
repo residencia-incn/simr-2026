@@ -47,7 +47,7 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
     };
 
     return (
-        <Modal isOpen={isOpen} onClose={onClose} title="Revisión de Trabajo" size="lg">
+        <Modal isOpen={isOpen} onClose={onClose} title="Revisión de Trabajo" size="3xl">
             <div className="space-y-6">
                 {/* Work Header */}
                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">

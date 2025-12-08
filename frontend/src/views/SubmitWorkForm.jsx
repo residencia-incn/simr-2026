@@ -41,7 +41,7 @@ const SubmitWorkForm = ({ navigate }) => {
                     }));
                 }
 
-                setFormSections(sections.filter(s => s.active));
+                setFormSections(sections); // Store all sections, filtering happens in render/effect
                 setAcademicConfig(acConfig);
                 setSpecialties(sysConfig.specialties || []);
 
@@ -151,6 +151,18 @@ const SubmitWorkForm = ({ navigate }) => {
             setFieldValue('specialty', specialties[0]);
         }
     }, [academicConfig, specialties]);
+
+    // Dynamic Sections Effect
+    useEffect(() => {
+        if (academicConfig && academicConfig.sections) {
+            // Filter sections that are active globally AND active for the selected work type
+            const relevantSections = academicConfig.sections.filter(s =>
+                s.active &&
+                (!s.workTypes || (values.type && s.workTypes.includes(values.type)))
+            );
+            setFormSections(relevantSections);
+        }
+    }, [values.type, academicConfig]);
 
 
     const onSubmit = async (formValues) => {

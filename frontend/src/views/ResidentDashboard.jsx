@@ -34,12 +34,9 @@ const ResidentDashboard = ({ user, navigate }) => {
             sortable: true,
             className: 'font-medium text-gray-900',
             render: (item) => (
-                <button
-                    onClick={() => { setSelectedWork(item); setModalMode('view'); setIsModalOpen(true); }}
-                    className="text-left hover:text-blue-600 hover:underline focus:outline-none transition-colors"
-                >
+                <span className="font-medium text-gray-900">
                     {item.title}
-                </button>
+                </span>
             )
         },
         { key: 'type', header: 'Tipo', sortable: true },
@@ -145,6 +142,7 @@ const ResidentDashboard = ({ user, navigate }) => {
                     sortConfig={sortConfig}
                     actions={renderActions}
                     emptyMessage="No has enviado trabajos aún."
+                    onRowClick={(item) => { setSelectedWork(item); setModalMode('view'); setIsModalOpen(true); }}
                     className="border-0 rounded-none shadow-none"
                 />
             </div>

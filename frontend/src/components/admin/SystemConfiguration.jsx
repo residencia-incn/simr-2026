@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus } from 'lucide-react';
+import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import CarouselManager from './CarouselManager';
@@ -27,7 +27,21 @@ const SystemConfiguration = () => {
                 startDate: data.startDate,
                 theme: "blue", // This is local UI state for now, or could be in config
                 showHeroCountdown: data.showHeroCountdown,
-                specialties: data.specialties || []
+                showHeroCountdown: data.showHeroCountdown,
+                specialties: data.specialties || [],
+                prices: data.prices || {
+                    incn: 50,
+                    external_resident: 80,
+                    specialist: 120,
+                    student: 30,
+                    certification: 50
+                },
+                duration: data.duration || 3,
+                schedule: Array.isArray(data.schedule) ? data.schedule : [
+                    { day: 1, open: "08:00", close: "18:00" },
+                    { day: 2, open: "09:00", close: "18:00" },
+                    { day: 3, open: "09:00", close: "13:00" }
+                ]
             });
             setLoading(false);
         };
@@ -79,6 +93,34 @@ const SystemConfiguration = () => {
         setConfig({ ...config, specialties: config.specialties.filter(s => s !== spec) });
     };
 
+    const handleDurationChange = (e) => {
+        const newDuration = parseInt(e.target.value) || 1;
+        let newSchedule = [...config.schedule];
+
+        if (newDuration > newSchedule.length) {
+            // Add days
+            const daysToAdd = newDuration - newSchedule.length;
+            for (let i = 0; i < daysToAdd; i++) {
+                newSchedule.push({
+                    day: newSchedule.length + 1,
+                    open: "08:00",
+                    close: "18:00"
+                });
+            }
+        } else if (newDuration < newSchedule.length) {
+            // Remove days
+            newSchedule = newSchedule.slice(0, newDuration);
+        }
+
+        setConfig({ ...config, duration: newDuration, schedule: newSchedule });
+    };
+
+    const handleScheduleChange = (index, field, value) => {
+        const newSchedule = [...config.schedule];
+        newSchedule[index] = { ...newSchedule[index], [field]: value };
+        setConfig({ ...config, schedule: newSchedule });
+    };
+
     return (
         <div className="space-y-6 animate-fadeIn">
             {/* Header */}
@@ -127,7 +169,7 @@ const SystemConfiguration = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Año del Evento</label>
                                     <input
-                                        type="text"
+                                        type="number"
                                         value={config.eventYear}
                                         onChange={(e) => setConfig({ ...config, eventYear: e.target.value })}
                                         className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
@@ -136,11 +178,61 @@ const SystemConfiguration = () => {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
                                     <input
-                                        type="datetime-local"
+                                        type="date"
                                         value={config.startDate}
                                         onChange={(e) => setConfig({ ...config, startDate: e.target.value })}
                                         className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                                     />
+                                </div>
+                            </div>
+
+                            {/* Agenda del Evento */}
+                            <div className="pt-4 border-t border-gray-200 mt-4">
+                                <h5 className="flex items-center gap-2 font-bold text-gray-800 mb-4">
+                                    <Clock size={18} className="text-gray-500" />
+                                    Agenda del Evento
+                                </h5>
+                                <div className="mb-4">
+                                    <label className="block text-sm font-medium text-gray-700 mb-2">Duración (Días)</label>
+                                    <div className="flex items-center gap-4">
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            max="7"
+                                            value={config.duration || 3}
+                                            onChange={handleDurationChange}
+                                            className="w-24 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        />
+                                        <span className="text-sm text-gray-500 italic">El horario se ajustará automáticamente.</span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {config.schedule?.map((day, idx) => (
+                                        <div key={idx} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                            <div className="w-16 font-bold text-gray-700">Día {day.day}</div>
+                                            <div className="flex-1 grid grid-cols-2 gap-4">
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Apertura</label>
+                                                    <input
+                                                        type="time"
+                                                        value={day.open}
+                                                        onChange={(e) => handleScheduleChange(idx, 'open', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-xs text-gray-500 mb-1">Cierre</label>
+                                                    <input
+                                                        type="time"
+                                                        value={day.close}
+                                                        onChange={(e) => handleScheduleChange(idx, 'close', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm focus:ring-1 focus:ring-blue-500"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -199,6 +291,63 @@ const SystemConfiguration = () => {
                                     {config.theme === theme.id && <div className="ml-auto text-blue-600"><Save size={16} /></div>}
                                 </div>
                             ))}
+                        </div>
+                    </Card>
+
+
+
+                    {/* Pricing Management */}
+                    <Card className="p-6">
+                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
+                            <DollarSign size={20} className="text-gray-500" />
+                            Gestión de Tarifas de Inscripción (S/.)
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Residente INCN</label>
+                                <input
+                                    type="number"
+                                    value={config.prices?.incn || 0}
+                                    onChange={(e) => setConfig({ ...config, prices: { ...config.prices, incn: parseInt(e.target.value) } })}
+                                    className="w-full p-2 border border-blue-200 bg-blue-50 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Médico Especialista</label>
+                                <input
+                                    type="number"
+                                    value={config.prices?.specialist || 0}
+                                    onChange={(e) => setConfig({ ...config, prices: { ...config.prices, specialist: parseInt(e.target.value) } })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Residente Externo</label>
+                                <input
+                                    type="number"
+                                    value={config.prices?.external_resident || 0}
+                                    onChange={(e) => setConfig({ ...config, prices: { ...config.prices, external_resident: parseInt(e.target.value) } })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estudiante</label>
+                                <input
+                                    type="number"
+                                    value={config.prices?.student || 0}
+                                    onChange={(e) => setConfig({ ...config, prices: { ...config.prices, student: parseInt(e.target.value) } })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
+                            <div className="col-span-2 border-t pt-4 mt-2">
+                                <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Costo Certificado (Opcional)</label>
+                                <input
+                                    type="number"
+                                    value={config.prices?.certification || 0}
+                                    onChange={(e) => setConfig({ ...config, prices: { ...config.prices, certification: parseInt(e.target.value) } })}
+                                    className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                            </div>
                         </div>
                     </Card>
 

@@ -16,11 +16,15 @@ import WorkReviewModal from '../components/academic/WorkReviewModal';
 import AssignJuryModal from '../components/academic/AssignJuryModal';
 import AssignScheduleModal from '../components/academic/AssignScheduleModal';
 import AcademicConfig from '../components/academic/AcademicConfig';
+import AcademicResults from '../components/academic/AcademicResults';
+import AcademicRubricConfig from '../components/academic/AcademicRubricConfig';
+import AcademicJurers from '../components/academic/AcademicJurers';
 
 const AcademicDashboard = () => {
     // State
     const [activeTab, setActiveTab] = useState('pending'); // pending, approved, observation
     const [searchTerm, setSearchTerm] = useState('');
+    const [selectedSpecialty, setSelectedSpecialty] = useState('all');
 
     // Fetch Data
     const { data: works, loading, refetch } = useApi(api.works.getAll);
@@ -60,13 +64,23 @@ const AcademicDashboard = () => {
     };
 
     // Derived Data
+    const specialties = works ? [...new Set(works.map(w => w?.specialty).filter(Boolean))].sort() : [];
+
     const fileteredWorks = works ? works.filter(work => {
-        const matchesSearch = work.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            work.author.toLowerCase().includes(searchTerm.toLowerCase());
+        if (!work) return false;
 
-        if (!matchesSearch) return false;
+        const title = work.title || '';
+        const author = work.author || '';
+        const specialty = work.specialty || '';
+        const lowerSearch = searchTerm.toLowerCase();
 
-        if (activeTab === 'pending') return work.status === 'En Evaluación' || work.status === 'Pending';
+        const matchesSearch = title.toLowerCase().includes(lowerSearch) ||
+            author.toLowerCase().includes(lowerSearch);
+        const matchesSpecialty = selectedSpecialty === 'all' || specialty === selectedSpecialty;
+
+        if (!matchesSearch || !matchesSpecialty) return false;
+
+        if (activeTab === 'pending') return work.status === 'En Evaluación' || work.status === 'Pending' || work.status === 'Pendiente';
         if (activeTab === 'approved') return work.status === 'Aceptado';
         if (activeTab === 'observation') return work.status === 'Observado' || work.status === 'Rechazado';
 
@@ -87,9 +101,9 @@ const AcademicDashboard = () => {
                 <div className="max-w-xs">
                     <div className="font-bold text-gray-900 line-clamp-2">{item.title}</div>
                     <div className="text-xs text-gray-500 mt-1">{item.specialty} • {item.type}</div>
-                    {item.jury && (
+                    {item.jury && (Array.isArray(item.jury) ? item.jury.length > 0 : item.jury) && (
                         <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
-                            <User size={10} /> Jurado Asignado
+                            <User size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
                         </span>
                     )}
                     {item.day && (
@@ -124,22 +138,13 @@ const AcademicDashboard = () => {
                 return <Badge type={type}>{item.status}</Badge>;
             }
         },
-        {
-            key: 'scores',
-            header: 'Puntaje',
-            sortable: true,
-            render: (item) => {
-                if (!item.scores || item.scores.length === 0) return <span className="text-gray-400 text-sm">-</span>;
-                const avg = item.scores.reduce((a, b) => a + b, 0) / item.scores.length;
-                return <span className="font-bold text-sm">{avg.toFixed(1)}</span>;
-            }
-        }
+
     ];
 
     // Actions
     const renderActions = (item) => (
         <div className="flex flex-col gap-1 items-end">
-            {(item.status === 'En Evaluación' || item.status === 'Observado' || item.status === 'Pending') && (
+            {(item.status === 'En Evaluación' || item.status === 'Observado' || item.status === 'Pending' || item.status === 'Pendiente') && (
                 <Button size="sm" onClick={() => handleOpenReview(item)}>
                     Revisar
                 </Button>
@@ -172,7 +177,7 @@ const AcademicDashboard = () => {
 
     // Stats
     const stats = {
-        pending: works?.filter(w => w.status === 'En Evaluación' || w.status === 'Pending').length || 0,
+        pending: works?.filter(w => w.status === 'En Evaluación' || w.status === 'Pending' || w.status === 'Pendiente').length || 0,
         approved: works?.filter(w => w.status === 'Aceptado').length || 0,
         total: works?.length || 0
     };
@@ -191,6 +196,17 @@ const AcademicDashboard = () => {
                     <p className="text-gray-600">Revisión, aprobación y programación de trabajos científicos.</p>
                 </div>
                 <div className="flex gap-2">
+                    <Button
+                        variant={activeTab === 'results' ? 'primary' : 'outline'}
+                        onClick={() => setActiveTab('results')}
+                        className={`h-auto flex-col items-center justify-center p-2 rounded-xl border-2 transition-all gap-1 ${activeTab === 'results'
+                            ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-105'
+                            : 'border-dashed hover:border-blue-500 hover:bg-blue-50 text-gray-600'
+                            }`}
+                    >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={activeTab === 'results' ? 'text-yellow-300' : 'text-yellow-500'}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
+                        <span className={`text-xs font-bold ${activeTab === 'results' ? 'text-white' : 'text-gray-600'}`}>Ver Resultados</span>
+                    </Button>
                     <Card className="px-4 py-2 flex items-center gap-3 bg-white border-blue-100">
                         <Clock size={20} className="text-orange-500" />
                         <div>
@@ -210,43 +226,85 @@ const AcademicDashboard = () => {
 
             {/* Tabs & Search */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden mb-6">
-                <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row justify-between gap-4 items-center">
-                    <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
-                        <button
-                            onClick={() => setActiveTab('pending')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Por Revisar
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('approved')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'approved' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Aceptados
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('observation')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'observation' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Observados
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('config')}
-                            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'config' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                        >
-                            Configuración
-                        </button>
+                <div className="p-4 border-b border-gray-100 flex flex-col gap-4">
+                    {/* Top Row: Tabs */}
+                    <div className="flex justify-between items-center w-full overflow-x-auto">
+                        <div className="flex bg-gray-100 p-1 rounded-lg w-auto">
+                            <button
+                                onClick={() => setActiveTab('pending')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Por Revisar
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('approved')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'approved' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Aceptados
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('observation')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'observation' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Observados
+                            </button>
+
+                            <button
+                                onClick={() => setActiveTab('rubrics')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'rubrics' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Rúbricas
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('juries')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'juries' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Jurados
+                            </button>
+                            <button
+                                onClick={() => setActiveTab('config')}
+                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'config' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                            >
+                                Configuración
+                            </button>
+                        </div>
                     </div>
-                    <div className="relative w-full md:w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-                        <input
-                            type="text"
-                            placeholder="Buscar autor o título..."
-                            className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
-                    </div>
+
+                    {/* Bottom Row: Filters & Search */}
+                    {activeTab !== 'config' && activeTab !== 'rubrics' && activeTab !== 'juries' && activeTab !== 'results' && (
+                        <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-2 border-t border-gray-50">
+                            <div className="flex items-center gap-2 w-full md:w-auto">
+                                <Filter size={16} className="text-gray-400" />
+                                <div className="h-6 w-px bg-gray-200 mx-2"></div>
+                                <select
+                                    className="border border-gray-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[200px]"
+                                    value={selectedSpecialty}
+                                    onChange={(e) => setSelectedSpecialty(e.target.value)}
+                                >
+                                    <option value="all">Todas las especialidades</option>
+                                    {specialties.map(spec => (
+                                        <option key={spec} value={spec}>{spec}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            <div className="flex gap-4 items-center w-full md:w-auto">
+                                <div className="text-sm text-gray-500 font-medium whitespace-nowrap bg-gray-50 px-3 py-1.5 rounded-full border border-gray-200">
+                                    Mostrando <strong>{sortedWorks.length}</strong> trabajos
+                                </div>
+                                <div className="relative w-full md:w-72">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar autor, título o código..."
+                                        className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 {/* Content */}
@@ -254,6 +312,12 @@ const AcademicDashboard = () => {
                     <div className="p-4">
                         <AcademicConfig />
                     </div>
+                ) : activeTab === 'rubrics' ? (
+                    <AcademicRubricConfig />
+                ) : activeTab === 'juries' ? (
+                    <AcademicJurers works={works} />
+                ) : activeTab === 'results' ? (
+                    <AcademicResults works={works} />
                 ) : (
                     <Table
                         columns={columns}
@@ -261,6 +325,10 @@ const AcademicDashboard = () => {
                         onSort={requestSort}
                         sortConfig={sortConfig}
                         actions={renderActions}
+                        onRowClick={(item) => {
+                            if (activeTab === 'pending' || activeTab === 'observation') handleOpenReview(item);
+                            else if (activeTab === 'approved') handleOpenJury(item);
+                        }}
                         emptyMessage={
                             <EmptyState
                                 icon={BookOpen}
