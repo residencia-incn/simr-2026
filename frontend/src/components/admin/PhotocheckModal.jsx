@@ -3,27 +3,23 @@ import ReactDOM from 'react-dom';
 import { X, Printer, Download } from 'lucide-react';
 import Button from '../ui/Button';
 import Photocheck from './Photocheck';
-import html2pdf from 'html2pdf.js';
+import { api } from '../../services/api';
+import { printContent } from '../../utils/printHandler';
 
 const PhotocheckModal = ({ isOpen, onClose, attendee }) => {
     const printRef = useRef();
+    const [printConfig, setPrintConfig] = React.useState({ width: 9, height: 13, pageMargin: 1 });
 
-    const handleDownloadPDF = async () => {
-        try {
-            const element = printRef.current;
-            const opt = {
-                margin: 0,
-                filename: `Photocheck-${attendee?.name || 'Participante'}.pdf`,
-                image: { type: 'jpeg', quality: 0.98 },
-                html2canvas: { scale: 2, useCORS: true },
-                jsPDF: { unit: 'mm', format: 'a6', orientation: 'portrait' }
-            };
-
-            await html2pdf().set(opt).from(element).save();
-        } catch (error) {
-            console.error("Error generating PDF:", error);
-            alert("Hubo un error al generar el PDF. Por favor intente nuevamente.");
+    useEffect(() => {
+        if (isOpen) {
+            api.content.getPrintConfig().then(config => {
+                if (config) setPrintConfig(config);
+            });
         }
+    }, [isOpen]);
+
+    const handlePrint = () => {
+        printContent(printRef.current, `Fotocheck-${attendee?.name || 'Participante'}`);
     };
 
     // Close on Escape key
@@ -49,10 +45,45 @@ const PhotocheckModal = ({ isOpen, onClose, attendee }) => {
                 </div>
 
                 {/* Content - Scrollable if needed */}
-                <div className="p-6 bg-gray-50 flex-grow overflow-y-auto flex justify-center">
+                <div className="p-6 bg-gray-50 flex-grow overflow-y-auto flex flex-col items-center justify-center gap-4">
+                    {/* 1. VISIBLE PREVIEW - Always standard size (9x13) so it looks "normal" */}
                     <div className="shadow-lg transform scale-90 sm:scale-100 origin-top">
-                        <div ref={printRef}>
-                            <Photocheck attendee={attendee} />
+                        <Photocheck
+                            attendee={attendee}
+                            width={9}
+                            height={13}
+                        />
+                    </div>
+                    <p className="text-xs text-gray-400 italic">Vista previa estandarizada</p>
+
+                    {/* 2. HIDDEN PRINT SOURCE - Uses configured dims & A4 layout */}
+                    <div className="hidden">
+                        <div ref={printRef} className="print-root">
+                            <style type="text/css" media="print">
+                                {`
+                                    @page { size: A4; margin: 0; }
+                                    body { margin: 0; }
+                                `}
+                            </style>
+                            <div
+                                style={{
+                                    width: '210mm',
+                                    height: '297mm',
+                                    padding: `${printConfig.pageMargin !== undefined ? printConfig.pageMargin : 1}cm`,
+                                    display: 'flex',
+                                    flexDirection: 'row',
+                                    alignItems: 'flex-start',
+                                    justifyContent: 'flex-start',
+                                    boxSizing: 'border-box',
+                                    backgroundColor: 'white'
+                                }}
+                            >
+                                <Photocheck
+                                    attendee={attendee}
+                                    width={printConfig.width}
+                                    height={printConfig.height}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -60,8 +91,8 @@ const PhotocheckModal = ({ isOpen, onClose, attendee }) => {
                 {/* Footer / Actions */}
                 <div className="p-4 border-t border-gray-100 flex justify-end gap-3 bg-white rounded-b-2xl">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
-                    <Button onClick={handleDownloadPDF} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800">
-                        <Download size={18} /> Guardar PDF
+                    <Button onClick={handlePrint} className="flex items-center gap-2 bg-blue-700 hover:bg-blue-800">
+                        <Printer size={18} /> Imprimir / PDF
                     </Button>
                 </div>
             </div>

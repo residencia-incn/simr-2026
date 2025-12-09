@@ -52,6 +52,8 @@ export const STORAGE_KEYS = {
     ATTENDEES: 'simr_attendees',
     TREASURY: 'treasury_data',
     TREASURY_CATEGORIES: 'simr_treasury_categories',
+    TREASURY_BUDGETS: 'simr_treasury_budgets',
+    PRINT_CONFIG: 'simr_print_config',
     PROGRAM: 'event_program',
     PROGRAM_DAYS: 'event_days',
     COMMITTEE: 'event_committee',

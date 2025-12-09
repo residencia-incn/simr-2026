@@ -337,7 +337,7 @@ export default function SIMRApp() {
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
-        {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
+
         {currentView === 'profile' && <ProfileView user={user} onSave={(updatedUser) => setUser({ ...user, ...updatedUser })} />}
         {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}
         {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart } from 'lucide-react';
 import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../components/ui';
+import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
 import { useApi, useForm } from '../hooks';
 import VerificationList from '../components/common/VerificationList';
@@ -15,15 +16,22 @@ const TreasurerDashboard = ({ user }) => {
     const [categoryType, setCategoryType] = useState('income');
 
     // Data Fetching
-    const fetchDashboardData = async () => {
-        const [txs, cats, pending, attendees] = await Promise.all([
+    const fetchDashboardData = React.useCallback(async () => {
+        const [txs, cats, pending, attendees, budgetsList] = await Promise.all([
             api.treasury.getTransactions(),
             api.treasury.getCategories(),
             api.registrations.getAll(),
-            api.attendees.getAll()
+            api.attendees.getAll(),
+            api.treasury.getBudgets()
         ]);
-        return { transactions: txs, categories: cats, pendingRegistrations: pending, confirmedAttendees: attendees };
-    };
+        return {
+            transactions: txs,
+            categories: cats,
+            pendingRegistrations: pending,
+            confirmedAttendees: attendees,
+            budgets: budgetsList
+        };
+    }, []);
 
     const { data, loading, execute: loadData } = useApi(fetchDashboardData);
 
@@ -31,8 +39,57 @@ const TreasurerDashboard = ({ user }) => {
         transactions = [],
         categories = { income: [], expense: [] },
         pendingRegistrations = [],
-        confirmedAttendees = []
+        confirmedAttendees = [],
+        budgets = []
     } = data || {};
+
+    // Budget Update Handler
+    const handleBudgetUpdate = async (category, amount) => {
+        const newBudgets = [...budgets];
+        const index = newBudgets.findIndex(b => b.category === category);
+        const val = parseFloat(amount) || 0;
+
+        if (index >= 0) {
+            newBudgets[index] = { ...newBudgets[index], amount: val };
+        } else {
+            newBudgets.push({ category, amount: val });
+        }
+
+        // Optimistic update
+        const newData = { ...data, budgets: newBudgets };
+        // We can't set data directly with useApi, so we might need a separate state or just re-fetch.
+        // For simplicity, let's just call API and reload.
+        try {
+            await api.treasury.updateBudget(newBudgets);
+            await loadData();
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    // Export Handler
+    const handleExport = () => {
+        const csvContent = [
+            ['ID', 'Fecha', 'Descripción', 'Categoría', 'Tipo', 'Monto'],
+            ...transactions.map(t => [
+                t.id,
+                t.date,
+                `"${t.description.replace(/"/g, '""')}"`,
+                t.category,
+                t.type === 'income' ? 'Ingreso' : 'Egreso',
+                t.amount
+            ])
+        ].map(e => e.join(',')).join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'transacciones_simr2026.csv');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     // Transaction Form
     const { values: formData, handleChange, setValues: setFormData, reset: resetForm } = useForm({
@@ -309,6 +366,11 @@ const TreasurerDashboard = ({ user }) => {
                     <p className="text-gray-600">Gestión de caja y contabilidad del evento</p>
                 </div>
 
+                {/* Export Button */}
+                <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+                    <FileDown size={18} /> Exportar
+                </Button>
+
                 <div className="flex p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full">
                     <button
                         onClick={() => setActiveTab('summary')}
@@ -339,6 +401,12 @@ const TreasurerDashboard = ({ user }) => {
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         Categorías
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('budget')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        Presupuesto
                     </button>
                 </div>
             </div>
@@ -381,13 +449,18 @@ const TreasurerDashboard = ({ user }) => {
             </div>
 
             {activeTab === 'summary' && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
-                    <h3 className="font-bold text-gray-900 mb-4">Últimos Movimientos</h3>
-                    <Table
-                        columns={transactionColumns}
-                        data={transactions.slice(0, 5)}
-                        emptyMessage="No hay movimientos recientes"
-                    />
+                <div className="space-y-6">
+                    {/* Charts Integration */}
+                    <TreasurerCharts transactions={transactions} categories={categories} />
+
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+                        <h3 className="font-bold text-gray-900 mb-4">Últimos Movimientos</h3>
+                        <Table
+                            columns={transactionColumns}
+                            data={transactions.slice(0, 5)}
+                            emptyMessage="No hay movimientos recientes"
+                        />
+                    </div>
                 </div>
             )}
 
@@ -622,6 +695,70 @@ const TreasurerDashboard = ({ user }) => {
                             </div>
                         </div>
                     </div>
+                </div>
+            )}
+
+            {activeTab === 'budget' && (
+                <div className="space-y-6">
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
+                            <PieChart className="text-teal-600" /> Control Presupuestal (Previsto vs Ejecutado)
+                        </h3>
+                        <div className="space-y-8">
+                            {categories.expense.map(cat => {
+                                const budgetAmount = budgets.find(b => b.category === cat)?.amount || 0;
+                                const spentAmount = transactions
+                                    .filter(t => t.type === 'expense' && t.category === cat)
+                                    .reduce((sum, t) => sum + t.amount, 0);
+                                const progress = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
+                                const isOver = spentAmount > budgetAmount;
+
+                                return (
+                                    <div key={cat} className="space-y-2">
+                                        <div className="flex justify-between items-end">
+                                            <div>
+                                                <p className="font-bold text-gray-900">{cat}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className="text-xs text-gray-500">Presupuesto: S/</span>
+                                                    <input
+                                                        type="number"
+                                                        className="border rounded px-2 py-0.5 w-24 text-sm font-medium bg-gray-50 focus:bg-white focus:ring-1 ring-teal-500 outline-none transition-all"
+                                                        value={budgetAmount}
+                                                        onChange={(e) => handleBudgetUpdate(cat, e.target.value)}
+                                                        placeholder="0.00"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="text-right">
+                                                <p className={`font-bold ${isOver ? 'text-red-600' : 'text-gray-900'}`}>
+                                                    S/ {spentAmount.toFixed(2)}
+                                                </p>
+                                                <p className="text-xs text-gray-500">Ejecutado</p>
+                                            </div>
+                                        </div>
+
+                                        <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={`absolute left-0 top-0 h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-teal-500'}`}
+                                                style={{ width: `${Math.min(progress, 100)}%` }}
+                                            ></div>
+                                            {/* Stripe pattern for overflow if needed, but simple red bar is enough */}
+                                        </div>
+
+                                        <div className="flex justify-between text-xs">
+                                            <span className="text-gray-400">0%</span>
+                                            <span className={`font-medium ${isOver ? 'text-red-600' : 'text-teal-600'}`}>
+                                                {progress.toFixed(1)}% {isOver && '(Excedido)'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                            {categories.expense.length === 0 && (
+                                <p className="text-gray-500 italic text-center">No hay categorías de egresos definidas.</p>
+                            )}
+                        </div>
+                    </Card>
                 </div>
             )}
 

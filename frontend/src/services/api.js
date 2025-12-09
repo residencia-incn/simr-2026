@@ -9,7 +9,9 @@ import {
     INITIAL_JURORS,
     ACADEMIC_CONFIG,
     INITIAL_ROADMAP,
-    INITIAL_COUPONS
+    INITIAL_COUPONS,
+    INITIAL_TRANSACTIONS,
+    INITIAL_BUDGETS
 } from '../data/mockData';
 import { MOCK_ATTENDEES } from '../data/mockAttendees';
 import { MOCK_USERS } from '../data/mockUsers';
@@ -83,11 +85,17 @@ export const api = {
     treasury: {
         getTransactions: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.TREASURY, []);
+            const stored = storage.get(STORAGE_KEYS.TREASURY);
+            if (!stored) {
+                // Seed initial if empty
+                storage.set(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
+                return INITIAL_TRANSACTIONS;
+            }
+            return stored;
         },
         addTransaction: async (tx) => {
             await delay();
-            const current = storage.get(STORAGE_KEYS.TREASURY, []);
+            const current = await api.treasury.getTransactions();
             const newTx = {
                 id: Date.now(),
                 date: new Date().toISOString().split('T')[0],
@@ -98,9 +106,21 @@ export const api = {
         },
         deleteTransaction: async (id) => {
             await delay();
-            const current = storage.get(STORAGE_KEYS.TREASURY, []);
+            const current = await api.treasury.getTransactions();
             const updated = current.filter(t => t.id !== id);
             storage.set(STORAGE_KEYS.TREASURY, updated);
+            return true;
+        },
+        // ... categories methods ...
+        getBudgets: async () => {
+            await delay();
+            const stored = storage.get(STORAGE_KEYS.TREASURY_BUDGETS);
+            if (!stored) return INITIAL_BUDGETS;
+            return stored;
+        },
+        updateBudget: async (budgetList) => {
+            await delay();
+            storage.set(STORAGE_KEYS.TREASURY_BUDGETS, budgetList);
             return true;
         },
         getCategories: async () => {
@@ -112,34 +132,10 @@ export const api = {
                 expense: stored.expense || DEFAULT_CATEGORIES.expense
             };
         },
-        addCategory: async (type, name) => {
-            await delay();
-            const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
-            const list = categories[type] || [];
-            if (!list.includes(name)) {
-                const updated = {
-                    ...categories,
-                    [type]: [...list, name]
-                };
-                storage.set(STORAGE_KEYS.TREASURY_CATEGORIES, updated);
-            }
-            return name;
-        },
-        deleteCategory: async (type, name) => {
-            await delay();
-            const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
-            if (categories[type]) {
-                const updated = {
-                    ...categories,
-                    [type]: categories[type].filter(c => c !== name)
-                };
-                storage.set(STORAGE_KEYS.TREASURY_CATEGORIES, updated);
-            }
-            return true;
-        },
+        // ...
         getStats: async () => {
             await delay();
-            const transactions = storage.get(STORAGE_KEYS.TREASURY, []);
+            const transactions = await api.treasury.getTransactions();
             const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
             const manualExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
             return {
@@ -243,6 +239,26 @@ export const api = {
             const config = storage.get(STORAGE_KEYS.CONFIG, EVENT_CONFIG);
             const mergedConfig = { ...EVENT_CONFIG, ...config };
             return mergedConfig.specialties || [];
+        },
+        getPrintConfig: async () => {
+            await delay();
+            const config = storage.get(STORAGE_KEYS.PRINT_CONFIG, {
+                width: 9,
+                height: 13,
+                margin: 0.5,
+                pageMargin: 1
+            });
+            return {
+                width: parseFloat(config.width),
+                height: parseFloat(config.height),
+                margin: parseFloat(config.margin),
+                pageMargin: parseFloat(config.pageMargin || 1)
+            };
+        },
+        savePrintConfig: async (config) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PRINT_CONFIG, config);
+            return true;
         }
     },
 

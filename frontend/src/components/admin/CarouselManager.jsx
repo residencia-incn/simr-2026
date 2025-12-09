@@ -174,14 +174,14 @@ const CarouselManager = () => {
 
     return (
         <>
-            <Card className="p-6">
-                <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
+            <Card className="p-6 h-[500px] flex flex-col">
+                <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
                     <Layout size={20} className="text-gray-500" />
                     Carrusel Interactivo
                 </h4>
 
                 {!isEditing ? (
-                    <div className="space-y-4">
+                    <div className="space-y-4 flex-1 overflow-y-auto pr-1">
                         {slides.map((slide, index) => (
                             <div key={slide.id} className="border border-gray-200 rounded-lg p-4 flex justify-between items-center bg-white hover:bg-gray-50 transition-colors">
                                 <div className="flex items-center gap-4">
@@ -207,15 +207,15 @@ const CarouselManager = () => {
                         </Button>
                     </div>
                 ) : (
-                    <div className="space-y-4 animate-fadeIn">
-                        <div className="flex justify-between items-center mb-4">
+                    <div className="space-y-4 animate-fadeIn flex-1 overflow-hidden flex flex-col">
+                        <div className="flex justify-between items-center mb-4 shrink-0">
                             <h5 className="font-bold text-gray-800">Editar Diapositiva</h5>
                             <button onClick={() => setIsEditing(false)} className="text-gray-500 hover:text-red-500">
                                 <X size={20} />
                             </button>
                         </div>
 
-                        <div className="space-y-3 h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                        <div className="space-y-3 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                             <div>
                                 <label className="block text-xs font-bold text-gray-500 mb-1">Etiqueta Superior</label>
                                 <input

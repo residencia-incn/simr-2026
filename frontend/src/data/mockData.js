@@ -436,6 +436,8 @@ export const INITIAL_ROADMAP = [
         completed: true,
         icon: 'Rocket'
     },
+    // ...
+
     {
         id: 'ev-002',
         title: 'Curso de Metodología',
@@ -497,4 +499,23 @@ export const INITIAL_COUPONS = [
         expiry: '2026-05-30',
         active: true
     }
+];
+
+export const INITIAL_TRANSACTIONS = [
+    { id: 1, date: '2025-10-01', description: 'Pago de local (Adelanto)', category: 'Logística', amount: 2000, type: 'expense' },
+    { id: 2, date: '2025-10-05', description: 'Diseño de Merchandising', category: 'Merchandising', amount: 500, type: 'expense' },
+    { id: 3, date: '2025-10-10', description: 'Publicidad en Redes', category: 'Marketing', amount: 300, type: 'expense' },
+    { id: 4, date: '2025-10-15', description: 'Inscripción: Juan Pérez', category: 'Inscripciones', amount: 50, type: 'income' },
+    { id: 5, date: '2025-10-16', description: 'Inscripción: María Gómez', category: 'Inscripciones', amount: 50, type: 'income' },
+    { id: 6, date: '2025-10-18', description: 'Sponsorship: Lab. XYZ', category: 'Patrocinios', amount: 5000, type: 'income' }
+];
+
+export const INITIAL_BUDGETS = [
+    { category: 'Logística', amount: 10000 },
+    { category: 'Alimentación', amount: 8000 },
+    { category: 'Honorarios', amount: 15000 },
+    { category: 'Publicidad', amount: 3000 },
+    { category: 'Materiales', amount: 2500 },
+    { category: 'Transporte', amount: 1000 },
+    { category: 'Otro', amount: 5000 }
 ];
