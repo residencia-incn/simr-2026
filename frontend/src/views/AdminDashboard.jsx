@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
-    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, ListTodo
+    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -17,8 +17,8 @@ import UserManagement from '../components/admin/UserManagement';
 import RoadmapManager from '../components/admin/RoadmapManager';
 import CouponManager from '../components/admin/CouponManager';
 import PlanningManager from '../components/admin/PlanningManager';
-import MyTasks from '../components/admin/MyTasks';
 import VerificationList from '../components/common/VerificationList';
+import DocumentationView from './DocumentationView';
 import { api } from '../services/api';
 
 const AdminDashboard = ({ user }) => {
@@ -132,13 +132,13 @@ const AdminDashboard = ({ user }) => {
         { id: 'program', label: 'Programa', icon: Calendar },
         { id: 'committee', label: 'Comité', icon: Users },
         ...(hasSecretaryRole ? [{ id: 'planning', label: 'Planificación', icon: Target }] : []),
-        ...(hasCommitteeRole ? [{ id: 'mytasks', label: 'Mis Tareas', icon: ListTodo }] : []),
         { id: 'certification', label: 'Certificación', icon: Award },
         { id: 'gallery', label: 'Galería', icon: Image },
         { id: 'roadmap', label: 'Roadmap', icon: Map },
         { id: 'coupons', label: 'Cupones', icon: Ticket },
         { id: 'config', label: 'Configuración', icon: Settings },
-        ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : [])
+        ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
+        ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : [])
     ];
 
     return (
@@ -353,9 +353,9 @@ const AdminDashboard = ({ user }) => {
                     </div>
                 )}
 
-                {activeTab === 'mytasks' && hasCommitteeRole && (
+                {activeTab === 'docs' && isSuperAdmin && (
                     <div className="animate-fadeIn h-[600px]">
-                        <MyTasks currentUser={user} />
+                        <DocumentationView />
                     </div>
                 )}
             </div>
