@@ -1,33 +1,198 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Edit2, Save, Calendar, Clock, MapPin, User, Layout, Columns, X } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Edit2, Save, Calendar, Clock, MapPin, User, Layout, Columns, X, BookOpen, Check, AlertCircle, Settings } from 'lucide-react';
 import { Button, Card, Modal, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
 
-const INITIAL_HALLS = [
-    { id: 'h1', name: 'Auditorio Principal' },
-    { id: 'h2', name: 'Sala 1 (Talleres)' },
-    { id: 'h3', name: 'Sala Virtual' }
-];
+// Helper: Convertir "HH:MM" a minutos desde medianoche
+const timeToMinutes = (time) => {
+    if (!time) return 0;
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+};
+
+// Helper: Convertir minutos a "HH:MM"
+const minutesToTime = (minutes) => {
+    const h = Math.floor(minutes / 60);
+    const m = minutes % 60;
+    return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+};
+
+// Helper: Generar slots de tiempo
+const generateTimeSlots = (startStr, endStr, interval) => {
+    const slots = [];
+    let current = timeToMinutes(startStr);
+    const end = timeToMinutes(endStr);
+
+    while (current < end) {
+        slots.push(minutesToTime(current));
+        current += interval;
+    }
+    return slots;
+};
+
+// Helper: Detectar conflictos de horarios
+const detectScheduleConflicts = (newBlock, existingBlocks, halls) => {
+    const conflicts = [];
+
+    const newStart = timeToMinutes(newBlock.startTime);
+    const newEnd = timeToMinutes(newBlock.endTime);
+
+    for (const block of existingBlocks) {
+        // Ignorar el mismo bloque (si estamos editando)
+        if (block.id === newBlock.id) continue;
+
+        // Parsear el tiempo del bloque existente
+        let blockStart, blockEnd;
+        if (block.startTime && block.endTime) {
+            blockStart = timeToMinutes(block.startTime);
+            blockEnd = timeToMinutes(block.endTime);
+        } else if (block.time) {
+            // Parsear formato "HH:MM - HH:MM"
+            const [start, end] = block.time.split(' - ');
+            blockStart = timeToMinutes(start);
+            blockEnd = timeToMinutes(end);
+        } else {
+            continue; // Skip si no tiene información de tiempo
+        }
+
+        // Verificar si hay solapamiento de horarios
+        const hasTimeOverlap = !(newEnd <= blockStart || newStart >= blockEnd);
+
+        if (!hasTimeOverlap) continue;
+
+        // Verificar conflictos de sala según el tipo
+        if (newBlock.type === 'full' && block.type === 'full') {
+            // Ambos son sala única
+            if (newBlock.room === block.room) {
+                conflicts.push({
+                    block,
+                    reason: `"${block.room}" ya está ocupada de ${block.time}`
+                });
+            }
+        } else if (newBlock.type === 'full' && block.type === 'split') {
+            // Nuevo es sala única, existente es multi-sala
+            for (const hallId in block.sessions) {
+                const hall = halls.find(h => h.id === hallId);
+                // Si la sala única es una de las salas del split
+                if (hall && hall.name === newBlock.room) {
+                    conflicts.push({
+                        block,
+                        reason: `"${newBlock.room}" ya tiene una sesión simultánea de ${block.time}`
+                    });
+                }
+            }
+        } else if (newBlock.type === 'split' && block.type === 'full') {
+            // Nuevo es multi-sala, existente es sala única
+            for (const hallId in newBlock.sessions) {
+                const hall = halls.find(h => h.id === hallId);
+                if (hall && hall.name === block.room && newBlock.sessions[hallId]?.title) {
+                    conflicts.push({
+                        block,
+                        reason: `"${hall.name}" está ocupada por "${block.title}" de ${block.time}`
+                    });
+                }
+            }
+        } else if (newBlock.type === 'split' && block.type === 'split') {
+            // Ambos son multi-sala
+            for (const hallId in newBlock.sessions) {
+                if (block.sessions[hallId] && newBlock.sessions[hallId]?.title) {
+                    const hall = halls.find(h => h.id === hallId);
+                    conflicts.push({
+                        block,
+                        reason: `"${hall?.name || hallId}" ya tiene una sesión programada de ${block.time}`
+                    });
+                }
+            }
+        }
+    }
+
+    return conflicts;
+};
 
 const ProgramManager = () => {
-    const [halls] = useState(INITIAL_HALLS);
+    // Data States
+    const [halls, setHalls] = useState([]);
     const [days, setDays] = useState([]);
     const [activeDay, setActiveDay] = useState(null);
     const [program, setProgram] = useState({});
 
+    // Academic Works for linking
+    const [works, setWorks] = useState([]);
+
+    // Schedule Config State
+    const [scheduleConfig, setScheduleConfig] = useState({
+        startTime: "08:00",
+        endTime: "20:00",
+        interval: 30 // minutes
+    });
+    const [isConfigOpen, setIsConfigOpen] = useState(false);
+
     // Edit State
     const [isEditing, setIsEditing] = useState(false);
     const [currentBlock, setCurrentBlock] = useState(null);
+    const [duration, setDuration] = useState(30); // Duración seleccionada en minutos
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false });
+
+    // Room Management State
+    const [isManagingRooms, setIsManagingRooms] = useState(false);
+    const [newHallName, setNewHallName] = useState('');
+
+    // Work Linking State
+    const [isLinkingWork, setIsLinkingWork] = useState(false);
+    const [linkingTarget, setLinkingTarget] = useState(null); // { hallId }
+
+    // Conflict Detection State
+    const [conflictWarning, setConflictWarning] = useState(null);
+
+    // Memoized Slots
+    const availableSlots = useMemo(() => {
+        return generateTimeSlots(scheduleConfig.startTime, scheduleConfig.endTime, scheduleConfig.interval);
+    }, [scheduleConfig]);
+
+    const durationOptions = [
+        { value: 15, label: '15 min' },
+        { value: 30, label: '30 min' },
+        { value: 45, label: '45 min' },
+        { value: 60, label: '1 hora' },
+        { value: 90, label: '1 hora 30 min' },
+        { value: 120, label: '2 horas' },
+        { value: 150, label: '2 horas 30 min' },
+        { value: 180, label: '3 horas' },
+    ];
+
+    // Helper to check if a slot is available
+    const checkSlotAvailability = (slotTime, checkDuration, checkRoom, blockId, checkType) => {
+        if (!activeDay || !program[activeDay]) return true;
+
+        const startMins = timeToMinutes(slotTime);
+        const endMins = startMins + checkDuration;
+        const endTime = minutesToTime(endMins);
+
+        // Simulated block for conflict detection
+        const testBlock = {
+            id: blockId,
+            startTime: slotTime,
+            endTime: endTime,
+            room: checkRoom,
+            type: checkType,
+            sessions: {} // Simplified for 'full' check
+        };
+
+        const conflicts = detectScheduleConflicts(testBlock, program[activeDay], halls);
+        return conflicts.length === 0;
+    };
 
     // API
     const fetchProgramData = async () => {
-        const [daysData, progData] = await Promise.all([
+        const [daysData, progData, hallsData, worksData, configData] = await Promise.all([
             api.program.getDays(),
-            api.program.getAll()
+            api.program.getAll(),
+            api.program.getHalls(),
+            api.works.getAll(),
+            api.program.getScheduleConfig ? api.program.getScheduleConfig() : Promise.resolve(null)
         ]);
-        return { days: daysData, program: progData };
+        return { days: daysData, program: progData, halls: hallsData, works: worksData, config: configData };
     };
 
     const { data, loading, execute: loadData } = useApi(fetchProgramData);
@@ -40,6 +205,9 @@ const ProgramManager = () => {
         if (data) {
             setDays(data.days);
             setProgram(data.program);
+            setHalls(data.halls || []);
+            setWorks(data.works || []);
+            if (data.config) setScheduleConfig(data.config);
             if (!activeDay && data.days.length > 0) setActiveDay(data.days[0].id);
         }
     }, [data]);
@@ -47,6 +215,31 @@ const ProgramManager = () => {
     const saveDays = async (newDays) => {
         setDays(newDays);
         await api.program.saveDays(newDays);
+    };
+
+    const saveHalls = async (newHalls) => {
+        setHalls(newHalls);
+        await api.program.saveHalls(newHalls);
+    };
+
+    const handleAddHall = () => {
+        if (!newHallName.trim()) return;
+        const newHall = {
+            id: `h-${Date.now()}`,
+            name: newHallName
+        };
+        saveHalls([...halls, newHall]);
+        setNewHallName('');
+    };
+
+    const handleUpdateHall = (id, name) => {
+        const updated = halls.map(h => h.id === id ? { ...h, name } : h);
+        saveHalls(updated);
+    };
+
+    const handleRemoveHall = (id) => {
+        const updated = halls.filter(h => h.id !== id);
+        saveHalls(updated);
     };
 
     const handleAddDay = () => {
@@ -114,22 +307,36 @@ const ProgramManager = () => {
             id: Date.now().toString(),
             type: 'full',
             time: '',
-            startTime: '',
-            endTime: '',
+            startTime: availableSlots[0] || '08:00', // Default to first slot
+            endTime: minutesToTime(timeToMinutes(availableSlots[0] || '08:00') + 30), // Default +30m
             title: '',
             room: 'Auditorio Principal',
             sessions: {}
         });
+        setDuration(30);
         setIsEditing(true);
     };
 
     const handleEditBlock = (block) => {
         const [start, end] = block.time ? block.time.split(' - ') : ['', ''];
+        const startTime = block.startTime || start || '';
+        const endTime = block.endTime || end || '';
+
+        // Calculate duration from existing times
+        let dur = 30;
+        if (startTime && endTime) {
+            const startMins = timeToMinutes(startTime);
+            const endMins = timeToMinutes(endTime);
+            dur = endMins - startMins;
+        }
+
+        setDuration(dur > 0 ? dur : 30);
+
         setCurrentBlock({
             ...block,
             sessions: block.sessions || {},
-            startTime: block.startTime || start || '',
-            endTime: block.endTime || end || ''
+            startTime: startTime,
+            endTime: endTime
         });
         setIsEditing(true);
     };
@@ -154,6 +361,32 @@ const ProgramManager = () => {
             return;
         }
 
+        // Detectar conflictos de horarios
+        const conflicts = detectScheduleConflicts(
+            currentBlock,
+            program[activeDay] || [],
+            halls
+        );
+
+        if (conflicts.length > 0) {
+            setConflictWarning({
+                conflicts,
+                onConfirm: () => {
+                    saveBlockAnyway();
+                    setConflictWarning(null);
+                },
+                onCancel: () => {
+                    setConflictWarning(null);
+                }
+            });
+            return;
+        }
+
+        // No hay conflictos, guardar normalmente
+        saveBlockNormally();
+    };
+
+    const saveBlockNormally = () => {
         const formattedTime = `${currentBlock.startTime} - ${currentBlock.endTime}`;
         const blockToSave = {
             ...currentBlock,
@@ -178,6 +411,45 @@ const ProgramManager = () => {
         setCurrentBlock(null);
     };
 
+    const saveBlockAnyway = () => {
+        saveBlockNormally();
+    };
+
+    const openLinkWork = (hallId) => {
+        setLinkingTarget({ hallId });
+        setIsLinkingWork(true);
+    };
+
+    const handleLinkWork = (work) => {
+        if (!linkingTarget) return;
+
+        if (linkingTarget.hallId) {
+            const newSessions = { ...currentBlock.sessions };
+            if (!newSessions[linkingTarget.hallId]) newSessions[linkingTarget.hallId] = {};
+
+            newSessions[linkingTarget.hallId].title = work.title;
+            newSessions[linkingTarget.hallId].speaker = work.author; // Using author as speaker
+            newSessions[linkingTarget.hallId].linkedWorkId = work.id;
+
+            setCurrentBlock({ ...currentBlock, sessions: newSessions });
+        } else {
+            // If linking to main block (full type)
+            setCurrentBlock({
+                ...currentBlock,
+                title: work.title,
+                speaker: work.author,
+                linkedWorkId: work.id
+            });
+        }
+        setIsLinkingWork(false);
+        setLinkingTarget(null);
+    };
+
+    const handleSaveScheduleConfig = async () => {
+        await api.program.saveScheduleConfig(scheduleConfig);
+        setIsConfigOpen(false);
+    };
+
     if (loading && !days.length) return <div className="p-8 flex justify-center"><LoadingSpinner text="Cargando programa..." /></div>;
 
     const currentActiveDayObj = days.find(d => d.id === activeDay);
@@ -189,8 +461,75 @@ const ProgramManager = () => {
                     <Calendar size={20} className="text-blue-600" />
                     Editor de Programa
                 </h3>
+                <Button variant="outline" size="sm" onClick={() => setIsConfigOpen(true)}>
+                    <Settings size={16} className="mr-2" /> Configurar Horario
+                </Button>
             </div>
 
+            {/* Auditorium Management Section */}
+            <div className="mb-6 bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <button
+                    onClick={() => setIsManagingRooms(!isManagingRooms)}
+                    className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
+                >
+                    <div className="flex items-center gap-2">
+                        <MapPin size={18} className="text-purple-600" />
+                        <span className="font-bold text-gray-800">Gestión de Auditorios</span>
+                        <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">{halls.length} salas</span>
+                    </div>
+                    <div className={`transform transition-transform ${isManagingRooms ? 'rotate-180' : ''}`}>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                    </div>
+                </button>
+
+                {isManagingRooms && (
+                    <div className="p-4 border-t border-gray-200 bg-gray-50 animate-fadeIn">
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                placeholder="Nombre del nuevo auditorio..."
+                                className="flex-1 p-2 border rounded-lg text-sm"
+                                value={newHallName}
+                                onChange={e => setNewHallName(e.target.value)}
+                                onKeyPress={e => e.key === 'Enter' && handleAddHall()}
+                            />
+                            <Button size="sm" onClick={handleAddHall} disabled={!newHallName.trim()}>
+                                <Plus size={16} className="mr-1" /> Agregar
+                            </Button>
+                        </div>
+
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {halls.length === 0 && (
+                                <p className="text-center text-gray-500 py-4 italic text-sm">
+                                    No hay auditorios configurados. Agrega uno para comenzar.
+                                </p>
+                            )}
+                            {halls.map(hall => (
+                                <div key={hall.id} className="flex items-center gap-2 p-3 bg-white rounded-lg border border-gray-200 hover:border-purple-300 transition-colors">
+                                    <MapPin size={16} className="text-purple-500 flex-shrink-0" />
+                                    <input
+                                        type="text"
+                                        value={hall.name}
+                                        onChange={(e) => handleUpdateHall(hall.id, e.target.value)}
+                                        className="flex-1 bg-transparent border-none text-sm focus:ring-0 p-0 font-medium"
+                                    />
+                                    <button
+                                        onClick={() => handleRemoveHall(hall.id)}
+                                        className="text-red-500 hover:bg-red-50 p-2 rounded transition-colors"
+                                        title="Eliminar auditorio"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Day Tabs */}
             <div className="flex flex-wrap items-center gap-2 mb-6 p-1 bg-gray-50 rounded-xl border border-gray-100">
                 {days.map(day => (
                     <div key={day.id} className="relative group">
@@ -258,25 +597,83 @@ const ProgramManager = () => {
                 {currentBlock && (
                     <div className="space-y-6">
                         <div className="flex gap-4">
-                            <div className="w-1/3">
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Horario</label>
-                                <div className="relative flex items-center gap-2">
-                                    <Clock size={16} className="absolute left-2.5 top-2.5 text-gray-400" />
-                                    <input
-                                        type="text"
-                                        value={currentBlock.startTime || ''}
-                                        onChange={e => setCurrentBlock({ ...currentBlock, startTime: e.target.value })}
-                                        placeholder="00:00"
-                                        className="w-full pl-8 p-2 border rounded-lg text-sm font-mono text-center"
-                                    />
-                                    <span className="text-gray-400 font-bold">-</span>
-                                    <input
-                                        type="text"
-                                        value={currentBlock.endTime || ''}
-                                        onChange={e => setCurrentBlock({ ...currentBlock, endTime: e.target.value })}
-                                        placeholder="00:00"
-                                        className="w-full p-2 border rounded-lg text-sm font-mono text-center"
-                                    />
+                            <div className="w-1/3 space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Hora Inicio</label>
+                                    <div className="relative">
+                                        <Clock size={16} className="absolute left-2.5 top-2.5 text-gray-400" />
+                                        <select
+                                            value={currentBlock.startTime || ''}
+                                            onChange={e => {
+                                                const start = e.target.value;
+                                                const startMins = timeToMinutes(start);
+                                                const endMins = startMins + duration;
+                                                const end = minutesToTime(endMins);
+                                                setCurrentBlock({
+                                                    ...currentBlock,
+                                                    startTime: start,
+                                                    endTime: end
+                                                });
+                                            }}
+                                            className={`w-full pl-8 p-2 border rounded-lg text-sm bg-white ${!checkSlotAvailability(currentBlock.startTime, duration, currentBlock.room, currentBlock.id, currentBlock.type)
+                                                ? 'border-red-500 text-red-600 bg-red-50'
+                                                : ''
+                                                }`}
+                                        >
+                                            <option value="">Seleccionar...</option>
+                                            {availableSlots.map(slot => {
+                                                const isAvailable = checkSlotAvailability(
+                                                    slot,
+                                                    duration,
+                                                    currentBlock.room,
+                                                    currentBlock.id,
+                                                    currentBlock.type
+                                                );
+                                                return (
+                                                    <option
+                                                        key={slot}
+                                                        value={slot}
+                                                        disabled={!isAvailable && slot !== currentBlock.startTime}
+                                                        className={!isAvailable ? "text-gray-400 bg-gray-50 italic" : ""}
+                                                    >
+                                                        {slot} {!isAvailable ? '(Ocupado)' : ''}
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                    </div>
+                                    {!checkSlotAvailability(currentBlock.startTime, duration, currentBlock.room, currentBlock.id, currentBlock.type) && (
+                                        <div className="mt-1 text-xs text-red-500 flex items-center gap-1 font-medium animate-fadeIn">
+                                            <AlertCircle size={12} />
+                                            <span>Horario no disponible en esta sala</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Duración</label>
+                                    <select
+                                        value={duration}
+                                        onChange={e => {
+                                            const newDuration = parseInt(e.target.value);
+                                            setDuration(newDuration);
+                                            if (currentBlock.startTime) {
+                                                const startMins = timeToMinutes(currentBlock.startTime);
+                                                const endMins = startMins + newDuration;
+                                                setCurrentBlock({
+                                                    ...currentBlock,
+                                                    endTime: minutesToTime(endMins)
+                                                });
+                                            }
+                                        }}
+                                        className="w-full p-2 border rounded-lg text-sm bg-white"
+                                    >
+                                        {durationOptions.map(opt => (
+                                            <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="text-xs text-center text-gray-500 bg-gray-50 p-2 rounded">
+                                    Fin calculado: <strong>{currentBlock.endTime || '--:--'}</strong>
                                 </div>
                             </div>
                             <div className="w-2/3">
@@ -308,29 +705,80 @@ const ProgramManager = () => {
                                 />
                                 <div className="flex gap-4">
                                     <div className="flex-1">
-                                        <FormField
-                                            label="Lugar / Sala"
+                                        <label className="block text-xs font-bold text-gray-500 mb-1">Lugar / Sala</label>
+                                        <select
                                             value={currentBlock.room}
                                             onChange={e => setCurrentBlock({ ...currentBlock, room: e.target.value })}
-                                        />
+                                            className="w-full p-2 border rounded-lg text-sm"
+                                        >
+                                            <option value="">Seleccionar sala...</option>
+                                            {halls.map(hall => (
+                                                <option key={hall.id} value={hall.name}>{hall.name}</option>
+                                            ))}
+                                        </select>
                                     </div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 relative">
                                         <FormField
                                             label="Ponente (Opcional)"
                                             value={currentBlock.speaker || ''}
                                             onChange={e => setCurrentBlock({ ...currentBlock, speaker: e.target.value })}
                                         />
+                                        <button
+                                            onClick={() => openLinkWork(null)}
+                                            className="absolute right-0 top-0 text-blue-600 text-xs font-bold hover:underline flex items-center gap-1"
+                                            title="Importar desde Trabajos Aceptados"
+                                        >
+                                            <BookOpen size={12} /> Importar
+                                        </button>
                                     </div>
                                 </div>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                <div className="bg-orange-50 text-orange-800 text-xs p-3 rounded-lg border border-orange-100 flex gap-2">
-                                    <Columns size={16} />
-                                    <span>Configura las actividades para cada sala disponible en este horario.</span>
+                                <div className="flex justify-between items-center bg-orange-50 p-3 rounded-lg border border-orange-100">
+                                    <div className="flex gap-2 text-orange-800 text-xs">
+                                        <Columns size={16} />
+                                        <span>Configura las actividades para cada sala disponible.</span>
+                                    </div>
+                                    <Button size="xs" variant="outline" onClick={() => setIsManagingRooms(!isManagingRooms)}>
+                                        {isManagingRooms ? 'Ocultar Gestión' : 'Gestionar Salas'}
+                                    </Button>
                                 </div>
+
+                                {isManagingRooms && (
+                                    <div className="bg-white p-3 rounded-lg border border-gray-200 animate-fadeIn mb-4">
+                                        <div className="flex gap-2 mb-3">
+                                            <input
+                                                type="text"
+                                                placeholder="Nombre de nueva sala..."
+                                                className="flex-1 p-2 border rounded-lg text-sm"
+                                                value={newHallName}
+                                                onChange={e => setNewHallName(e.target.value)}
+                                            />
+                                            <Button size="sm" onClick={handleAddHall} disabled={!newHallName.trim()}>
+                                                <Plus size={16} className="mr-1" /> Agregar
+                                            </Button>
+                                        </div>
+                                        <div className="space-y-2 max-h-40 overflow-y-auto">
+                                            {halls.map(hall => (
+                                                <div key={hall.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
+                                                    <input
+                                                        type="text"
+                                                        value={hall.name}
+                                                        onChange={(e) => handleUpdateHall(hall.id, e.target.value)}
+                                                        className="flex-1 bg-transparent border-none text-sm focus:ring-0 p-0"
+                                                    />
+                                                    <button onClick={() => handleRemoveHall(hall.id)} className="text-red-500 hover:bg-red-50 p-1 rounded">
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
                                 {halls.map(hall => (
-                                    <div key={hall.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                                    <div key={hall.id} className="p-4 bg-gray-50 rounded-lg border border-gray-200 relative group">
                                         <h5 className="font-bold text-sm text-gray-700 mb-3 flex items-center gap-2">
                                             <MapPin size={14} /> {hall.name}
                                         </h5>
@@ -347,18 +795,27 @@ const ProgramManager = () => {
                                                 }}
                                                 className="w-full p-2 border rounded text-sm"
                                             />
-                                            <input
-                                                type="text"
-                                                placeholder="Ponente"
-                                                value={currentBlock.sessions?.[hall.id]?.speaker || ''}
-                                                onChange={e => {
-                                                    const newSessions = { ...currentBlock.sessions };
-                                                    if (!newSessions[hall.id]) newSessions[hall.id] = {};
-                                                    newSessions[hall.id].speaker = e.target.value;
-                                                    setCurrentBlock({ ...currentBlock, sessions: newSessions });
-                                                }}
-                                                className="w-full p-2 border rounded text-sm"
-                                            />
+                                            <div className="relative">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ponente"
+                                                    value={currentBlock.sessions?.[hall.id]?.speaker || ''}
+                                                    onChange={e => {
+                                                        const newSessions = { ...currentBlock.sessions };
+                                                        if (!newSessions[hall.id]) newSessions[hall.id] = {};
+                                                        newSessions[hall.id].speaker = e.target.value;
+                                                        setCurrentBlock({ ...currentBlock, sessions: newSessions });
+                                                    }}
+                                                    className="w-full p-2 border rounded text-sm pr-8"
+                                                />
+                                                <button
+                                                    onClick={() => openLinkWork(hall.id)}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-500 hover:text-blue-700"
+                                                    title="Importar Trabajo"
+                                                >
+                                                    <BookOpen size={14} />
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
@@ -373,6 +830,129 @@ const ProgramManager = () => {
                         </div>
                     </div>
                 )}
+            </Modal>
+
+            {/* Conflict Warning Modal */}
+            <Modal
+                isOpen={conflictWarning !== null}
+                onClose={() => setConflictWarning(null)}
+                title="⚠️ Conflicto de Horarios Detectado"
+                size="md"
+            >
+                {conflictWarning && (
+                    <div className="space-y-4">
+                        <p className="text-sm text-gray-700">
+                            Se detectaron los siguientes conflictos de horarios:
+                        </p>
+
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 space-y-3">
+                            {conflictWarning.conflicts.map((c, i) => (
+                                <div key={i} className="flex items-start gap-2">
+                                    <AlertCircle size={18} className="text-red-500 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm flex-1">
+                                        <div className="font-bold text-red-900">{c.block.title || 'Actividad'}</div>
+                                        <div className="text-red-700 mt-1">{c.reason}</div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <p className="text-xs text-gray-500 bg-yellow-50 p-3 rounded border border-yellow-200">
+                            💡 <strong>Nota:</strong> Puedes guardar de todas formas si es necesario, pero esto creará un conflicto en el programa público.
+                        </p>
+
+                        <div className="flex gap-3 justify-end pt-2 border-t border-gray-100">
+                            <Button variant="ghost" onClick={conflictWarning.onCancel}>
+                                Cancelar
+                            </Button>
+                            <Button
+                                onClick={conflictWarning.onConfirm}
+                                className="bg-red-600 hover:bg-red-700 text-white"
+                            >
+                                Guardar de todas formas
+                            </Button>
+                        </div>
+                    </div>
+                )}
+            </Modal>
+
+            {/* Link Work Modal */}
+            <Modal
+                isOpen={isLinkingWork}
+                onClose={() => { setIsLinkingWork(false); setLinkingTarget(null); }}
+                title="Vincular Trabajo Académico"
+                size="md"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-600">Selecciona un trabajo aceptado para rellenar los datos de la sesión.</p>
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                        {works.filter(w => w.status === 'Aceptado').length === 0 && (
+                            <p className="text-center text-gray-500 py-4 italic">No hay trabajos aceptados disponibles.</p>
+                        )}
+                        {works.filter(w => w.status === 'Aceptado').map(work => (
+                            <button
+                                key={work.id}
+                                onClick={() => handleLinkWork(work)}
+                                className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                            >
+                                <div className="font-bold text-sm text-gray-800 group-hover:text-blue-700 line-clamp-2">{work.title}</div>
+                                <div className="flex justify-between mt-1 text-xs text-gray-500">
+                                    <span>{work.author}</span>
+                                    <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                        <Check size={10} /> Aceptado
+                                    </span>
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex justify-end pt-2">
+                        <Button variant="ghost" onClick={() => { setIsLinkingWork(false); setLinkingTarget(null); }}>Cancelar</Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Schedule Config Modal */}
+            <Modal
+                isOpen={isConfigOpen}
+                onClose={() => setIsConfigOpen(false)}
+                title="Configuración de Horario"
+                size="sm"
+            >
+                <div className="space-y-4">
+                    <p className="text-sm text-gray-600">
+                        Define el rango horario y los intervalos de tiempo para la programación de actividades.
+                    </p>
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            label="Hora Inicio"
+                            type="time"
+                            value={scheduleConfig.startTime}
+                            onChange={e => setScheduleConfig({ ...scheduleConfig, startTime: e.target.value })}
+                        />
+                        <FormField
+                            label="Hora Fin"
+                            type="time"
+                            value={scheduleConfig.endTime}
+                            onChange={e => setScheduleConfig({ ...scheduleConfig, endTime: e.target.value })}
+                        />
+                    </div>
+                    <FormField
+                        label="Intervalo (minutos)"
+                        type="number"
+                        min="5"
+                        max="60"
+                        step="5"
+                        value={scheduleConfig.interval}
+                        onChange={e => setScheduleConfig({ ...scheduleConfig, interval: parseInt(e.target.value) })}
+                    />
+
+                    <div className="flex justify-end pt-4 border-t border-gray-100">
+                        <Button variant="ghost" onClick={() => setIsConfigOpen(false)} className="mr-2">Cancelar</Button>
+                        <Button onClick={handleSaveScheduleConfig}>
+                            <Save size={16} className="mr-2" /> Guardar Configuración
+                        </Button>
+                    </div>
+                </div>
             </Modal>
 
             <ConfirmDialog

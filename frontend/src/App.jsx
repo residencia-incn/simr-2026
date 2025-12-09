@@ -20,6 +20,7 @@ import AcademicDashboard from './views/AcademicDashboard';
 import LoginModal from './views/LoginModal';
 import BasesView from './views/BasesView';
 import NotificationMenu from './components/common/NotificationMenu';
+import TasksQuickAccess from './components/common/TasksQuickAccess';
 import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
 
@@ -199,6 +200,9 @@ export default function SIMRApp() {
             {/* Notification Menu */}
             {user && <NotificationMenu user={user} />}
 
+            {/* Tasks Quick Access */}
+            {user && <TasksQuickAccess user={user} />}
+
             {user ? (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative" ref={roleMenuRef}>
                 <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
@@ -340,43 +344,44 @@ export default function SIMRApp() {
 
         {currentView === 'profile' && <ProfileView user={user} onSave={(updatedUser) => setUser({ ...user, ...updatedUser })} />}
         {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}
-        {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}
       </main>
 
       {/* Chat Widget */}
       <ChatWidget />
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-200 mt-12 py-12">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 text-center md:text-left grid md:grid-cols-4 gap-8">
-          <div className="col-span-1 md:col-span-2">
-            <h3 className="font-bold text-gray-900 mb-4">{eventName}</h3>
-            <p className="text-gray-600 text-sm leading-relaxed max-w-sm">
-              Instituto Nacional de Ciencias Neurológicas.<br />
-              Jr. Ancash 1271, Barrios Altos, Lima - Perú.<br />
-              Promoviendo la excelencia en investigación neurocientífica desde 1995.
-            </p>
+      {['home', 'bases', 'roadmap', 'program', 'committee', 'gallery', 'posters', 'registration', 'login'].includes(currentView) && (
+        <footer className="bg-white border-t border-gray-200 mt-12 py-12">
+          <div className="max-w-7xl mx-auto px-4 md:px-8 text-center md:text-left grid md:grid-cols-4 gap-8">
+            <div className="col-span-1 md:col-span-2">
+              <h3 className="font-bold text-gray-900 mb-4">{eventName}</h3>
+              <p className="text-gray-600 text-sm leading-relaxed max-w-sm">
+                Instituto Nacional de Ciencias Neurológicas.<br />
+                Jr. Ancash 1271, Barrios Altos, Lima - Perú.<br />
+                Promoviendo la excelencia en investigación neurocientífica desde 1995.
+              </p>
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-900 mb-4">Enlaces</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li><a href="#" className="hover:text-blue-700">Bases del Concurso</a></li>
+                <li><a href="#" className="hover:text-blue-700">Libro de Resúmenes ({parseInt(eventYear) - 1})</a></li>
+                <li><a href="#" className="hover:text-blue-700">Preguntas Frecuentes</a></li>
+              </ul>
+            </div>
+            <div>
+              <h4 className="font-bold text-gray-900 mb-4">Soporte</h4>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>{config?.contact?.email || 'comite.simr@incn.gob.pe'}</li>
+                <li>{config?.contact?.phone || '+51 1 411-7700 (Anexo 234)'}</li>
+              </ul>
+            </div>
           </div>
-          <div>
-            <h4 className="font-bold text-gray-900 mb-4">Enlaces</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li><a href="#" className="hover:text-blue-700">Bases del Concurso</a></li>
-              <li><a href="#" className="hover:text-blue-700">Libro de Resúmenes ({parseInt(eventYear) - 1})</a></li>
-              <li><a href="#" className="hover:text-blue-700">Preguntas Frecuentes</a></li>
-            </ul>
+          <div className="max-w-7xl mx-auto px-4 md:px-8 mt-12 pt-8 border-t border-gray-100 text-center text-xs text-gray-500">
+            © {eventYear} Comité Organizador de Residentes INCN. Todos los derechos reservados.
           </div>
-          <div>
-            <h4 className="font-bold text-gray-900 mb-4">Soporte</h4>
-            <ul className="space-y-2 text-sm text-gray-600">
-              <li>{config?.contact?.email || 'comite.simr@incn.gob.pe'}</li>
-              <li>{config?.contact?.phone || '+51 1 411-7700 (Anexo 234)'}</li>
-            </ul>
-          </div>
-        </div>
-        <div className="max-w-7xl mx-auto px-4 md:px-8 mt-12 pt-8 border-t border-gray-100 text-center text-xs text-gray-500">
-          © {eventYear} Comité Organizador de Residentes INCN. Todos los derechos reservados.
-        </div>
-      </footer>
+        </footer>
+      )}
     </div>
   );
 }

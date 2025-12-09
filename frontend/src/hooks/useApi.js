@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 
 /**
  * Custom hook for API calls with loading and error states
@@ -11,12 +11,20 @@ export const useApi = (apiFunction, immediate = true) => {
     const [loading, setLoading] = useState(immediate);
     const [error, setError] = useState(null);
 
+    // Use ref to store the latest apiFunction without causing re-renders
+    const apiFunctionRef = useRef(apiFunction);
+
+    // Update ref when apiFunction changes
+    useEffect(() => {
+        apiFunctionRef.current = apiFunction;
+    }, [apiFunction]);
+
     const execute = useCallback(async (...params) => {
         setLoading(true);
         setError(null);
 
         try {
-            const result = await apiFunction(...params);
+            const result = await apiFunctionRef.current(...params);
             setData(result);
             return result;
         } catch (err) {
@@ -25,7 +33,7 @@ export const useApi = (apiFunction, immediate = true) => {
         } finally {
             setLoading(false);
         }
-    }, [apiFunction]);
+    }, []); // Empty dependency array - execute function never changes
 
     useEffect(() => {
         if (immediate) {

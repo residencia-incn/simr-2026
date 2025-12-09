@@ -56,6 +56,8 @@ export const STORAGE_KEYS = {
     PRINT_CONFIG: 'simr_print_config',
     PROGRAM: 'event_program',
     PROGRAM_DAYS: 'event_days',
+    PROGRAM_HALLS: 'simr_program_halls',
+    PROGRAM_SCHEDULE_CONFIG: 'simr_program_schedule_config',
     COMMITTEE: 'event_committee',
     GALLERY: 'simr_gallery',
     HERO_SLIDES: 'simr_hero_slides',
@@ -63,5 +65,9 @@ export const STORAGE_KEYS = {
     WORKS: 'simr_works',
     ACADEMIC: 'simr_academic_config',
     ROADMAP: 'simr_roadmap',
-    COUPONS: 'simr_coupons'
+    COUPONS: 'simr_coupons',
+    USERS: 'simr_users',
+    NEWS: 'simr_news',
+    PLANNING_MEETINGS: 'simr_planning_meetings',
+    PLANNING_TASKS: 'simr_planning_tasks'
 };

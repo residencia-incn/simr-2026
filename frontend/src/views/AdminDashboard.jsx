@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
-    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield
+    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, ListTodo
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -16,6 +16,8 @@ import CommitteeManager from '../components/admin/CommitteeManager';
 import UserManagement from '../components/admin/UserManagement';
 import RoadmapManager from '../components/admin/RoadmapManager';
 import CouponManager from '../components/admin/CouponManager';
+import PlanningManager from '../components/admin/PlanningManager';
+import MyTasks from '../components/admin/MyTasks';
 import VerificationList from '../components/common/VerificationList';
 import { api } from '../services/api';
 
@@ -119,23 +121,31 @@ const AdminDashboard = ({ user }) => {
         return <div className="p-8 text-center text-gray-500">Cargando panel de control...</div>;
     }
 
+    const hasAdminRole = user?.roles?.includes('admin') || user?.role === 'admin';
+    const hasSecretaryRole = user?.roles?.includes('admin') || user?.role === 'admin'; // Secretario tiene rol admin
+    const hasCommitteeRole = user?.roles?.some(r => ['admin', 'academic', 'treasurer'].includes(r)) ||
+        ['admin', 'academic', 'treasurer'].includes(user?.role);
+
     const navItems = [
         { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
         { id: 'admission', label: 'Admisión', icon: ClipboardList, badge: registrations.length },
         { id: 'program', label: 'Programa', icon: Calendar },
         { id: 'committee', label: 'Comité', icon: Users },
+        ...(hasSecretaryRole ? [{ id: 'planning', label: 'Planificación', icon: Target }] : []),
+        ...(hasCommitteeRole ? [{ id: 'mytasks', label: 'Mis Tareas', icon: ListTodo }] : []),
         { id: 'certification', label: 'Certificación', icon: Award },
-        { id: 'config', label: 'Configuración', icon: Settings },
         { id: 'gallery', label: 'Galería', icon: Image },
         { id: 'roadmap', label: 'Roadmap', icon: Map },
         { id: 'coupons', label: 'Cupones', icon: Ticket },
+        { id: 'config', label: 'Configuración', icon: Settings },
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : [])
     ];
 
     return (
         <div className="animate-fadeIn min-h-[600px] flex flex-col md:flex-row gap-6">
             {/* Sidebar Navigation */}
-            <div className="w-full md:w-20 bg-white shadow-sm border border-gray-200 rounded-2xl flex md:flex-col items-center justify-between md:justify-start py-4 px-2 gap-4 sticky top-24 h-fit md:min-h-[600px] overflow-x-auto md:overflow-visible z-10">
+            {/* Sidebar Navigation */}
+            <div className="w-full md:w-16 bg-white shadow-sm border border-gray-200 rounded-2xl flex md:flex-col items-center justify-between md:justify-start py-4 px-2 gap-2 sticky top-24 h-fit md:min-h-0 overflow-x-auto md:overflow-visible z-10">
                 {navItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -143,13 +153,13 @@ const AdminDashboard = ({ user }) => {
                         <div key={item.id} className="relative group">
                             <button
                                 onClick={() => handleTabChange(item.id)}
-                                className={`p-3 rounded-xl transition-all relative
+                                className={`p-2 rounded-xl transition-all relative
                                     ${isActive
                                         ? 'bg-blue-600 text-white shadow-md shadow-blue-200'
                                         : 'text-gray-500 hover:bg-gray-100 hover:text-blue-600'
                                     }`}
                             >
-                                <Icon size={24} />
+                                <Icon size={20} />
                                 {item.badge > 0 && (
                                     <span className="absolute -top-1 -right-1 flex h-4 w-4">
                                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -173,13 +183,14 @@ const AdminDashboard = ({ user }) => {
 
             {/* Main Content */}
             <div className="flex-1 overflow-hidden">
-                <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-gray-900">{navItems.find(i => i.id === activeTab)?.label}</h2>
-                    <p className="text-gray-500 text-sm">Panel de Organización SIMR 2026</p>
-                </div>
-
                 {activeTab === 'overview' && (
                     <>
+                        {/* Header for Overview */}
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-bold text-gray-900">Resumen del Evento</h2>
+                            <p className="text-gray-500 text-sm">Panel de Organización SIMR 2026</p>
+                        </div>
+
                         {/* Financial Summary */}
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                             <Card className="p-5 border-l-4 border-blue-500">
@@ -333,6 +344,18 @@ const AdminDashboard = ({ user }) => {
                 {activeTab === 'users' && isSuperAdmin && (
                     <div className="animate-fadeIn">
                         <UserManagement />
+                    </div>
+                )}
+
+                {activeTab === 'planning' && hasSecretaryRole && (
+                    <div className="animate-fadeIn h-[600px]">
+                        <PlanningManager currentUser={user} />
+                    </div>
+                )}
+
+                {activeTab === 'mytasks' && hasCommitteeRole && (
+                    <div className="animate-fadeIn h-[600px]">
+                        <MyTasks currentUser={user} />
                     </div>
                 )}
             </div>

@@ -9,6 +9,27 @@ export const MOCK_USERS = [
     { id: 'u8', name: 'Dr. Juan Pérez', email: 'jperez@gmail.com', institution: 'HNDAC', roles: ['resident', 'participant', 'treasurer'], role: 'Residente' },
     { id: 'u9', name: 'Dra. María López', email: 'mlopez@gmail.com', institution: 'Hosp. Almenara', roles: ['participant'], role: 'Asistente' },
     { id: 'u10', name: 'Dr. Julio García', email: 'jgarcia@gmail.com', institution: 'Hosp. Rebagliati', roles: ['participant'], role: 'Asistente' },
+
+    // Test Users for Planning Module
+    {
+        id: 'u_academic',
+        name: 'Dr. Pedro Castillo',
+        email: 'academico',
+        password: 'academico',
+        institution: 'INCN',
+        roles: ['academic', 'participant'],
+        role: 'academic'
+    },
+    {
+        id: 'u_treasurer',
+        name: 'Dra. Ana Torres',
+        email: 'tesorero',
+        password: 'tesorero',
+        institution: 'INCN',
+        roles: ['treasurer', 'participant'],
+        role: 'treasurer'
+    },
+
     // Default Super User with ALL roles
     {
         id: 'u999',

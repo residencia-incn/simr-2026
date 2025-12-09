@@ -167,6 +167,34 @@ export const api = {
             storage.set(STORAGE_KEYS.PROGRAM_DAYS, days);
             window.dispatchEvent(new Event('program-days-updated'));
             return true;
+        },
+        getHalls: async () => {
+            await delay();
+            const defaultHalls = [
+                { id: 'h1', name: 'Auditorio Principal' },
+                { id: 'h2', name: 'Sala 1 (Talleres)' },
+                { id: 'h3', name: 'Sala Virtual' }
+            ];
+            return storage.get(STORAGE_KEYS.PROGRAM_HALLS, defaultHalls);
+        },
+
+        saveHalls: async (halls) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PROGRAM_HALLS, halls);
+            return true;
+        },
+        getScheduleConfig: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PROGRAM_SCHEDULE_CONFIG, {
+                startTime: "08:00",
+                endTime: "20:00",
+                interval: 30
+            });
+        },
+        saveScheduleConfig: async (config) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PROGRAM_SCHEDULE_CONFIG, config);
+            return true;
         }
     },
 
@@ -449,7 +477,121 @@ export const api = {
         }
     },
 
-    // --- 11. Authentication ---
+
+    // --- 11. Planning & Task Management ---
+    planning: {
+        // Meetings
+        getMeetings: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+        },
+        saveMeeting: async (meeting) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const existing = meetings.findIndex(m => m.id === meeting.id);
+
+            if (existing >= 0) {
+                meetings[existing] = { ...meeting, updatedAt: Date.now() };
+            } else {
+                meetings.push({
+                    ...meeting,
+                    id: meeting.id || `meeting-${Date.now()}`,
+                    createdAt: Date.now()
+                });
+            }
+
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+            return meeting;
+        },
+        deleteMeeting: async (id) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const updated = meetings.filter(m => m.id !== id);
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, updated);
+
+            // Also delete associated tasks
+            const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+            const updatedTasks = tasks.filter(t => t.meetingId !== id);
+            storage.set(STORAGE_KEYS.PLANNING_TASKS, updatedTasks);
+
+            return true;
+        },
+
+        // Tasks
+        getTasks: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+        },
+        saveTask: async (task) => {
+            await delay();
+            const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+            const existing = tasks.findIndex(t => t.id === task.id);
+
+            if (existing >= 0) {
+                tasks[existing] = { ...task, updatedAt: Date.now() };
+            } else {
+                tasks.push({
+                    ...task,
+                    id: task.id || `task-${Date.now()}`,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now()
+                });
+            }
+
+            storage.set(STORAGE_KEYS.PLANNING_TASKS, tasks);
+            return task;
+        },
+        deleteTask: async (id) => {
+            await delay();
+            const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+            const updated = tasks.filter(t => t.id !== id);
+            storage.set(STORAGE_KEYS.PLANNING_TASKS, updated);
+            return true;
+        },
+        updateTaskProgress: async (taskId, progress, comment, userId) => {
+            await delay();
+            const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+            const taskIndex = tasks.findIndex(t => t.id === taskId);
+
+            if (taskIndex >= 0) {
+                const task = tasks[taskIndex];
+                task.progress = progress;
+                task.updatedAt = Date.now();
+
+                // Update status based on progress
+                if (progress === 100) {
+                    task.status = 'completed';
+                } else if (progress > 0) {
+                    task.status = 'in_progress';
+                } else {
+                    task.status = 'pending';
+                }
+
+                // Add comment if provided
+                if (comment) {
+                    if (!task.comments) task.comments = [];
+                    task.comments.push({
+                        userId,
+                        text: comment,
+                        timestamp: Date.now(),
+                        progress
+                    });
+                }
+
+                storage.set(STORAGE_KEYS.PLANNING_TASKS, tasks);
+                return task;
+            }
+
+            throw new Error('Task not found');
+        },
+        getMyTasks: async (userId) => {
+            await delay();
+            const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
+            return tasks.filter(t => t.assignedTo === userId);
+        }
+    },
+
+    // --- 12. Authentication ---
     auth: {
         login: async (email, password) => {
             await delay(600); // Simulate network latency

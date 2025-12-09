@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, Printer, Download } from 'lucide-react';
+import { Search, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
 import PhotocheckModal from './PhotocheckModal';
 import { useSearch, useSortableData, useModal } from '../../hooks';
 import { Button, Table, FormField, Badge } from '../ui';
@@ -54,9 +54,54 @@ const AttendeeList = ({ attendees }) => {
                 return <Badge variant={colors[item.role] || colors.default}>{item.role}</Badge>;
             }
         },
-        { header: 'Especialidad', key: 'specialty', sortable: true },
+        {
+            header: 'Especialidad',
+            key: 'specialty',
+            sortable: true,
+            className: 'text-center w-16',
+            render: (item) => {
+                const spec = item.specialty || '';
+                let Icon = Stethoscope;
+                let color = 'text-gray-400';
+
+                if (spec.toLowerCase().includes('neurología')) { Icon = Brain; color = 'text-purple-600'; }
+                else if (spec.toLowerCase().includes('pediatría')) { Icon = Baby; color = 'text-pink-500'; }
+                else if (spec.toLowerCase().includes('cirugía')) { Icon = Activity; color = 'text-red-500'; }
+                else if (spec.toLowerCase().includes('medicina')) { Icon = Stethoscope; color = 'text-blue-500'; }
+
+                return (
+                    <div className="flex justify-center group relative cursor-help">
+                        <Icon size={20} className={color} strokeWidth={1.5} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
+                            {spec}
+                        </span>
+                    </div>
+                );
+            }
+        },
         { header: 'Email', key: 'email', sortable: true },
-        { header: 'Modalidad', key: 'modality' },
+        {
+            header: 'Modality',
+            key: 'modality',
+            className: 'text-center w-16',
+            render: (item) => {
+                const mod = item.modality || 'Presencial';
+                let Icon = MapPin;
+                let color = 'text-green-600';
+
+                if (mod === 'Virtual') { Icon = Wifi; color = 'text-blue-500'; }
+                else if (mod === 'Híbrido') { Icon = Monitor; color = 'text-purple-600'; }
+
+                return (
+                    <div className="flex justify-center group relative cursor-help">
+                        <Icon size={18} className={color} strokeWidth={2} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
+                            {mod}
+                        </span>
+                    </div>
+                );
+            }
+        },
         { header: 'Fecha Reg.', key: 'date', sortable: true }
     ];
 
