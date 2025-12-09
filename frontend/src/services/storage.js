@@ -69,5 +69,7 @@ export const STORAGE_KEYS = {
     USERS: 'simr_users',
     NEWS: 'simr_news',
     PLANNING_MEETINGS: 'simr_planning_meetings',
-    PLANNING_TASKS: 'simr_planning_tasks'
+    PLANNING_TASKS: 'simr_planning_tasks',
+    ATTENDANCE: 'simr_attendance',
+    ATTENDANCE_TOKENS: 'simr_attendance_tokens'
 };

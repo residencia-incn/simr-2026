@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
-    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen
+    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode
 } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
@@ -19,6 +19,7 @@ import CouponManager from '../components/admin/CouponManager';
 import PlanningManager from '../components/admin/PlanningManager';
 import VerificationList from '../components/common/VerificationList';
 import DocumentationView from './DocumentationView';
+import AttendanceManager from './AttendanceManager';
 import { api } from '../services/api';
 
 const AdminDashboard = ({ user }) => {
@@ -138,14 +139,16 @@ const AdminDashboard = ({ user }) => {
         { id: 'coupons', label: 'Cupones', icon: Ticket },
         { id: 'config', label: 'Configuración', icon: Settings },
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
-        ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : [])
+        ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : []),
+        { id: 'attendance', label: 'Asistencia', icon: QrCode }
     ];
 
     return (
         <div className="animate-fadeIn min-h-[600px] flex flex-col md:flex-row gap-6">
             {/* Sidebar Navigation */}
             {/* Sidebar Navigation */}
-            <div className="w-full md:w-16 bg-white shadow-sm border border-gray-200 rounded-2xl flex md:flex-col items-center justify-between md:justify-start py-4 px-2 gap-2 sticky top-24 h-fit md:min-h-0 overflow-x-auto md:overflow-visible z-10">
+            {/* Sidebar Navigation */}
+            <div className="w-full md:w-16 bg-white shadow-sm border border-gray-200 rounded-2xl flex md:flex-col items-center justify-between md:justify-center py-4 px-2 gap-2 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto md:overflow-visible z-10">
                 {navItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -182,7 +185,7 @@ const AdminDashboard = ({ user }) => {
             </div>
 
             {/* Main Content */}
-            <div className="flex-1 overflow-hidden">
+            <div className="flex-1">
                 {activeTab === 'overview' && (
                     <>
                         {/* Header for Overview */}
@@ -300,13 +303,13 @@ const AdminDashboard = ({ user }) => {
                 )}
 
                 {activeTab === 'program' && (
-                    <div className="animate-fadeIn h-[600px]">
+                    <div className="animate-fadeIn min-h-[600px]">
                         <ProgramManager />
                     </div>
                 )}
 
                 {activeTab === 'committee' && (
-                    <div className="animate-fadeIn h-[600px]">
+                    <div className="animate-fadeIn min-h-[600px]">
                         <CommitteeManager />
                     </div>
                 )}
@@ -348,14 +351,20 @@ const AdminDashboard = ({ user }) => {
                 )}
 
                 {activeTab === 'planning' && hasSecretaryRole && (
-                    <div className="animate-fadeIn h-[600px]">
+                    <div className="animate-fadeIn min-h-[600px]">
                         <PlanningManager currentUser={user} />
                     </div>
                 )}
 
                 {activeTab === 'docs' && isSuperAdmin && (
-                    <div className="animate-fadeIn h-[600px]">
+                    <div className="animate-fadeIn min-h-[600px]">
                         <DocumentationView />
+                    </div>
+                )}
+
+                {activeTab === 'attendance' && (
+                    <div className="animate-fadeIn">
+                        <AttendanceManager />
                     </div>
                 )}
             </div>

@@ -591,7 +591,94 @@ export const api = {
         }
     },
 
-    // --- 12. Authentication ---
+    // --- 12. Attendance ---
+    attendance: {
+        record: async (userId, type, timestamp = new Date().toISOString(), method = 'staff_scan') => {
+            await delay();
+            const attendance = storage.get(STORAGE_KEYS.ATTENDANCE, []);
+
+            // Generate a unique ID for this record
+            const id = `att-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            const newRecord = {
+                id,
+                userId,
+                type, // 'entry' or 'exit'
+                timestamp,
+                method // 'staff_scan' or 'self_scan'
+            };
+
+            storage.set(STORAGE_KEYS.ATTENDANCE, [newRecord, ...attendance]);
+            return newRecord;
+        },
+
+        getStats: async () => {
+            await delay();
+            const attendance = storage.get(STORAGE_KEYS.ATTENDANCE, []);
+            const users = await api.users.getAll();
+            const registrations = await api.registrations.getAll(); // Assuming accepted registrations define total participants
+
+            // Get today's start and end
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today);
+            tomorrow.setDate(tomorrow.getDate() + 1);
+
+            // Filter today's records
+            const todayRecords = attendance.filter(r => {
+                const rDate = new Date(r.timestamp);
+                return rDate >= today && rDate < tomorrow;
+            });
+
+            // Unique users present today (have at least one entry)
+            const presentUserIds = new Set(
+                todayRecords
+                    .filter(r => r.type === 'entry')
+                    .map(r => r.userId)
+            );
+
+            return {
+                totalRegistered: users.length, // Or use registrations count
+                todayPresent: presentUserIds.size,
+                todayVirtual: 0, // Placeholder for future virtual attendance logic
+                inPerson: presentUserIds.size,
+                history: attendance
+            };
+        },
+
+        getUserHistory: async (userId) => {
+            await delay();
+            const attendance = storage.get(STORAGE_KEYS.ATTENDANCE, []);
+            return attendance.filter(r => r.userId === userId);
+        },
+
+        generateDayToken: async (dayId) => {
+            await delay();
+            const activeTokens = storage.get(STORAGE_KEYS.ATTENDANCE_TOKENS, {});
+
+            // If exists and valid, return it, otherwise generate new
+            // For simplicity, we regenerate or return existing. 
+            // In a real app, this would change dynamically or be valid for specific timeframe.
+            const token = `SIMR2026-${dayId}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+
+            activeTokens[dayId] = {
+                token,
+                generatedAt: new Date().toISOString()
+            };
+
+            storage.set(STORAGE_KEYS.ATTENDANCE_TOKENS, activeTokens);
+            return token;
+        },
+
+        verifyDayToken: async (token) => {
+            await delay();
+            const activeTokens = storage.get(STORAGE_KEYS.ATTENDANCE_TOKENS, {});
+            const dayId = Object.keys(activeTokens).find(key => activeTokens[key].token === token);
+            return dayId ? true : false;
+        }
+    },
+
+    // --- 13. Authentication ---
     auth: {
         login: async (email, password) => {
             await delay(600); // Simulate network latency

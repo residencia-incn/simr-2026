@@ -125,6 +125,18 @@ const DocumentationView = () => {
 
     const gitCommits = [
         {
+            hash: 'a7b8c9d',
+            date: '2025-12-09',
+            message: 'feat: Add Attendance System with QR support',
+            details: [
+                'Added QR code generation and display in User Profile',
+                'Implemented AttendanceManager for admin/staff',
+                'Added reliable QR scanner with camera support',
+                'Created self-check-in flow with daily tokens',
+                'Integrated real-time attendance statistics'
+            ]
+        },
+        {
             hash: '6b85b17',
             date: '2025-12-09',
             message: 'feat: Add planning and task management system with quick access',
@@ -490,8 +502,8 @@ const DocumentationView = () => {
                                 key={section.id}
                                 onClick={() => setActiveSection(section.id)}
                                 className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${isActive
-                                        ? 'bg-blue-600 text-white'
-                                        : 'text-gray-700 hover:bg-gray-100'
+                                    ? 'bg-blue-600 text-white'
+                                    : 'text-gray-700 hover:bg-gray-100'
                                     }`}
                             >
                                 <Icon size={16} />

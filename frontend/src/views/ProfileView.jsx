@@ -1,13 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff } from 'lucide-react';
 import { Card, Button, FormField, SectionHeader } from '../components/ui';
-import { useForm, useFileUpload } from '../hooks';
+import { useForm, useFileUpload, useApi } from '../hooks';
+import QRCode from 'react-qr-code';
+import AttendanceScanner from '../components/common/AttendanceScanner';
+import { api } from '../services/api';
 
 const ProfileView = ({ user, onSave }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [message, setMessage] = useState(null);
     const [passwordMessage, setPasswordMessage] = useState(null);
     const [showPassword, setShowPassword] = useState(false);
+    const [activeTab, setActiveTab] = useState('personal'); // 'personal' or 'attendance'
+    const [showScanner, setShowScanner] = useState(false);
+    const [attendanceHistory, setAttendanceHistory] = useState([]);
+
+    // Fetch attendance history
+    const { execute: loadHistory } = useApi(async () => {
+        if (user?.id) {
+            const history = await api.attendance.getUserHistory(user.id);
+            setAttendanceHistory(history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
+        }
+    });
+
+    useEffect(() => {
+        if (activeTab === 'attendance') {
+            loadHistory();
+        }
+    }, [activeTab, user]);
 
     // Password Form State
     const [passwordForm, setPasswordForm] = useState({
@@ -113,9 +133,57 @@ const ProfileView = ({ user, onSave }) => {
         }, 800);
     };
 
+    const handleScanSuccess = async (data) => {
+        setShowScanner(false);
+        try {
+            // Verify if it's a valid day token
+            const isValid = await api.attendance.verifyDayToken(data);
+
+            if (isValid) {
+                await api.attendance.record(user.id, 'entry', new Date().toISOString(), 'self_scan');
+                setMessage({ type: 'success', text: '¡Asistencia registrada correctamente!' });
+                loadHistory();
+            } else {
+                setMessage({ type: 'error', text: 'Código QR inválido o expirado.' });
+            }
+        } catch (error) {
+            console.error(error);
+            setMessage({ type: 'error', text: 'Error al registrar asistencia.' });
+        }
+    };
+
     return (
         <div className="animate-fadeIn max-w-4xl mx-auto space-y-6">
-            <SectionHeader title="Mi Perfil" subtitle="Administra tu información personal y profesional." />
+            <SectionHeader title="Mi Perfil" subtitle="Administra tu información personal, profesional y asistencia." />
+
+            {/* Tabs */}
+            <div className="flex gap-2 border-b border-gray-200 mb-6">
+                <button
+                    onClick={() => setActiveTab('personal')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'personal'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                >
+                    Información Personal
+                </button>
+                <button
+                    onClick={() => setActiveTab('attendance')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'attendance'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                >
+                    Asistencia y QR
+                </button>
+            </div>
+
+            {showScanner && (
+                <AttendanceScanner
+                    onScan={handleScanSuccess}
+                    onClose={() => setShowScanner(false)}
+                />
+            )}
 
             <div className="grid md:grid-cols-3 gap-6">
                 {/* Sidebar / Profile Card */}
@@ -197,190 +265,266 @@ const ProfileView = ({ user, onSave }) => {
                     )}
                 </div>
 
-                {/* Main Content / Edit Form */}
-                <div className="md:col-span-2">
-                    <Card className="p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
-                                <FileText size={20} className="text-blue-600" />
-                                Información Personal
-                            </h3>
-                            {!isEditing ? (
-                                <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
-                                    Editar Información
+                {/* Attendance Tab Content */}
+                {activeTab === 'attendance' && (
+                    <div className="md:col-span-2 space-y-6">
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                    <Camera size={20} className="text-blue-600" />
+                                    Mi Código QR
+                                </h3>
+                                <Button onClick={() => setShowScanner(true)}>
+                                    <Camera size={18} className="mr-2" />
+                                    Escanear QR del Evento
                                 </Button>
-                            ) : (
-                                <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="text-gray-500">
-                                    Cancelar
-                                </Button>
-                            )}
-                        </div>
-
-                        {message && (
-                            <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                                {message.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
-                                {message.text}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSubmit} className="space-y-6">
-                            <div className="grid md:grid-cols-2 gap-5">
-                                <FormField
-                                    label="Nombre Completo"
-                                    name="name"
-                                    value={form.name}
-                                    onChange={handleChange}
-                                    readOnly={!isEditing}
-                                    required
-                                    className="md:col-span-2"
-                                />
-                                <FormField
-                                    label="Correo Electrónico"
-                                    name="email"
-                                    type="email"
-                                    value={form.email}
-                                    onChange={handleChange}
-                                    readOnly={!isEditing}
-                                    required
-                                />
-                                <FormField
-                                    label="Teléfono / Celular"
-                                    name="phone"
-                                    type="tel"
-                                    value={form.phone}
-                                    onChange={handleChange}
-                                    readOnly={!isEditing}
-                                    placeholder="Ej. 987654321"
-                                />
-                                <FormField
-                                    label="Institución"
-                                    name="institution"
-                                    value={form.institution}
-                                    onChange={handleChange}
-                                    readOnly={!isEditing}
-                                    className="md:col-span-2"
-                                />
                             </div>
 
-                            <div className="border-t border-gray-100 pt-6 mt-2">
-                                <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                    <CreditCard size={18} className="text-gray-500" />
-                                    Datos Profesionales
-                                </h4>
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-3 gap-4">
-                                    <FormField
-                                        label="DNI"
-                                        name="dni"
-                                        value={form.dni}
-                                        readOnly={true}
-                                        className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                        subLabel="(No editable)"
-                                    />
-                                    <FormField
-                                        label="CMP"
-                                        name="cmp"
-                                        value={form.cmp}
-                                        readOnly={true}
-                                        className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                        subLabel="(No editable)"
-                                    />
-                                    <FormField
-                                        label="RNE"
-                                        name="rne"
-                                        value={form.rne}
-                                        readOnly={true}
-                                        className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                        subLabel="(No editable)"
+                            <div className="flex flex-col items-center justify-center p-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 mb-6">
+                                <div className="bg-white p-4 rounded-xl shadow-sm mb-4">
+                                    <QRCode
+                                        value={JSON.stringify({ id: user?.id, name: user?.name, role: user?.role })}
+                                        size={200}
+                                        level="H"
                                     />
                                 </div>
-                                <p className="text-xs text-gray-400 mt-2 ml-1">
-                                    * Para modificar estos datos, por favor contacte con el administrador del sistema.
+                                <p className="text-sm text-gray-500 text-center max-w-xs">
+                                    Presenta este código QR al ingresar al evento para registrar tu asistencia automáticamente.
                                 </p>
                             </div>
 
-                            {isEditing && (
-                                <div className="flex justify-end pt-4">
-                                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700 gap-2">
-                                        <Save size={18} />
-                                        Guardar Cambios
+                            <div className="border-t border-gray-100 pt-6">
+                                <h4 className="font-bold text-gray-900 mb-4">Historial de Asistencia</h4>
+
+                                {attendanceHistory.length === 0 ? (
+                                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                                        No hay registros de asistencia aún.
+                                    </div>
+                                ) : (
+                                    <div className="overflow-hidden rounded-lg border border-gray-200">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gray-50 text-gray-700 font-medium">
+                                                <tr>
+                                                    <th className="p-3">Fecha y Hora</th>
+                                                    <th className="p-3">Tipo</th>
+                                                    <th className="p-3">Método</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-gray-100">
+                                                {attendanceHistory.map((record) => (
+                                                    <tr key={record.id} className="hover:bg-gray-50">
+                                                        <td className="p-3 text-gray-900">
+                                                            {new Date(record.timestamp).toLocaleString('es-PE')}
+                                                        </td>
+                                                        <td className="p-3">
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${record.type === 'entry'
+                                                                ? 'bg-green-100 text-green-700'
+                                                                : 'bg-orange-100 text-orange-700'
+                                                                }`}>
+                                                                {record.type === 'entry' ? 'Entrada' : 'Salida'}
+                                                            </span>
+                                                        </td>
+                                                        <td className="p-3 text-gray-600">
+                                                            {record.method === 'self_scan' ? 'Auto-escaneo' : 'Staff'}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Personal Info Tab Content */}
+                {activeTab === 'personal' && (
+                    <div className="md:col-span-2 space-y-6">
+                        <Card className="p-6">
+                            {/* ... existing personal info form ... */}
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                    <FileText size={20} className="text-blue-600" />
+                                    Información Personal
+                                </h3>
+                                {!isEditing ? (
+                                    <Button size="sm" variant="outline" onClick={() => setIsEditing(true)}>
+                                        Editar Información
                                     </Button>
+                                ) : (
+                                    <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="text-gray-500">
+                                        Cancelar
+                                    </Button>
+                                )}
+                            </div>
+
+                            {message && (
+                                <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${message.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                    {message.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                    {message.text}
                                 </div>
                             )}
-                        </form>
-                    </Card>
 
-                    {/* Change Password Section */}
-                    <Card className="p-6 mt-6">
-                        <div className="mb-6">
-                            <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
-                                <Lock size={20} className="text-blue-600" />
-                                Seguridad
-                            </h3>
-                            <p className="text-sm text-gray-500 mt-1">Actualiza tu contraseña para mantener tu cuenta segura.</p>
-                        </div>
+                            <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="grid md:grid-cols-2 gap-5">
+                                    <FormField
+                                        label="Nombre Completo"
+                                        name="name"
+                                        value={form.name}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        required
+                                        className="md:col-span-2"
+                                    />
+                                    <FormField
+                                        label="Correo Electrónico"
+                                        name="email"
+                                        type="email"
+                                        value={form.email}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        required
+                                    />
+                                    <FormField
+                                        label="Teléfono / Celular"
+                                        name="phone"
+                                        type="tel"
+                                        value={form.phone}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        placeholder="Ej. 987654321"
+                                    />
+                                    <FormField
+                                        label="Institución"
+                                        name="institution"
+                                        value={form.institution}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        className="md:col-span-2"
+                                    />
+                                </div>
 
-                        {passwordMessage && (
-                            <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                                {passwordMessage.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
-                                {passwordMessage.text}
+                                <div className="border-t border-gray-100 pt-6 mt-2">
+                                    <h4 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                        <CreditCard size={18} className="text-gray-500" />
+                                        Datos Profesionales
+                                    </h4>
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-3 gap-4">
+                                        <FormField
+                                            label="DNI"
+                                            name="dni"
+                                            value={form.dni}
+                                            readOnly={true}
+                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
+                                            subLabel="(No editable)"
+                                        />
+                                        <FormField
+                                            label="CMP"
+                                            name="cmp"
+                                            value={form.cmp}
+                                            readOnly={true}
+                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
+                                            subLabel="(No editable)"
+                                        />
+                                        <FormField
+                                            label="RNE"
+                                            name="rne"
+                                            value={form.rne}
+                                            readOnly={true}
+                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
+                                            subLabel="(No editable)"
+                                        />
+                                    </div>
+                                    <p className="text-xs text-gray-400 mt-2 ml-1">
+                                        * Para modificar estos datos, por favor contacte con el administrador del sistema.
+                                    </p>
+                                </div>
+
+                                {isEditing && (
+                                    <div className="flex justify-end pt-4">
+                                        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 gap-2">
+                                            <Save size={18} />
+                                            Guardar Cambios
+                                        </Button>
+                                    </div>
+                                )}
+                            </form>
+                        </Card>
+
+                        {/* Change Password Section */}
+                        <Card className="p-6 mt-6">
+                            <div className="mb-6">
+                                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                    <Lock size={20} className="text-blue-600" />
+                                    Seguridad
+                                </h3>
+                                <p className="text-sm text-gray-500 mt-1">Actualiza tu contraseña para mantener tu cuenta segura.</p>
                             </div>
-                        )}
 
-                        <form onSubmit={handlePasswordSubmit} className="space-y-5">
-                            <div className="relative">
-                                <FormField
-                                    label="Contraseña Actual"
-                                    name="currentPassword"
-                                    type={showPassword ? "text" : "password"}
-                                    value={passwordForm.currentPassword}
-                                    onChange={handlePasswordChange}
-                                    placeholder="Ingrese su contraseña actual"
-                                />
-                            </div>
+                            {passwordMessage && (
+                                <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                    {passwordMessage.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                    {passwordMessage.text}
+                                </div>
+                            )}
 
-                            <div className="grid md:grid-cols-2 gap-5">
-                                <FormField
-                                    label="Nueva Contraseña"
-                                    name="newPassword"
-                                    type={showPassword ? "text" : "password"}
-                                    value={passwordForm.newPassword}
-                                    onChange={handlePasswordChange}
-                                    placeholder="Mínimo 6 caracteres"
-                                />
-                                <FormField
-                                    label="Confirmar Nueva Contraseña"
-                                    name="confirmPassword"
-                                    type={showPassword ? "text" : "password"}
-                                    value={passwordForm.confirmPassword}
-                                    onChange={handlePasswordChange}
-                                    placeholder="Reingrese la nueva contraseña"
-                                />
-                            </div>
+                            <form onSubmit={handlePasswordSubmit} className="space-y-5">
+                                <div className="relative">
+                                    <FormField
+                                        label="Contraseña Actual"
+                                        name="currentPassword"
+                                        type={showPassword ? "text" : "password"}
+                                        value={passwordForm.currentPassword}
+                                        onChange={handlePasswordChange}
+                                        placeholder="Ingrese su contraseña actual"
+                                    />
+                                </div>
 
-                            <div className="flex items-center justify-between pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowPassword(!showPassword)}
-                                    className="text-sm text-gray-600 flex items-center gap-2 hover:text-blue-600"
-                                >
-                                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                                    {showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
-                                </button>
+                                <div className="grid md:grid-cols-2 gap-5">
+                                    <FormField
+                                        label="Nueva Contraseña"
+                                        name="newPassword"
+                                        type={showPassword ? "text" : "password"}
+                                        value={passwordForm.newPassword}
+                                        onChange={handlePasswordChange}
+                                        placeholder="Mínimo 6 caracteres"
+                                    />
+                                    <FormField
+                                        label="Confirmar Nueva Contraseña"
+                                        name="confirmPassword"
+                                        type={showPassword ? "text" : "password"}
+                                        value={passwordForm.confirmPassword}
+                                        onChange={handlePasswordChange}
+                                        placeholder="Reingrese la nueva contraseña"
+                                    />
+                                </div>
 
-                                <Button
-                                    type="submit"
-                                    variant="outline"
-                                    className="border-gray-300 hover:bg-gray-50 text-gray-700"
-                                    disabled={!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
-                                >
-                                    Actualizar Contraseña
-                                </Button>
-                            </div>
-                        </form>
-                    </Card>
-                </div>
+                                <div className="flex items-center justify-between pt-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowPassword(!showPassword)}
+                                        className="text-sm text-gray-600 flex items-center gap-2 hover:text-blue-600"
+                                    >
+                                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        {showPassword ? 'Ocultar contraseñas' : 'Mostrar contraseñas'}
+                                    </button>
+
+                                    <Button
+                                        type="submit"
+                                        variant="outline"
+                                        className="border-gray-300 hover:bg-gray-50 text-gray-700"
+                                        disabled={!passwordForm.currentPassword || !passwordForm.newPassword || !passwordForm.confirmPassword}
+                                    >
+                                        Actualizar Contraseña
+                                    </Button>
+                                </div>
+                            </form>
+                        </Card>
+                    </div>
+                )}
             </div>
-        </div >
+        </div>
     );
 };
 
