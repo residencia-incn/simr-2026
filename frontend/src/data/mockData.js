@@ -62,8 +62,12 @@ export const MOCK_INCN_RESIDENTS = [
     { dni: "11223344", name: "Carlos Lopez", specialty: "Neurocirugía", year: "R3", email: "carlos.lopez@incn.gob.pe" }
 ];
 
+
 export const ACADEMIC_CONFIG = {
     titleWordLimit: 20,
+    submissionDeadline: "2026-03-15T23:59",
+    extensionDeadline: "2026-03-20T23:59",
+    latePenalty: 2.0, // Points deduction
     sections: [
         { id: 'introduction', label: 'Introducción', limit: 300, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
         { id: 'objective', label: 'Objetivo', limit: 100, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
@@ -200,7 +204,9 @@ export const INITIAL_WORKS = [
         day: "Lunes 22",
         room: "Auditorio Principal",
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.5, 4.8, 5.0]
+        scores: [4.5, 4.8, 5.0],
+        submittedAt: "2025-11-15T10:30:00",
+        updatedAt: "2025-11-20T14:45:00"
     },
     {
         id: "TRB-002",
@@ -213,6 +219,8 @@ export const INITIAL_WORKS = [
         room: null,
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
         scores: [3.5, 4.0],
+        submittedAt: "2025-11-18T09:15:00",
+        updatedAt: "2025-11-25T11:20:00",
         observations: "El resumen excede el límite de palabras en la introducción. Por favor corregir y ser más conciso con los objetivos."
     },
     {
@@ -225,7 +233,9 @@ export const INITIAL_WORKS = [
         day: "Martes 23",
         room: "Sala 1",
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.2, 4.5, 4.3]
+        scores: [4.2, 4.5, 4.3],
+        submittedAt: "2025-11-10T16:00:00",
+        updatedAt: "2025-11-10T16:00:00"
     },
     {
         id: "TRB-004",
@@ -237,7 +247,9 @@ export const INITIAL_WORKS = [
         day: "Lunes 22",
         room: "Sala Virtual",
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.8, 4.9, 4.7]
+        scores: [4.8, 4.9, 4.7],
+        submittedAt: "2025-11-05T08:45:00",
+        updatedAt: "2025-11-05T08:45:00"
     },
     {
         id: "TRB-005",
@@ -249,7 +261,9 @@ export const INITIAL_WORKS = [
         day: "Miércoles 24",
         room: "Auditorio Principal",
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.0, 4.1, 3.9]
+        scores: [4.0, 4.1, 3.9],
+        submittedAt: "2025-10-25T18:20:00",
+        updatedAt: "2025-11-12T09:10:00"
     },
     {
         id: "TRB-006",
@@ -261,7 +275,9 @@ export const INITIAL_WORKS = [
         day: null,
         room: null,
         abstract: { intro: "Pendiente de ...", methods: "...", results: "...", conclusions: "..." },
-        scores: []
+        scores: [],
+        submittedAt: "2025-12-01T15:30:00",
+        updatedAt: "2025-12-01T15:30:00"
     },
     {
         id: "TRB-007",
@@ -274,6 +290,8 @@ export const INITIAL_WORKS = [
         room: null,
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
         scores: [],
+        submittedAt: "2025-11-28T10:00:00",
+        updatedAt: "2025-11-30T17:45:00",
         observations: "Favor aclarar la metodología quirúrgica empleada y ampliar la discusión sobre las complicaciones post-operatorias."
     },
     {
@@ -406,4 +424,77 @@ export const INITIAL_JURORS = [
     { id: 'J-003', name: 'Dra. Carmen Betancur', specialty: 'Neuropediatría', institution: 'INCN', email: 'cbetancur@incn.gob.pe', active: true },
     { id: 'J-004', name: 'Dr. Henderson Vasquez', specialty: 'Neurocirugía', institution: 'INCN', email: 'hvasquez@incn.gob.pe', active: true },
     { id: 'J-005', name: 'Dr. Carlos Gutiérrez', specialty: 'Neurología', institution: 'INCN', email: 'cgutierrez@incn.gob.pe', active: true }
+];
+
+export const INITIAL_ROADMAP = [
+    {
+        id: 'ev-001',
+        title: 'Lanzamiento de Convocatoria',
+        date: '2025-11-01',
+        description: 'Inicio de la recepción de trabajos de investigación.',
+        year: '2025',
+        completed: true,
+        icon: 'Rocket'
+    },
+    {
+        id: 'ev-002',
+        title: 'Curso de Metodología',
+        date: '2026-01-15',
+        description: 'Curso pre-evento sobre redacción científica y metodología.',
+        year: '2026',
+        completed: false,
+        icon: 'BookOpen'
+    },
+    {
+        id: 'ev-003',
+        title: 'Apertura de Inscripciones',
+        date: '2026-03-01',
+        description: 'Inicio de inscripciones para asistentes y participantes.',
+        year: '2026',
+        completed: false,
+        icon: 'UserPlus'
+    },
+    {
+        id: 'ev-004',
+        title: 'Cierre de Envío de Trabajos',
+        date: '2026-05-30',
+        description: 'Fecha límite para enviar resúmenes de trabajos.',
+        year: '2026',
+        completed: false,
+        icon: 'Clock'
+    },
+    {
+        id: 'ev-005',
+        title: 'SIMR 2026',
+        date: '2026-10-22',
+        description: 'Día central del evento.',
+        year: '2026',
+        completed: false,
+        icon: 'Calendar'
+    }
+];
+
+export const INITIAL_COUPONS = [
+    {
+        id: 'cpn-001',
+        code: 'BECA100',
+        type: 'percentage', // percentage or fixed
+        value: 100,
+        description: 'Beca Integral SIMR 2026',
+        maxUses: 10,
+        usedCount: 2,
+        expiry: '2026-10-22',
+        active: true
+    },
+    {
+        id: 'cpn-002',
+        code: 'DSCTO20',
+        type: 'fixed',
+        value: 20,
+        description: 'Descuento pronto pago',
+        maxUses: 50,
+        usedCount: 15,
+        expiry: '2026-05-30',
+        active: true
+    }
 ];

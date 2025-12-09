@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown, Shield, Award, BookOpen, DollarSign, User } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown, Shield, Award, BookOpen, DollarSign, User, CircleUser, TrendingUp } from 'lucide-react';
 import { api } from './services/api';
 import Button from './components/ui/Button';
 import ChatWidget from './components/layout/ChatWidget';
@@ -20,15 +20,45 @@ import AcademicDashboard from './views/AcademicDashboard';
 import LoginModal from './views/LoginModal';
 import BasesView from './views/BasesView';
 import NotificationMenu from './components/common/NotificationMenu';
+import ProfileView from './views/ProfileView';
+import RoadmapView from './views/RoadmapView';
 
 export default function SIMRApp() {
+  // Persistent User State
+  const [user, setUser] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const savedUser = window.localStorage.getItem('simr_user');
+      return savedUser ? JSON.parse(savedUser) : null;
+    }
+    return null;
+  });
+
+  // Persistent Active Role
+  const [activeRole, setActiveRole] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.localStorage.getItem('simr_active_role') || null;
+    }
+    return null;
+  });
+
   const [currentView, setCurrentView] = useState('home');
   const [basesTab, setBasesTab] = useState('bases');
-  const [user, setUser] = useState(null);
-  const [activeRole, setActiveRole] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
   const [config, setConfig] = useState(null);
+  const roleMenuRef = useRef(null);
+
+  // Restore view based on role if just loaded and logged in
+  useEffect(() => {
+    if (user && currentView === 'home' && activeRole) {
+      // Optional: could redirect to dashboard, but keeping 'home' is also fine.
+      // The user requested F5 keeps them logged in, which this does.
+      // If they were on a dashboard, we might want to put them back there, but
+      // for now let's just ensure they are logged in.
+      // Actually, let's redirect to their dashboard if they were logged in.
+      updateViewForRole(activeRole);
+    }
+  }, []); // Run once on mount
 
   useEffect(() => {
     const loadConfig = async () => {
@@ -42,17 +72,48 @@ export default function SIMRApp() {
     loadConfig();
   }, []);
 
+  // Redirect logged-in users away from registration view
+  useEffect(() => {
+    if (user && currentView === 'registration') {
+      // Redirect to their respective dashboard or home
+      const role = user.role || user.roles[0];
+      updateViewForRole(role);
+    }
+  }, [user, currentView]);
+
+  // Close role menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target)) {
+        setIsRoleMenuOpen(false);
+      }
+    };
+
+    if (isRoleMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isRoleMenuOpen]);
+
   const handleLogin = (userData) => {
     setUser(userData);
+    window.localStorage.setItem('simr_user', JSON.stringify(userData));
+
     // Default to the primary role or the first one in the list
     const initialRole = userData.role || userData.roles[0];
     setActiveRole(initialRole);
+    window.localStorage.setItem('simr_active_role', initialRole);
+
     updateViewForRole(initialRole);
     setIsMobileMenuOpen(false);
   };
 
   const handleRoleSwitch = (newRole) => {
     setActiveRole(newRole);
+    window.localStorage.setItem('simr_active_role', newRole);
     updateViewForRole(newRole);
     setIsRoleMenuOpen(false);
   };
@@ -72,6 +133,8 @@ export default function SIMRApp() {
   const handleLogout = () => {
     setUser(null);
     setActiveRole(null);
+    window.localStorage.removeItem('simr_user');
+    window.localStorage.removeItem('simr_active_role');
     setCurrentView('home');
   };
 
@@ -123,57 +186,92 @@ export default function SIMRApp() {
             <button onClick={() => navigate('home')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Home size={16} /> Inicio</button>
 
             <button onClick={() => navigate('bases')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><FileText size={16} /> Bases</button>
+            <button onClick={() => navigate('roadmap')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><TrendingUp size={16} /> Roadmap</button>
 
             <button onClick={() => navigate('program')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Calendar size={16} /> Programa</button>
             <button onClick={() => navigate('committee')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Users size={16} /> Comité</button>
             <button onClick={() => navigate('gallery')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><ImageIcon size={16} /> Galería</button>
             <button onClick={() => navigate('posters')} className="hover:text-blue-700 flex items-center gap-1 bg-blue-50 text-blue-800 px-3 py-1 rounded-full transition-all hover:shadow-sm hover:-translate-y-0.5"><Grid size={16} /> E-Posters</button>
-            <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
+            {!user && (
+              <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
+            )}
 
             {/* Notification Menu */}
             {user && <NotificationMenu user={user} />}
 
             {user ? (
-              <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative">
+              <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative" ref={roleMenuRef}>
                 <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
                   <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
                     {ROLE_LABELS[activeRole] || activeRole}
                     {user.roles && user.roles.length > 1 && <ChevronDown size={10} />}
                   </div>
-                  <div className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</div>
+                  <div className="flex items-center gap-2 justify-end">
+                    <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200 overflow-hidden">
+                      {user.image ? (
+                        <img src={user.image} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        user.name.charAt(0)
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Role Switcher Dropdown */}
-                {isRoleMenuOpen && user.roles && user.roles.length > 1 && (
-                  <div className="absolute top-12 right-0 bg-white border border-gray-100 rounded-xl shadow-xl w-56 py-2 z-50 animate-fadeIn overflow-hidden">
-                    <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider bg-gray-50 border-b border-gray-100 mb-1">Cambiar Perfil</div>
-                    {user.roles.map(role => {
-                      const Icon = ROLE_ICONS[role] || Users;
-                      return (
-                        <button
-                          key={role}
-                          onClick={() => handleRoleSwitch(role)}
-                          className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
-                            ${activeRole === role ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
-                            `}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`p-1.5 rounded-lg ${activeRole === role ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                              <Icon size={16} />
-                            </div>
-                            {ROLE_LABELS[role] || role}
-                          </div>
-                          {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
-                        </button>
-                      );
-                    })}
+                {isRoleMenuOpen && (
+                  <div className="absolute top-14 right-0 bg-white border border-gray-100 rounded-xl shadow-xl w-60 py-2 z-50 animate-fadeIn overflow-hidden">
+
+                    {/* User Profile Section */}
+                    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
+                      <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
+                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); navigate('profile'); setIsRoleMenuOpen(false); }}
+                        className="text-xs text-blue-600 font-medium hover:underline mt-1 flex items-center gap-1"
+                      >
+                        Ver mi perfil
+                      </button>
+                    </div>
+
+                    {user.roles && user.roles.length > 1 && (
+                      <>
+                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cambiar Perfil</div>
+                        {user.roles.map(role => {
+                          const Icon = ROLE_ICONS[role] || Users;
+                          return (
+                            <button
+                              key={role}
+                              onClick={() => handleRoleSwitch(role)}
+                              className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
+                                     ${activeRole === role ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
+                                     `}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1.5 rounded-lg ${activeRole === role ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                  <Icon size={16} />
+                                </div>
+                                {ROLE_LABELS[role] || role}
+                              </div>
+                              {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                            </button>
+                          );
+                        })}
+                        <div className="my-1 border-t border-gray-100"></div>
+                      </>
+                    )}
+
+                    <button
+                      onClick={() => { handleLogout(); setIsRoleMenuOpen(false); }}
+                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+                    >
+                      <div className="p-1.5 rounded-lg bg-red-100 text-red-600">
+                        <LogOut size={16} />
+                      </div>
+                      Cerrar Sesión
+                    </button>
                   </div>
                 )}
-
-
-                <button onClick={handleLogout} className="p-2 hover:bg-red-50 text-gray-500 hover:text-red-600 rounded-full transition-colors" title="Cerrar Sesión">
-                  <LogOut size={18} />
-                </button>
               </div>
             ) : (
               <Button size="sm" onClick={() => navigate('login')}>Login</Button>
@@ -190,11 +288,14 @@ export default function SIMRApp() {
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4">
             <button onClick={() => navigate('home')} className="block w-full text-left font-medium py-2 text-gray-800">Inicio</button>
+            <button onClick={() => navigate('roadmap')} className="block w-full text-left font-medium py-2 text-gray-800">Roadmap</button>
             <button onClick={() => navigate('program')} className="block w-full text-left font-medium py-2 text-gray-800">Programa</button>
             <button onClick={() => navigate('committee')} className="block w-full text-left font-medium py-2 text-gray-800">Comité</button>
             <button onClick={() => navigate('gallery')} className="block w-full text-left font-medium py-2 text-gray-800">Galería</button>
             <button onClick={() => navigate('posters')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">E-Posters</button>
-            <button onClick={() => navigate('registration')} className="block w-full text-left font-medium py-2 text-blue-700">Inscripción</button>
+            {!user && (
+              <button onClick={() => navigate('registration')} className="block w-full text-left font-medium py-2 text-blue-700">Inscripción</button>
+            )}
             {user ? (
               <>
                 <div className="border-t border-gray-100 pt-2 mt-2">
@@ -221,6 +322,7 @@ export default function SIMRApp() {
       {/* Main Content Area */}
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
         {currentView === 'home' && <HomeView navigate={navigate} user={user} />}
+        {currentView === 'roadmap' && <RoadmapView />}
         {currentView === 'bases' && <BasesView activeTab={basesTab} />}
         {currentView === 'program' && <ProgramView />}
         {currentView === 'committee' && <CommitteeView />}
@@ -235,6 +337,9 @@ export default function SIMRApp() {
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
+        {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
+        {currentView === 'profile' && <ProfileView user={user} onSave={(updatedUser) => setUser({ ...user, ...updatedUser })} />}
+        {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}
         {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}
       </main>
 

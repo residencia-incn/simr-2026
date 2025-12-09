@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocalStorage } from '../../hooks';
 import {
     X,
     FileText,
@@ -20,6 +21,45 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
     const [feedback, setFeedback] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+
+    // Draft persistence
+    const [drafts, setDrafts] = useLocalStorage('academic_review_drafts', {});
+
+    // Load draft when work changes
+    useEffect(() => {
+        if (work) {
+            const savedDraft = drafts[work.id];
+            if (savedDraft) {
+                setChecklist(savedDraft.checklist || {
+                    format: false,
+                    wordCount: false,
+                    anonymity: false,
+                    bibliography: false
+                });
+                setFeedback(savedDraft.feedback || '');
+            } else {
+                // Reset to defaults if no draft
+                setChecklist({
+                    format: false,
+                    wordCount: false,
+                    anonymity: false,
+                    bibliography: false
+                });
+                setFeedback('');
+            }
+        }
+    }, [work]); // Only runs when props.work changes
+
+    // Save draft when content changes
+    useEffect(() => {
+        if (work && isOpen) {
+            setDrafts(prev => ({
+                ...prev,
+                [work.id]: { checklist, feedback }
+            }));
+        }
+    }, [checklist, feedback, work, isOpen]);
+
     if (!work) return null;
 
     const handleCheck = (key) => {
@@ -37,6 +77,15 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
                 feedback: status === 'Observado' ? feedback : null,
                 checklist: status === 'Aceptado' ? checklist : null
             });
+
+
+            // Clear draft on success
+            setDrafts(prev => {
+                const newDrafts = { ...prev };
+                delete newDrafts[work.id];
+                return newDrafts;
+            });
+
             onUpdate(); // Refresh parent list
             onClose();
         } catch (error) {

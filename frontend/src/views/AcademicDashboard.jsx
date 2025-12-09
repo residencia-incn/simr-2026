@@ -138,6 +138,31 @@ const AcademicDashboard = () => {
                 return <Badge type={type}>{item.status}</Badge>;
             }
         },
+        {
+            key: 'submittedAt',
+            header: 'Enviado',
+            sortable: true,
+            render: (item) => (
+                <div className="text-xs text-gray-500">
+                    <div>{item.submittedAt ? new Date(item.submittedAt).toLocaleDateString() : '-'}</div>
+                    <div className="text-[10px]">{item.submittedAt ? new Date(item.submittedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}</div>
+                </div>
+            )
+        },
+        {
+            key: 'updatedAt',
+            header: 'Modificado',
+            sortable: true,
+            render: (item) => {
+                if (!item.updatedAt || item.updatedAt === item.submittedAt) return <span className="text-xs text-gray-400">-</span>;
+                return (
+                    <div className="text-xs text-gray-500">
+                        <div>{new Date(item.updatedAt).toLocaleDateString()}</div>
+                        <div className="text-[10px]">{new Date(item.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                    </div>
+                );
+            }
+        },
 
     ];
 

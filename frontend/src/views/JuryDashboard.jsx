@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useModal } from '../hooks';
-import { FileText } from 'lucide-react';
+import { useModal, useLocalStorage } from '../hooks';
+import { FileText, Save } from 'lucide-react';
 import { Button, Card, Badge, Modal, FormField } from '../components/ui';
 import { api } from '../services/api';
 import { INITIAL_WORKS } from '../data/mockData';
@@ -12,6 +12,37 @@ const JuryDashboard = ({ user }) => {
     const [comment, setComment] = useState("");
     const { isOpen: showModal, open: openModal, close: closeModal } = useModal();
     const [error, setError] = useState("");
+
+    // Draft Persistence
+    const [drafts, setDrafts, removeDrafts] = useLocalStorage('jury_drafts', {});
+
+    // Load draft when switching works
+    useEffect(() => {
+        if (selectedWorkId) {
+            const savedDraft = drafts[selectedWorkId];
+            if (savedDraft) {
+                setScores(savedDraft.scores || {});
+                setComment(savedDraft.comment || "");
+            } else {
+                setScores({});
+                setComment("");
+            }
+        }
+    }, [selectedWorkId]); // Only run when ID changes, not drafts
+
+    // Auto-save draft when scores or comment change
+    useEffect(() => {
+        if (selectedWorkId) {
+            // Only save if there is some data
+            const hasData = Object.keys(scores).length > 0 || comment.trim() !== "";
+            if (hasData) {
+                setDrafts(prev => ({
+                    ...prev,
+                    [selectedWorkId]: { scores, comment }
+                }));
+            }
+        }
+    }, [scores, comment, selectedWorkId]); // Only save on content change
 
     // Config loading
     const [academicConfig, setAcademicConfig] = useState(null);
@@ -61,6 +92,14 @@ const JuryDashboard = ({ user }) => {
     const confirmSubmission = () => {
         // Here you would typically send the data to the backend
         console.log("Submitting scores:", scores, "Comment:", comment);
+
+        // Remove draft for this workId
+        setDrafts(prev => {
+            const newDrafts = { ...prev };
+            delete newDrafts[selectedWorkId];
+            return newDrafts;
+        });
+
         closeModal();
         setScores({});
         setComment("");
@@ -93,6 +132,12 @@ const JuryDashboard = ({ user }) => {
                                 </div>
                                 <h4 className="font-bold text-gray-900 mb-2 group-hover:text-blue-700">{work.title}</h4>
                                 <div className="text-sm text-gray-600 mb-4">Autor oculto (Ciego)</div>
+                                {drafts && drafts[work.id] && (
+                                    <div className="flex items-center gap-1 text-xs text-amber-600 font-medium mb-3 bg-amber-50 w-fit px-2 py-1 rounded">
+                                        <Save size={12} />
+                                        Borrador guardado
+                                    </div>
+                                )}
                                 <Button
                                     variant={selectedWorkId === work.id ? "primary" : "outline"}
                                     className="w-full justify-center text-sm py-1.5"

@@ -59,5 +59,7 @@ export const STORAGE_KEYS = {
     HERO_SLIDES: 'simr_hero_slides',
     CONFIG: 'simr_config',
     WORKS: 'simr_works',
-    ACADEMIC: 'simr_academic_config'
+    ACADEMIC: 'simr_academic_config',
+    ROADMAP: 'simr_roadmap',
+    COUPONS: 'simr_coupons'
 };

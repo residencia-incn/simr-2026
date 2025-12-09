@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, X, AlertTriangle, FileText, List, CheckSquare, Edit, Ban, Eye, Trash2, ChevronRight, Info, GripVertical, Check } from 'lucide-react';
+import { Save, Plus, X, AlertTriangle, FileText, List, CheckSquare, Edit, Ban, Eye, Trash2, ChevronRight, Info, GripVertical, Check, Clock } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { api } from '../../services/api';
@@ -65,6 +65,11 @@ const AcademicConfig = () => {
     // --- Title ---
     const handleTitleLimitChange = (val) => {
         setConfig(prev => ({ ...prev, titleWordLimit: parseInt(val) || 0 }));
+    };
+
+    // --- Penalties & Dates ---
+    const handleConfigChange = (key, value) => {
+        setConfig(prev => ({ ...prev, [key]: value }));
     };
 
     // --- Sections Management (DnD & Content) ---
@@ -289,6 +294,53 @@ const AcademicConfig = () => {
                         <p className="text-xs text-gray-400 mt-2 flex items-center gap-1">
                             <Info size={12} /> Selecciona un tipo para editar su estructura.
                         </p>
+                    </Card>
+
+                    {/* Deadlines & Penalties Card (NEW) */}
+                    <Card className="p-6">
+                        <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-4 border-b pb-2">
+                            <Clock size={20} className="text-orange-600" />
+                            Plazos y Penalidades
+                        </h4>
+
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Fecha Límite de Envío</label>
+                                <input
+                                    type="datetime-local"
+                                    className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500"
+                                    value={config.submissionDeadline || ''}
+                                    onChange={(e) => handleConfigChange('submissionDeadline', e.target.value)}
+                                />
+                                <p className="text-[10px] text-gray-500 mt-1">Fecha máxima para envíos regulares sin penalidad.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Fecha Límite de Prórroga</label>
+                                <input
+                                    type="datetime-local"
+                                    className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500"
+                                    value={config.extensionDeadline || ''}
+                                    onChange={(e) => handleConfigChange('extensionDeadline', e.target.value)}
+                                />
+                                <p className="text-[10px] text-orange-600 mt-1">Envíos en este periodo tendrán penalidad.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">Penalidad por Envío Tardío (Puntos)</label>
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="number"
+                                        step="0.1"
+                                        min="0"
+                                        className="w-20 p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-red-500"
+                                        value={config.latePenalty || 0}
+                                        onChange={(e) => handleConfigChange('latePenalty', parseFloat(e.target.value))}
+                                    />
+                                    <span className="text-sm text-gray-500">puntos menos</span>
+                                </div>
+                            </div>
+                        </div>
                     </Card>
 
                     {/* Declarations */}

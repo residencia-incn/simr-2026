@@ -1,16 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
- * Custom hook for form handling with validation
+ * Custom hook for form handling with validation and optional persistence
  * @param {Object} initialValues - Initial form values
  * @param {Function} validate - Validation function (optional)
+ * @param {string} persistKey - Key for localStorage persistence (optional)
  * @returns {Object} Form state and control functions
  */
-export const useForm = (initialValues = {}, validate = null) => {
-    const [values, setValues] = useState(initialValues);
+export const useForm = (initialValues = {}, validate = null, persistKey = null) => {
+    // Initialize with stored value if persistKey exists and storage has data
+    const [values, setValues] = useState(() => {
+        if (persistKey && typeof window !== 'undefined') {
+            try {
+                const item = window.localStorage.getItem(persistKey);
+                return item ? JSON.parse(item) : initialValues;
+            } catch (error) {
+                console.error(`Error loading persistent form state for key "${persistKey}":`, error);
+                return initialValues;
+            }
+        }
+        return initialValues;
+    });
+
     const [errors, setErrors] = useState({});
     const [touched, setTouched] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Persist to localStorage whenever values change
+    useEffect(() => {
+        if (persistKey && typeof window !== 'undefined') {
+            try {
+                window.localStorage.setItem(persistKey, JSON.stringify(values));
+            } catch (error) {
+                console.error(`Error persisting form state for key "${persistKey}":`, error);
+            }
+        }
+    }, [values, persistKey]);
 
     const handleChange = (e) => {
         const { name, value, type, checked } = e.target;
@@ -88,6 +113,9 @@ export const useForm = (initialValues = {}, validate = null) => {
         setErrors({});
         setTouched({});
         setIsSubmitting(false);
+        if (persistKey && typeof window !== 'undefined') {
+            window.localStorage.removeItem(persistKey);
+        }
     };
 
     const setFieldValue = (name, value) => {

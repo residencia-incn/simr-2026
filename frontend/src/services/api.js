@@ -7,7 +7,9 @@ import {
     SPONSORS,
     INITIAL_WORKS,
     INITIAL_JURORS,
-    ACADEMIC_CONFIG
+    ACADEMIC_CONFIG,
+    INITIAL_ROADMAP,
+    INITIAL_COUPONS
 } from '../data/mockData';
 import { MOCK_ATTENDEES } from '../data/mockAttendees';
 import { MOCK_USERS } from '../data/mockUsers';
@@ -305,7 +307,89 @@ export const api = {
         }
     },
 
-    // --- 10. Users ---
+    // --- 10. Roadmap ---
+    roadmap: {
+        getAll: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.ROADMAP, INITIAL_ROADMAP);
+        },
+        save: async (roadmapData) => {
+            await delay();
+            storage.set(STORAGE_KEYS.ROADMAP, roadmapData);
+            return true;
+        },
+        add: async (event) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.ROADMAP, INITIAL_ROADMAP);
+            const newEvent = { ...event, id: `ev-${Date.now()}` };
+            const updated = [...current, newEvent];
+            storage.set(STORAGE_KEYS.ROADMAP, updated);
+            return newEvent;
+        },
+        update: async (event) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.ROADMAP, INITIAL_ROADMAP);
+            const updated = current.map(e => e.id === event.id ? event : e);
+            storage.set(STORAGE_KEYS.ROADMAP, updated);
+            return event;
+        },
+        delete: async (id) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.ROADMAP, INITIAL_ROADMAP);
+            const updated = current.filter(e => e.id !== id);
+            storage.set(STORAGE_KEYS.ROADMAP, updated);
+            return true;
+        }
+    },
+
+    // --- 11. Coupons ---
+    coupons: {
+        getAll: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+        },
+        create: async (coupon) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+            const newCoupon = { ...coupon, id: `cpn-${Date.now()}`, usedCount: 0 };
+            storage.set(STORAGE_KEYS.COUPONS, [newCoupon, ...current]);
+            return newCoupon;
+        },
+        delete: async (id) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+            const updated = current.filter(c => c.id !== id);
+            storage.set(STORAGE_KEYS.COUPONS, updated);
+            return true;
+        },
+        validate: async (code) => {
+            await delay(500);
+            const all = storage.get(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+            const coupon = all.find(c => c.code.toUpperCase() === code.toUpperCase());
+
+            if (!coupon) throw new Error("Cupón no encontrado");
+            if (!coupon.active) throw new Error("Cupón inactivo");
+            if (new Date(coupon.expiry) < new Date()) throw new Error("Cupón expirado");
+            if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) throw new Error("Cupón agorades");
+
+            return coupon;
+        },
+        redeem: async (code) => {
+            await delay();
+            const all = storage.get(STORAGE_KEYS.COUPONS, INITIAL_COUPONS);
+            const index = all.findIndex(c => c.code.toUpperCase() === code.toUpperCase());
+
+            if (index !== -1) {
+                const updated = [...all];
+                updated[index] = { ...updated[index], usedCount: updated[index].usedCount + 1 };
+                storage.set(STORAGE_KEYS.COUPONS, updated);
+                return true;
+            }
+            return false;
+        }
+    },
+
+    // --- 12. Users ---
     users: {
         getAll: async () => {
             await delay();

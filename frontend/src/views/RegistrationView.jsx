@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, Upload, FileCheck, X, DollarSign, CreditCard, Mail, Search, CheckCircle, AlertTriangle } from 'lucide-react';
+import { FileText, Upload, FileCheck, X, DollarSign, CreditCard, Mail, Search, CheckCircle, AlertTriangle, Tag, Loader } from 'lucide-react';
 import { Button, Card, SectionHeader, InfoIcon, Modal, FormField, Table } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useModal, useFileUpload, useApi } from '../hooks';
@@ -14,6 +14,11 @@ const RegistrationView = () => {
     const [verifiedResident, setVerifiedResident] = useState(null);
     const [verificationDni, setVerificationDni] = useState('');
     const [wantsCertification, setWantsCertification] = useState(false);
+
+    // Coupon State
+    const [couponCode, setCouponCode] = useState('');
+    const [appliedCoupon, setAppliedCoupon] = useState(null);
+    const [validatingCoupon, setValidatingCoupon] = useState(false);
 
     useEffect(() => {
         const loadConfig = async () => {
@@ -76,6 +81,27 @@ const RegistrationView = () => {
         }
     };
 
+    const handleValidateCoupon = async () => {
+        if (!couponCode.trim()) return;
+        setValidatingCoupon(true);
+        try {
+            const coupon = await api.coupons.validate(couponCode);
+            setAppliedCoupon(coupon);
+            alert(`¡Cupón "${coupon.code}" aplicado! Descuento: ${coupon.type === 'percentage' ? `${coupon.value}%` : `S/. ${coupon.value}`}`);
+        } catch (error) {
+            console.error(error);
+            alert(error.message || 'Error al validar cupón');
+            setAppliedCoupon(null);
+        } finally {
+            setValidatingCoupon(false);
+        }
+    };
+
+    const handleRemoveCoupon = () => {
+        setAppliedCoupon(null);
+        setCouponCode('');
+    };
+
     const calculateAmount = () => {
         if (!config?.prices) return 0;
 
@@ -88,22 +114,33 @@ const RegistrationView = () => {
         const isPresencial = form.modalidad === 'Presencial';
         const isVirtual = form.modalidad === 'Virtual';
 
+        let basePrice = 0;
+
         if (isPresencial) {
             // Presencial is free unless certification is requested
-            return wantsCertification ? (config.prices.certification || 50) : 0;
-        }
-
-        if (isVirtual) {
-            // Virtual pricing based on explicit category
+            if (wantsCertification) {
+                basePrice = config.prices.certification || 50;
+            }
+        } else if (isVirtual) {
             // Virtual pricing based on occupation
             const occupation = form.occupation;
-            if (occupation === 'Médico Especialista') return config?.prices?.specialist || 120;
-            if (occupation === 'Médico Residente') return config?.prices?.external_resident || 80;
-            if (occupation === 'Estudiante de Medicina') return config?.prices?.student || 30;
-            return config?.prices?.student || 30; // Default/Other
+            if (occupation === 'Médico Especialista') basePrice = config?.prices?.specialist || 120;
+            else if (occupation === 'Médico Residente') basePrice = config?.prices?.external_resident || 80;
+            else if (occupation === 'Estudiante de Medicina') basePrice = config?.prices?.student || 30;
+            else basePrice = config?.prices?.student || 30;
         }
 
-        return 0;
+        // Apply Coupon to any base price
+        if (basePrice > 0 && appliedCoupon) {
+            if (appliedCoupon.type === 'percentage') {
+                const discount = (basePrice * appliedCoupon.value) / 100;
+                return Math.max(0, basePrice - discount);
+            } else if (appliedCoupon.type === 'fixed') {
+                return Math.max(0, basePrice - appliedCoupon.value);
+            }
+        }
+
+        return basePrice;
     };
 
     const amount = calculateAmount();
@@ -132,12 +169,17 @@ const RegistrationView = () => {
             const result = await submitRegistration(registrationData);
 
             if (result) {
+                if (appliedCoupon) {
+                    await api.coupons.redeem(appliedCoupon.code);
+                }
                 alert('¡Inscripción enviada exitosamente!');
                 resetForm();
                 clearVoucher();
                 setVerifiedResident(null);
                 setUserType('external');
                 setWantsCertification(false);
+                setAppliedCoupon(null);
+                setCouponCode('');
             } else {
                 alert('Hubo un error al guardar tu inscripción. Intenta nuevamente.');
             }
@@ -380,6 +422,55 @@ const RegistrationView = () => {
                                     </div>
                                 )}
 
+                                {/* Coupon Section - Main Form */}
+                                {!verifiedResident && (form.modalidad === 'Virtual' || (form.modalidad === 'Presencial' && wantsCertification)) && (
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">¿Tienes un cupón de descuento o beca?</label>
+                                        <div className="flex gap-2">
+                                            <div className="relative flex-grow">
+                                                <input
+                                                    type="text"
+                                                    placeholder="Ingresa tu código (Ej: BECA100)"
+                                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase"
+                                                    value={couponCode}
+                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                                                    disabled={!!appliedCoupon}
+                                                />
+                                                <Tag size={18} className="absolute left-3 top-2.5 text-gray-400" />
+                                            </div>
+                                            {!appliedCoupon ? (
+                                                <Button
+                                                    type="button"
+                                                    onClick={handleValidateCoupon}
+                                                    disabled={validatingCoupon || !couponCode}
+                                                    className="bg-gray-800 hover:bg-black"
+                                                >
+                                                    {validatingCoupon ? <Loader size={18} className="animate-spin" /> : 'Aplicar'}
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    type="button"
+                                                    onClick={handleRemoveCoupon}
+                                                    className="bg-red-100 text-red-600 border border-red-200 hover:bg-red-200"
+                                                >
+                                                    <X size={18} />
+                                                </Button>
+                                            )}
+                                        </div>
+                                        {appliedCoupon && (
+                                            <div className="mt-2 text-sm text-green-700 bg-green-50 p-2 rounded-lg flex items-center gap-2 border border-green-200">
+                                                <CheckCircle size={16} />
+                                                <span>
+                                                    ¡Cupón <strong>{appliedCoupon.code}</strong> aplicado!
+                                                    <span className="ml-1 opacity-75">
+                                                        (-{appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `S/. ${appliedCoupon.value}`})
+                                                    </span>
+                                                </span>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
                                 {requiresPayment && (
                                     <div className="pt-4 border-t border-gray-100 animate-fadeIn">
                                         <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -441,6 +532,16 @@ const RegistrationView = () => {
                                     <span className="text-lg font-bold text-white">Total a Pagar</span>
                                     <span className="text-2xl font-bold text-emerald-400">S/. {amount}.00</span>
                                 </li>
+
+                                {/* Applied Coupon Indicator */}
+                                {appliedCoupon && (
+                                    <li className="flex justify-between items-center text-green-400">
+                                        <span>Descuento ({appliedCoupon.code})</span>
+                                        <span className="font-medium">
+                                            -{appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `S/. ${appliedCoupon.value}`}
+                                        </span>
+                                    </li>
+                                )}
                             </ul>
 
                             <Button onClick={openCostsModal} className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white border-0">
