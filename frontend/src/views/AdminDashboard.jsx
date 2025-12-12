@@ -3,6 +3,7 @@ import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
     LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode
 } from 'lucide-react';
+import SuperAdminAnalytics from '../components/admin/SuperAdminAnalytics';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import StatsOverview from '../components/admin/StatsOverview';
@@ -25,7 +26,7 @@ import { api } from '../services/api';
 const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [admissionTab, setAdmissionTab] = useState('list'); // 'list' or 'verification'
-    const isSuperAdmin = user?.role === 'superadmin';
+    const isSuperAdmin = user?.role === 'superadmin' || user?.roles?.includes('admin') || user?.role === 'admin';
 
     // State - Data
     const [registrations, setRegistrations] = useState([]);
@@ -138,6 +139,7 @@ const AdminDashboard = ({ user }) => {
         { id: 'roadmap', label: 'Roadmap', icon: Map },
         { id: 'coupons', label: 'Cupones', icon: Ticket },
         { id: 'config', label: 'Configuración', icon: Settings },
+        ...(isSuperAdmin ? [{ id: 'analytics', label: 'Analítica', icon: TrendingUp }] : []),
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
         ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : []),
         { id: 'attendance', label: 'Asistencia', icon: QrCode }
@@ -365,6 +367,12 @@ const AdminDashboard = ({ user }) => {
                 {activeTab === 'attendance' && (
                     <div className="animate-fadeIn">
                         <AttendanceManager />
+                    </div>
+                )}
+
+                {activeTab === 'analytics' && isSuperAdmin && (
+                    <div className="animate-fadeIn">
+                        <SuperAdminAnalytics />
                     </div>
                 )}
             </div>

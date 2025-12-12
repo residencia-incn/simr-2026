@@ -47,12 +47,28 @@ export const EVENT_CONFIG = {
         phone: "999 888 777",
         email: "inscripciones@simr.pe"
     },
-    prices: {
-        incn: 50,
-        external_resident: 80,
-        specialist: 120,
-        student: 30,
-        certification: 50
+    pricingMatrix: {
+        rows: [
+            { id: 'row_1', label: 'Médicos Especialistas' },
+            { id: 'row_2', label: 'Residentes / Otros' },
+            { id: 'row_3', label: 'Estudiantes' }
+        ],
+        columns: [
+            { id: 'col_1', label: 'Hasta 15 Ene', deadline: '2026-01-15' },
+            { id: 'col_2', label: 'Hasta 13 Mar', deadline: '2026-03-13' },
+            { id: 'col_3', label: 'Después', deadline: '2099-12-31' }
+        ],
+        values: {
+            'row_1_col_1': 100, 'row_1_col_2': 120, 'row_1_col_3': 150,
+            'row_2_col_1': 60, 'row_2_col_2': 80, 'row_2_col_3': 100,
+            'row_3_col_1': 20, 'row_3_col_2': 30, 'row_3_col_3': 40
+        },
+        certificationCost: 50,
+        incnRate: 50
+    },
+    contact: {
+        phone: "999 888 777",
+        email: "inscripciones@simr.pe"
     }
 };
 
@@ -204,6 +220,8 @@ export const INITIAL_WORKS = [
         day: "Lunes 22",
         room: "Auditorio Principal",
         abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
+        slidesUrl: "https://example.com/slides/encefalitis-auto.pdf",
+        slidesUpdatedAt: "2025-11-21T10:00:00",
         scores: [4.5, 4.8, 5.0],
         submittedAt: "2025-11-15T10:30:00",
         updatedAt: "2025-11-20T14:45:00"
@@ -347,6 +365,47 @@ export const INITIAL_WORKS = [
             conclusions: "El tratamiento endovascular de aneurismas rotos es seguro y efectivo, con resultados comparables a la cirugía abierta."
         },
         scores: []
+    },
+    {
+        id: "TRB-011",
+        title: "Neurocisticercosis Racemosa: Abordaje Endoscópico",
+        author: "Dr. Henderson Vasquez (R2)",
+        type: "Reporte de Caso",
+        specialty: "Neurocirugía",
+        status: "Aceptado",
+        day: "Martes 23",
+        room: "Sala 1",
+        abstract: {
+            introduction: "La neurocisticercosis racemosa es una forma grave de la enfermedad.",
+            objective: "Describir el abordaje endoscópico para la resección de quistes racemosos.",
+            methodology: "Reporte de caso de paciente masculino de 45 años.",
+            results: "Resección completa de los quistes, mejoría clínica inmediata.",
+            conclusions: "El abordaje endoscópico es seguro y efectivo."
+        },
+        slidesUrl: null, // To test upload flow
+        scores: [4.6, 4.7, 4.5],
+        submittedAt: "2025-11-25T08:00:00",
+        updatedAt: "2025-11-30T10:00:00"
+    },
+    {
+        id: "TRB-012",
+        title: "Manejo de TEC Grave: Protocolo Institucional",
+        author: "Dr. Henderson Vasquez (R2)",
+        type: "Trabajo Original",
+        specialty: "Neurocirugía",
+        status: "En Evaluación",
+        day: null,
+        room: null,
+        abstract: {
+            introduction: "El traumatismo encéfalo craneano (TEC) grave tiene alta morbimortalidad.",
+            objective: "Evaluar la adherencia al protocolo de manejo de TEC grave.",
+            methodology: "Estudio observacional prospectivo.",
+            results: "Pendiente de análisis.",
+            conclusions: "Pendiente."
+        },
+        scores: [],
+        submittedAt: "2025-12-05T14:30:00",
+        updatedAt: "2025-12-05T14:30:00"
     }
 ];
 
@@ -473,6 +532,93 @@ export const INITIAL_ROADMAP = [
         year: '2026',
         completed: false,
         icon: 'Calendar'
+    }
+
+];
+
+
+export const INITIAL_ANALYTICS = {
+    realTimeUsers: [
+        { time: '08:00', users: 120, expected: 100 },
+        { time: '09:00', users: 250, expected: 200 },
+        { time: '10:00', users: 380, expected: 300 },
+        { time: '11:00', users: 420, expected: 350 },
+        { time: '12:00', users: 350, expected: 350 },
+        { time: '13:00', users: 200, expected: 150 },
+        { time: '14:00', users: 450, expected: 400 }
+    ],
+    engagement: {
+        avgStudyTime: 35, // hours
+        completionRate: 85, // percentage
+        avgTimePerStudent: 4, // hours per day
+        certifiedProjects: 42
+    },
+    moduleAttendance: [
+        { name: 'Mod 1', attendance: 350 },
+        { name: 'Mod 2', attendance: 420 },
+        { name: 'Mod 3', attendance: 380 },
+        { name: 'Taller', attendance: 150 }
+    ],
+    distribution: [
+        { name: 'Virtual', value: 850 },
+        { name: 'Presencial', value: 250 }
+    ]
+};
+
+export const INITIAL_PROGRAM = [
+    {
+        id: 'prog-001',
+        title: 'Introducción al Simposio',
+        time: '08:30 - 09:00',
+        speaker: 'Dr. Presidente SIMR',
+        status: 'finished', // finished, live, upcoming
+        day: 'Día 1',
+        country: 'pe'
+    },
+    {
+        id: 'prog-002',
+        title: 'Manejo Actual del ACV Isquémico',
+        time: '09:00 - 10:00',
+        speaker: 'Dr. Juan Pérez',
+        status: 'live',
+        day: 'Día 1',
+        abstract: "El accidente cerebrovascular (ACV) isquémico sigue siendo una de las principales causas de muerte y discapacidad a nivel mundial. En esta ponencia, se revisarán las últimas guías de manejo agudo, incluyendo la trombectomía mecánica en ventana extendida y el uso de tenecteplase como alternativa al alteplase. Se discutirán también los criterios de selección de pacientes mediante neuroimágenes avanzadas (perfusión por TC/RM) y el manejo de la presión arterial post-recanalización para prevenir la transformación hemorrágica. Finalmente, se presentarán casos clínicos ilustrativos para consolidar los conceptos teóricos y facilitar su aplicación en la práctica clínica diaria.",
+        country: 'us'
+    },
+    {
+        id: 'prog-003',
+        title: 'Epilepsia Refractaria: Nuevos Horizontes',
+        time: '10:00 - 11:00',
+        speaker: 'Dra. María López',
+        status: 'upcoming',
+        day: 'Día 1',
+        country: 'es'
+    },
+    {
+        id: 'prog-004',
+        title: 'Coffee Break',
+        time: '11:00 - 11:30',
+        speaker: '-',
+        status: 'upcoming',
+        day: 'Día 1'
+    },
+    {
+        id: 'prog-005',
+        title: 'Esclerosis Múltiple: Diagnóstico Temprano',
+        time: '11:30 - 12:30',
+        speaker: 'Dr. Carlos Gutiérrez',
+        status: 'upcoming',
+        day: 'Día 1',
+        country: 'co'
+    },
+    {
+        id: 'prog-006',
+        title: 'Trastornos del Movimiento en Pediatría',
+        time: '12:30 - 13:30',
+        speaker: 'Dra. Carmen Betancur',
+        status: 'upcoming',
+        day: 'Día 1',
+        country: 'mx'
     }
 ];
 

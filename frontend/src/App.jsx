@@ -119,16 +119,18 @@ export default function SIMRApp() {
     setIsRoleMenuOpen(false);
   };
 
+  const getDashboardView = (role) => {
+    return role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
+      role === 'academic' ? 'academic-dashboard' :
+        role === 'admission' ? 'admission-dashboard' :
+          role === 'jury' ? 'jury-dashboard' :
+            role === 'treasurer' ? 'treasurer-dashboard' :
+              role === 'participant' ? 'participant-dashboard' :
+                'resident-dashboard';
+  };
+
   const updateViewForRole = (role) => {
-    setCurrentView(
-      role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
-        role === 'academic' ? 'academic-dashboard' :
-          role === 'admission' ? 'admission-dashboard' :
-            role === 'jury' ? 'jury-dashboard' :
-              role === 'treasurer' ? 'treasurer-dashboard' :
-                role === 'participant' ? 'participant-dashboard' :
-                  'resident-dashboard'
-    );
+    setCurrentView(getDashboardView(role));
   };
 
   const handleLogout = () => {
@@ -150,14 +152,13 @@ export default function SIMRApp() {
   const eventYear = config?.year || '2026';
 
   const ROLE_LABELS = {
-    superadmin: 'Super Admin',
-    admin: 'Comité Org.',
-    academic: 'Académico',
-    admission: 'Admisión',
+    admin: 'Organización',
+    academic: 'Académica',
+    admission: 'Asistencia',
     jury: 'Jurado',
-    treasurer: 'Tesorero',
-    participant: 'Asistente',
-    resident: 'Residente'
+    treasurer: 'Contabilidad',
+    participant: 'Aula Virtual',
+    resident: 'Trabajos'
   };
 
   const ROLE_ICONS = {
@@ -241,23 +242,24 @@ export default function SIMRApp() {
                     {user.roles && user.roles.length > 1 && (
                       <>
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cambiar Perfil</div>
-                        {user.roles.map(role => {
+                        {user.roles.filter(role => role !== 'superadmin').map(role => {
                           const Icon = ROLE_ICONS[role] || Users;
+                          const isDashboardActive = currentView === getDashboardView(role);
                           return (
                             <button
                               key={role}
                               onClick={() => handleRoleSwitch(role)}
                               className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
-                                     ${activeRole === role ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
+                                     ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
                                      `}
                             >
                               <div className="flex items-center gap-3">
-                                <div className={`p-1.5 rounded-lg ${activeRole === role ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                                   <Icon size={16} />
                                 </div>
                                 {ROLE_LABELS[role] || role}
                               </div>
-                              {activeRole === role && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                              {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
                             </button>
                           );
                         })}
@@ -304,7 +306,7 @@ export default function SIMRApp() {
               <>
                 <div className="border-t border-gray-100 pt-2 mt-2">
                   <div className="text-xs text-gray-500 uppercase mb-2">Cambiar Perfil ({ROLE_LABELS[activeRole]})</div>
-                  {user.roles && user.roles.map(role => (
+                  {user.roles && user.roles.filter(role => role !== 'superadmin').map(role => (
                     <button
                       key={role}
                       onClick={() => handleRoleSwitch(role)}
@@ -334,7 +336,7 @@ export default function SIMRApp() {
         {currentView === 'posters' && <PostersView />}
         {currentView === 'registration' && <RegistrationView />}
         {currentView === 'resident-dashboard' && <ResidentDashboard user={user} navigate={navigate} />}
-        {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} />}
+        {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} navigate={navigate} />}
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
         {currentView === 'jury-dashboard' && <JuryDashboard user={user} />}
         {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}

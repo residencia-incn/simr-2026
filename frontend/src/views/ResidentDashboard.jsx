@@ -1,11 +1,12 @@
 import React from 'react';
-import { PlusCircle, FileText, CheckCircle, Users } from 'lucide-react';
+import { PlusCircle, FileText, CheckCircle, Users, Clock } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
 import Table from '../components/ui/Table';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { api } from '../services/api';
+import { INITIAL_ROADMAP } from '../data/mockData';
 
 import WorkModal from '../components/academic/WorkModal';
 import { useApi, useSortableData } from '../hooks';
@@ -62,17 +63,96 @@ const ResidentDashboard = ({ user, navigate }) => {
         }
     };
 
+    // File Upload handling
+    const fileInputRef = React.useRef(null);
+    const [uploadingId, setUploadingId] = React.useState(null);
+
+    const handleFileSelect = async (event, workId) => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        setUploadingId(workId);
+
+        // Simulate upload delay
+        setTimeout(async () => {
+            // In a real app, we would upload to storage here and get a URL back
+            // For now, we simulate a URL
+            const slidesUrl = `https://storage.googleapis.com/simr-2026/slides/${workId}_${Date.now()}.pdf`;
+
+            try {
+                // Find work to update
+                const workToUpdate = works.find(w => w.id === workId);
+                if (workToUpdate) {
+                    const updatedWork = {
+                        ...workToUpdate,
+                        slidesUrl: slidesUrl,
+                        slidesUpdatedAt: new Date().toISOString()
+                    };
+                    await api.works.update(updatedWork);
+                    window.location.reload(); // Refresh to see changes
+                }
+            } catch (error) {
+                console.error("Error updating slides", error);
+            } finally {
+                setUploadingId(null);
+                // Clear input
+                event.target.value = '';
+            }
+        }, 1500);
+    };
+
+    const triggerFileUpload = (workId) => {
+        // Store the workId we are uploading for
+        fileInputRef.current.setAttribute('data-work-id', workId);
+        fileInputRef.current.click();
+    };
+
+
     const renderActions = (item) => {
         const canEdit = item.status === 'Observado' || item.status === 'Pendiente' || item.status === 'En Evaluación';
+        const isAccepted = item.status === 'Aceptado';
+        const isUploading = uploadingId === item.id;
+        const hasSlides = !!item.slidesUrl;
+
         return (
-            <Button
-                variant="ghost"
-                className={`text-xs p-1 h-auto ${canEdit ? 'text-blue-600 hover:text-blue-800' : 'text-gray-300 cursor-not-allowed'}`}
-                disabled={!canEdit}
-                onClick={() => { setSelectedWork(item); setModalMode('edit'); setIsModalOpen(true); }}
-            >
-                Edita
-            </Button>
+            <div className="flex flex-col gap-2 items-end">
+                {canEdit && (
+                    <Button
+                        variant="ghost"
+                        className="text-xs p-1 h-auto text-blue-600 hover:text-blue-800"
+                        onClick={() => { setSelectedWork(item); setModalMode('edit'); setIsModalOpen(true); }}
+                    >
+                        Editar
+                    </Button>
+                )}
+
+                {isAccepted && (
+                    <>
+                        <Button
+                            variant={hasSlides ? "outline" : "primary"}
+                            className={`text-xs px-2 py-1 h-auto ${hasSlides ? 'text-green-600 border-green-200 bg-green-50' : ''}`}
+                            disabled={isUploading}
+                            onClick={() => triggerFileUpload(item.id)}
+                        >
+                            {isUploading ? (
+                                <span className="flex items-center gap-1">
+                                    <LoadingSpinner size="sm" /> Subiendo...
+                                </span>
+                            ) : (
+                                <span className="flex items-center gap-1">
+                                    {hasSlides ? <CheckCircle size={12} /> : <FileText size={12} />}
+                                    {hasSlides ? 'Actualizar Diapositivas' : 'Subir Diapositivas'}
+                                </span>
+                            )}
+                        </Button>
+                        {hasSlides && (
+                            <div className="text-[10px] text-green-600">
+                                Enviado: {new Date(item.slidesUpdatedAt).toLocaleDateString()}
+                            </div>
+                        )}
+                    </>
+                )}
+            </div>
         );
     };
 
@@ -86,6 +166,7 @@ const ResidentDashboard = ({ user, navigate }) => {
 
     // Stats calculation
     const acceptedCount = userWorks.filter(w => w.status === 'Aceptado').length;
+    const pendingCount = userWorks.filter(w => w.status === 'En Evaluación' || w.status === 'Pendiente').length;
 
     return (
         <div className="animate-fadeIn space-y-8">
@@ -100,7 +181,19 @@ const ResidentDashboard = ({ user, navigate }) => {
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Hidden File Input for Slides */}
+            <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept=".pdf,.ppt,.pptx"
+                onChange={(e) => {
+                    const workId = fileInputRef.current.getAttribute('data-work-id');
+                    handleFileSelect(e, workId);
+                }}
+            />
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                 <Card className="flex items-center gap-4">
                     <div className="bg-blue-100 p-3 rounded-full text-blue-700">
                         <FileText />
@@ -120,12 +213,36 @@ const ResidentDashboard = ({ user, navigate }) => {
                     </div>
                 </Card>
                 <Card className="flex items-center gap-4">
-                    <div className="bg-purple-100 p-3 rounded-full text-purple-700">
+                    <div className="bg-orange-100 p-3 rounded-full text-orange-700">
                         <Users />
                     </div>
                     <div>
-                        <div className="text-2xl font-bold">2</div>
-                        <div className="text-sm text-gray-600">Talleres Inscritos</div>
+                        <div className="text-2xl font-bold">{pendingCount}</div>
+                        <div className="text-sm text-gray-600">En revisión</div>
+                    </div>
+                </Card>
+                <Card className="flex items-center gap-4 border-l-4 border-l-purple-500 bg-purple-50">
+                    <div className="bg-purple-100 p-3 rounded-full text-purple-700">
+                        <Clock />
+                    </div>
+                    <div>
+                        <div className="text-sm text-purple-800 font-bold uppercase">Próximo Evento</div>
+                        {(() => {
+                            const now = new Date();
+                            const nextEvent = INITIAL_ROADMAP
+                                .filter(e => new Date(e.date) >= now)
+                                .sort((a, b) => new Date(a.date) - new Date(b.date))[0];
+
+                            if (nextEvent) {
+                                return (
+                                    <>
+                                        <div className="text-sm font-bold text-gray-900 truncate max-w-[150px]" title={nextEvent.title}>{nextEvent.title}</div>
+                                        <div className="text-xs text-gray-600">Vence: {new Date(nextEvent.date).toLocaleDateString()}</div>
+                                    </>
+                                );
+                            }
+                            return <div className="text-sm text-gray-500">No hay eventos próximos</div>;
+                        })()}
                     </div>
                 </Card>
             </div>
@@ -144,6 +261,7 @@ const ResidentDashboard = ({ user, navigate }) => {
                     emptyMessage="No has enviado trabajos aún."
                     onRowClick={(item) => { setSelectedWork(item); setModalMode('view'); setIsModalOpen(true); }}
                     className="border-0 rounded-none shadow-none"
+                    interactiveRow={false} // Disable row click to avoid conflict with buttons if needed, or handle carefuly
                 />
             </div>
 

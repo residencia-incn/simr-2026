@@ -5,6 +5,20 @@ import { api } from '../services/api';
 import { useForm, useModal, useFileUpload, useApi } from '../hooks';
 import { MOCK_INCN_RESIDENTS } from '../data/mockData';
 
+const getActivePricingColumnId = (matrix) => {
+    if (!matrix || !matrix.columns) return null;
+    const today = new Date();
+    for (const col of matrix.columns) {
+        if (!col.deadline) continue;
+        const deadline = new Date(col.deadline);
+        deadline.setHours(23, 59, 59, 999);
+        if (today <= deadline) {
+            return col.id;
+        }
+    }
+    return matrix.columns[matrix.columns.length - 1]?.id;
+};
+
 const RegistrationView = () => {
     // Hooks
     const { isOpen: isCostsModalOpen, open: openCostsModal, close: closeCostsModal } = useModal();
@@ -103,34 +117,78 @@ const RegistrationView = () => {
     };
 
     const calculateAmount = () => {
-        if (!config?.prices) return 0;
-
-        // INCN Residents
-        if (userType === 'incn') {
-            return config.prices.incn || 50;
+        if (!config) return 0;
+        const matrix = config.pricingMatrix;
+        if (!matrix) {
+            // Fallback for safety if matrix isn't loaded yet but prices exist (legacy)
+            if (config.prices) {
+                if (userType === 'incn') return config.prices.incn || 50;
+                if (form.modalidad === 'Presencial' && wantsCertification) return config.prices.certification || 50;
+                // ... simplistic fallback or just 0
+                return 0;
+            }
+            return 0;
         }
-
-        // External Logic
-        const isPresencial = form.modalidad === 'Presencial';
-        const isVirtual = form.modalidad === 'Virtual';
 
         let basePrice = 0;
 
-        if (isPresencial) {
-            // Presencial is free unless certification is requested
-            if (wantsCertification) {
-                basePrice = config.prices.certification || 50;
-            }
-        } else if (isVirtual) {
-            // Virtual pricing based on occupation
+        // INCN Logic
+        if (userType === 'incn') {
+            basePrice = parseInt(matrix.incnRate || 50);
+        } else {
+            // Find the matrix row based on occupation/status
+            let rowId = null;
             const occupation = form.occupation;
-            if (occupation === 'Médico Especialista') basePrice = config?.prices?.specialist || 120;
-            else if (occupation === 'Médico Residente') basePrice = config?.prices?.external_resident || 80;
-            else if (occupation === 'Estudiante de Medicina') basePrice = config?.prices?.student || 30;
-            else basePrice = config?.prices?.student || 30;
+            const rows = matrix.rows || [];
+
+            // Helper to find row by loose match
+            const findRow = (keywords) => rows.find(r => keywords.some(k => r.label.toLowerCase().includes(k.toLowerCase())));
+
+            if (occupation === 'Médico Especialista' || occupation === 'Médico General') {
+                // Try "Especialistas"
+                const r = findRow(['Especialista', 'Médico']);
+                rowId = r ? r.id : rows[0]?.id;
+            } else if (occupation === 'Médico Residente') {
+                // Try "Residente"
+                const r = findRow(['Residente']);
+                rowId = r ? r.id : (rows[1]?.id || rows[0]?.id);
+            } else if (occupation === 'Estudiante de Medicina') {
+                // Try "Estudiante"
+                const r = findRow(['Estudiante']);
+                rowId = r ? r.id : (rows[2]?.id || rows[0]?.id);
+            } else {
+                // Fallback "Otros" or "Residentes" usually
+                const r = findRow(['Otro', 'General']);
+                rowId = r ? r.id : (rows[1]?.id || rows[0]?.id);
+            }
+
+            if (rowId) {
+                const colId = getActivePricingColumnId(matrix);
+                if (colId) {
+                    basePrice = parseInt(matrix.values[`${rowId}_${colId}`] || 0);
+                }
+            }
         }
 
-        // Apply Coupon to any base price
+        // Add Certification if applicable
+        if (form.modalidad === 'Presencial' && wantsCertification) {
+            basePrice += parseInt(matrix.certificationCost || 50);
+        }
+
+        // Handle virtual vs presencial logic separation if needed, 
+        // but broadly pricing is now matrix-based.
+        // If Presencial is "Free" but only certification costs money:
+        // The matrix might have 0 for Presencial rows? 
+        // Or we stick to the logic that Presencial = 0 base price unless Matrix says otherwise?
+        // User said: "prices match user type". 
+        // Let's assume Matrix covers the base participation cost. 
+        // If Presencial is free, the matrix values for those rows should be 0 or handled here.
+        // For now, adhering to matrix values is safest.
+
+        // However, existing logic said Presencial is free. 
+        // Let's keep matrix authority. If matrix has price, we charge it.
+
+        // Apply Coupon logic (existing)
         if (basePrice > 0 && appliedCoupon) {
             if (appliedCoupon.type === 'percentage') {
                 const discount = (basePrice * appliedCoupon.value) / 100;
@@ -560,26 +618,91 @@ const RegistrationView = () => {
                         title="Tarifario 2026"
                         size="xl"
                     >
-                        <div className="p-2">
-                            <p className="text-blue-600 text-sm mb-4 text-center">Inversión para certificación y materiales</p>
+                        <div className="overflow-hidden bg-white rounded-lg">
+                            <div className="text-center pt-2 pb-2">
+                                <h3 className="text-2xl font-black text-[#4a3b7d] uppercase tracking-wide">COSTOS DE INSCRIPCIÓN</h3>
+                            </div>
 
-                            <Table
-                                columns={[
-                                    { header: 'Categoría', key: 'category' },
-                                    { header: 'Inversión', key: 'price', tdClassName: 'text-right font-bold text-blue-700' }
-                                ]}
-                                data={[
-                                    { category: 'Residentes INCN', price: `S/. ${config?.prices?.incn || 50}.00` },
-                                    { category: 'Residentes Externos', price: `S/. ${config?.prices?.external_resident || 80}.00` },
-                                    { category: 'Médicos Especialistas', price: `S/. ${config?.prices?.specialist || 120}.00` },
-                                    { category: 'Estudiantes / Otros', price: `S/. ${config?.prices?.student || 30}.00` },
-                                    { category: 'Solo Certificación (Presencial)', price: `S/. ${config?.prices?.certification || 50}.00` }
-                                ]}
-                                className="mb-0 shadow-none border-0"
-                            />
+                            <div className="flex flex-col md:flex-row gap-[15px] px-[15px] pb-[15px]">
+                                <div className="flex-1">
+                                    <div className="grid grid-cols-4 gap-2 mb-2 text-center text-white font-bold text-sm">
+                                        <div className="bg-transparent"></div> {/* Spacer */}
+                                        {config?.pricingMatrix?.columns?.map(col => (
+                                            <div key={col.id} className="bg-[#4a3b7d] py-2 rounded-t-lg flex flex-col justify-center min-h-[44px]">
+                                                <span className="leading-tight text-sm">{col.label}</span>
+                                            </div>
+                                        ))}
+                                    </div>
 
-                            <div className="mt-6 text-center">
-                                <Button onClick={closeCostsModal} className="w-full justify-center bg-blue-700">Entendido</Button>
+                                    {/* Rows */}
+                                    <div className="space-y-2">
+                                        {config?.pricingMatrix?.rows?.map(row => (
+                                            <div key={row.id} className="grid grid-cols-4 gap-2 items-stretch h-20">
+                                                <div className="bg-gray-100 p-2 rounded-lg font-bold text-gray-700 text-sm leading-tight text-center flex items-center justify-center h-full">
+                                                    {row.label}
+                                                </div>
+                                                {config?.pricingMatrix?.columns?.map(col => {
+                                                    const price = config.pricingMatrix.values[`${row.id}_${col.id}`] || 0;
+                                                    const activeColId = getActivePricingColumnId(config.pricingMatrix);
+                                                    const isActive = col.id === activeColId;
+
+                                                    return (
+                                                        <div key={col.id} className={`rounded-lg flex items-center justify-center p-1 shadow-sm border border-gray-100 relative overflow-hidden group
+                                                        ${isActive ? 'bg-[#4a3b7d] ring-2 ring-purple-400 ring-offset-1 z-10' : 'bg-[#4a3b7d]'}
+                                                    `}>
+                                                            <div className="w-14 h-14 rounded-full border-2 border-white/30 flex flex-col items-center justify-center text-white relative z-10">
+                                                                <span className="text-[10px] opacity-80 -mb-0.5">S/.</span>
+                                                                <span className="text-xl font-bold tracking-tight">{price}</span>
+                                                            </div>
+                                                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/10 rounded-full -mr-2 -mt-2 blur-sm"></div>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <p className="text-xs text-gray-500 mt-3 text-center">* Incluye IGV. Residentes INCN: Tarifa Única S/. {config?.pricingMatrix?.incnRate || 50}.00</p>
+                                </div>
+
+                                <div className="w-full md:w-80 bg-gray-50 rounded-xl p-[15px] border border-gray-100 flex flex-col shrink-0">
+                                    <h4 className="font-bold text-gray-900 text-lg border-b pb-2 mb-3">Cuentas Bancarias</h4>
+
+                                    <div className="mb-4">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded font-bold">BBVA</span>
+                                            <span className="font-bold text-base text-gray-800">Banco BBVA</span>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <div>
+                                                <p className="text-xs text-gray-500 font-medium">Cuenta Corriente Soles</p>
+                                                <p className="font-mono text-lg font-bold text-gray-800 tracking-tight">0011-0117-0100084567</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-xs text-gray-500 font-medium">CCI</p>
+                                                <p className="font-mono text-sm text-gray-600 tracking-tight">011-117-000100084567-90</p>
+                                            </div>
+                                            <p className="text-xs text-gray-500 mt-1">Titular: SIMR Eventos SAC</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex-1 flex flex-col">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded font-bold">Y/P</span>
+                                            <span className="font-bold text-base text-gray-800">Yape / Plin</span>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <div className="bg-white border-2 border-dashed border-gray-200 rounded-lg w-20 h-20 flex items-center justify-center shrink-0">
+                                                <span className="text-xs text-gray-400 text-center leading-none">QR<br />Code</span>
+                                            </div>
+                                            <p className="font-bold text-2xl text-gray-800">999 888 777</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="p-[15px] text-center border-t border-gray-100 bg-gray-50/50">
+                                <Button onClick={closeCostsModal} size="lg" className="bg-blue-700 hover:bg-blue-800 px-10 rounded-full shadow-lg shadow-blue-700/20 text-base">Entendido</Button>
                             </div>
                         </div>
                     </Modal>
@@ -590,3 +713,4 @@ const RegistrationView = () => {
 };
 
 export default RegistrationView;
+

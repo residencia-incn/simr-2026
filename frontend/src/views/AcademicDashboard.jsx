@@ -106,6 +106,11 @@ const AcademicDashboard = () => {
                             <User size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
                         </span>
                     )}
+                    {item.slidesUrl && (
+                        <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[10px] font-medium border border-green-100">
+                            <FileText size={10} /> PPT Enviado
+                        </span>
+                    )}
                     {item.day && (
                         <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-100">
                             <Calendar size={10} /> {item.day} {item.time}
@@ -195,6 +200,18 @@ const AcademicDashboard = () => {
                         <Calendar size={12} className="mr-1" />
                         {item.day ? 'Reprogramar' : 'Programar'}
                     </Button>
+
+                    {item.slidesUrl && (
+                        <Button
+                            size="xs"
+                            variant="primary" // Highlight this action
+                            className="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                            onClick={() => window.open(item.slidesUrl, '_blank')}
+                        >
+                            <FileText size={12} className="mr-1" />
+                            Descargar PPT
+                        </Button>
+                    )}
                 </>
             )}
         </div>

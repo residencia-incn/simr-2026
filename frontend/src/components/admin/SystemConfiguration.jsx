@@ -486,64 +486,194 @@ const SystemConfiguration = () => {
                 )}
 
                 {activeTab === 'pricing' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
+                    <div className="grid grid-cols-1 gap-6 animate-fadeIn">
+                        <Card className="p-6">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
                                 <DollarSign size={20} className="text-gray-500" />
-                                Gestión de Tarifas de Inscripción (S/.)
+                                Gestión de Matriz de Precios
                             </h4>
-                            <div className="grid grid-cols-2 gap-4 flex-1 overflow-y-auto pr-1 content-start">
+
+                            <div className="space-y-8">
+                                {/* Columns Management */}
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Residente INCN</label>
-                                    <input
-                                        type="number"
-                                        value={config.prices?.incn || 0}
-                                        onChange={(e) => setConfig({ ...config, prices: { ...config.prices, incn: parseInt(e.target.value) } })}
-                                        className="w-full p-2 border border-blue-200 bg-blue-50 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <h5 className="font-bold text-sm text-gray-700 mb-3 flex items-center justify-between">
+                                        Columnas (Fechas / Etapas)
+                                        <Button
+                                            size="sm"
+                                            onClick={() => {
+                                                const newId = `col_${Date.now()}`;
+                                                setConfig({
+                                                    ...config,
+                                                    pricingMatrix: {
+                                                        ...config.pricingMatrix,
+                                                        columns: [...config.pricingMatrix.columns, { id: newId, label: 'Nueva Etapa', deadline: '' }]
+                                                    }
+                                                });
+                                            }}
+                                        >
+                                            <Plus size={14} /> Agregar Columna
+                                        </Button>
+                                    </h5>
+                                    <div className="grid gap-3">
+                                        {config.pricingMatrix?.columns?.map((col, idx) => (
+                                            <div key={col.id} className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                                <span className="text-xs font-bold text-gray-400 w-6">#{idx + 1}</span>
+                                                <input
+                                                    type="text"
+                                                    value={col.label}
+                                                    onChange={(e) => {
+                                                        const newCols = [...config.pricingMatrix.columns];
+                                                        newCols[idx].label = e.target.value;
+                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
+                                                    }}
+                                                    className="flex-1 p-1.5 border border-gray-300 rounded text-sm"
+                                                    placeholder="Etiqueta (Ej. Hasta 15 Ene)"
+                                                />
+                                                <input
+                                                    type="date"
+                                                    value={col.deadline}
+                                                    onChange={(e) => {
+                                                        const newCols = [...config.pricingMatrix.columns];
+                                                        newCols[idx].deadline = e.target.value;
+                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
+                                                    }}
+                                                    className="p-1.5 border border-gray-300 rounded text-sm w-40"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const newCols = config.pricingMatrix.columns.filter(c => c.id !== col.id);
+                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
+                                                    }}
+                                                    className="text-red-500 hover:bg-red-50 p-1 rounded"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
+
+                                {/* Rows Management */}
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Médico Especialista</label>
-                                    <input
-                                        type="number"
-                                        value={config.prices?.specialist || 0}
-                                        onChange={(e) => setConfig({ ...config, prices: { ...config.prices, specialist: parseInt(e.target.value) } })}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <h5 className="font-bold text-sm text-gray-700 mb-3 flex items-center justify-between">
+                                        Filas (Categorías)
+                                        <Button
+                                            size="sm"
+                                            onClick={() => {
+                                                const newId = `row_${Date.now()}`;
+                                                setConfig({
+                                                    ...config,
+                                                    pricingMatrix: {
+                                                        ...config.pricingMatrix,
+                                                        rows: [...config.pricingMatrix.rows, { id: newId, label: 'Nueva Categoría' }]
+                                                    }
+                                                });
+                                            }}
+                                        >
+                                            <Plus size={14} /> Agregar Fila
+                                        </Button>
+                                    </h5>
+                                    <div className="grid gap-3">
+                                        {config.pricingMatrix?.rows?.map((row, idx) => (
+                                            <div key={row.id} className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
+                                                <span className="text-xs font-bold text-gray-400 w-6">#{idx + 1}</span>
+                                                <input
+                                                    type="text"
+                                                    value={row.label}
+                                                    onChange={(e) => {
+                                                        const newRows = [...config.pricingMatrix.rows];
+                                                        newRows[idx].label = e.target.value;
+                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, rows: newRows } });
+                                                    }}
+                                                    className="flex-1 p-1.5 border border-gray-300 rounded text-sm"
+                                                    placeholder="Categoría"
+                                                />
+                                                <button
+                                                    onClick={() => {
+                                                        const newRows = config.pricingMatrix.rows.filter(r => r.id !== row.id);
+                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, rows: newRows } });
+                                                    }}
+                                                    className="text-red-500 hover:bg-red-50 p-1 rounded"
+                                                >
+                                                    <X size={16} />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
+
+                                {/* Matrix Values */}
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Residente Externo</label>
-                                    <input
-                                        type="number"
-                                        value={config.prices?.external_resident || 0}
-                                        onChange={(e) => setConfig({ ...config, prices: { ...config.prices, external_resident: parseInt(e.target.value) } })}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+                                    <h5 className="font-bold text-sm text-gray-700 mb-3">Matriz de Precios (S/.)</h5>
+                                    <div className="overflow-x-auto border rounded-xl shadow-sm">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-gray-100 text-gray-600 font-bold">
+                                                <tr>
+                                                    <th className="p-3 border-b">Categoría / Etapa</th>
+                                                    {config.pricingMatrix?.columns?.map(col => (
+                                                        <th key={col.id} className="p-3 border-b text-center border-l w-32">{col.label}</th>
+                                                    ))}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {config.pricingMatrix?.rows?.map(row => (
+                                                    <tr key={row.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                        <td className="p-3 font-medium text-gray-900">{row.label}</td>
+                                                        {config.pricingMatrix?.columns?.map(col => {
+                                                            const cellId = `${row.id}_${col.id}`;
+                                                            return (
+                                                                <td key={col.id} className="p-2 border-l text-center">
+                                                                    <div className="flex items-center justify-center">
+                                                                        <span className="text-gray-400 text-xs mr-1">S/.</span>
+                                                                        <input
+                                                                            type="number"
+                                                                            value={config.pricingMatrix.values?.[cellId] || 0}
+                                                                            onChange={(e) => {
+                                                                                const newValues = { ...config.pricingMatrix.values, [cellId]: parseInt(e.target.value) || 0 };
+                                                                                setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, values: newValues } });
+                                                                            }}
+                                                                            className="w-16 p-1 border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500"
+                                                                        />
+                                                                    </div>
+                                                                </td>
+                                                            );
+                                                        })}
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Estudiante</label>
-                                    <input
-                                        type="number"
-                                        value={config.prices?.student || 0}
-                                        onChange={(e) => setConfig({ ...config, prices: { ...config.prices, student: parseInt(e.target.value) } })}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
-                                </div>
-                                <div className="col-span-2 border-t pt-4 mt-2">
-                                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Costo Certificado (Opcional)</label>
-                                    <input
-                                        type="number"
-                                        value={config.prices?.certification || 0}
-                                        onChange={(e) => setConfig({ ...config, prices: { ...config.prices, certification: parseInt(e.target.value) } })}
-                                        className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    />
+
+                                {/* Additional Costs */}
+                                <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-200">
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Costo Certificado (Solo Presencial)</label>
+                                        <div className="flex items-center">
+                                            <span className="bg-gray-100 border border-gray-300 border-r-0 rounded-l-lg p-2 text-gray-500">S/.</span>
+                                            <input
+                                                type="number"
+                                                value={config.pricingMatrix?.certificationCost || 0}
+                                                onChange={(e) => setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, certificationCost: parseInt(e.target.value) } })}
+                                                className="w-full p-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-1">Tarifa Plana INCN</label>
+                                        <div className="flex items-center">
+                                            <span className="bg-blue-100 border border-blue-200 border-r-0 rounded-l-lg p-2 text-blue-600 font-bold">S/.</span>
+                                            <input
+                                                type="number"
+                                                value={config.pricingMatrix?.incnRate || 0}
+                                                onChange={(e) => setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, incnRate: parseInt(e.target.value) } })}
+                                                className="w-full p-2 border border-blue-200 bg-blue-50 rounded-r-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-700"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </Card>
-                        <div className="hidden md:flex flex-col items-center justify-center p-8 bg-blue-50/50 rounded-2xl border-2 border-dashed border-blue-100 text-blue-300 h-[500px]">
-                            <DollarSign size={80} strokeWidth={1} />
-                            <p className="text-sm font-medium mt-4 text-blue-400">Configuración de Precios</p>
-                        </div>
                     </div>
                 )}
 
