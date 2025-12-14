@@ -153,7 +153,7 @@ const AdminDashboard = ({ user }) => {
             {/* Sidebar Navigation */}
             {/* Sidebar Navigation */}
             {/* Top Navigation Bar */}
-            <div className="w-full bg-white shadow-sm border-b border-gray-200 rounded-2xl flex flex-row items-center justify-start py-2 px-4 gap-4 sticky top-16 overflow-x-auto scrollbar-hide z-20">
+            <div className="w-full bg-white shadow-sm border-b border-gray-200 rounded-2xl flex flex-row items-center justify-start py-2 px-4 gap-4 sticky top-16 overflow-x-auto md:overflow-visible scrollbar-hide z-20">
                 {navItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
@@ -179,10 +179,10 @@ const AdminDashboard = ({ user }) => {
                             </button>
 
                             {/* Tooltip (Bottom) */}
-                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 hidden md:block">
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 bg-black text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 hidden md:block shadow-lg">
                                 {item.label}
                                 {/* Arrow (Up) */}
-                                <div className="absolute left-1/2 -translate-x-1/2 -top-1 border-4 border-transparent border-b-gray-900"></div>
+                                <div className="absolute left-1/2 -translate-x-1/2 -top-[6px] border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-black"></div>
                             </div>
                         </div>
                     );
