@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Plus, Trash2, Edit2, Users, CheckCircle, Clock, AlertCircle, Target, TrendingUp, MessageSquare, Eye } from 'lucide-react';
+import { Calendar, Plus, Trash2, Edit2, Users, CheckCircle, Clock, AlertCircle, Target, TrendingUp, MessageSquare, Eye, Printer } from 'lucide-react';
 import { Button, Card, Modal, FormField, LoadingSpinner, EmptyState, ConfirmDialog } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
@@ -16,6 +16,10 @@ const PlanningManager = ({ currentUser }) => {
     const [filterStatus, setFilterStatus] = useState('all');
     const [viewingMeetingDetails, setViewingMeetingDetails] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [viewingPreviousMeetings, setViewingPreviousMeetings] = useState(false);
+    const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
+    const [viewingTaskDetails, setViewingTaskDetails] = useState(null);
+    const [openedFromPreviousMeetings, setOpenedFromPreviousMeetings] = useState(false);
     const ITEMS_PER_PAGE = 5;
 
     // Load data
@@ -55,7 +59,36 @@ const PlanningManager = ({ currentUser }) => {
     // Sort meetings by date descending
     const sortedMeetings = [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
     const recentMeetings = sortedMeetings.slice(0, 4);
-    const previousMeetings = sortedMeetings.slice(4);
+
+    // Filter previous meetings by date range
+    let filteredPreviousMeetings = sortedMeetings.slice(4);
+    if (dateFilter.startDate || dateFilter.endDate) {
+        filteredPreviousMeetings = filteredPreviousMeetings.filter(meeting => {
+            const meetingDate = new Date(meeting.date);
+            const start = dateFilter.startDate ? new Date(dateFilter.startDate) : null;
+            const end = dateFilter.endDate ? new Date(dateFilter.endDate) : null;
+
+            if (start && end) {
+                return meetingDate >= start && meetingDate <= end;
+            } else if (start) {
+                return meetingDate >= start;
+            } else if (end) {
+                return meetingDate <= end;
+            }
+            return true;
+        });
+    }
+
+    const handleClearFilters = () => {
+        setDateFilter({ startDate: '', endDate: '' });
+        setCurrentPage(1);
+    };
+
+    const handleOpenPreviousMeetings = () => {
+        setViewingPreviousMeetings(true);
+        setCurrentPage(1);
+        setDateFilter({ startDate: '', endDate: '' });
+    };
 
     // Meeting handlers
     const handleAddMeeting = () => {
@@ -267,7 +300,16 @@ const PlanningManager = ({ currentUser }) => {
         return (
             <div
                 className={`bg-white rounded-xl border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group ${!isRecent ? 'opacity-80 hover:opacity-100' : ''}`}
-                onClick={() => setViewingMeetingDetails(meeting)}
+                onClick={() => {
+                    setViewingMeetingDetails(meeting);
+                    if (!isRecent) {
+                        setOpenedFromPreviousMeetings(true);
+                        setViewingPreviousMeetings(false); // Close to avoid z-index issues
+                    } else {
+                        setOpenedFromPreviousMeetings(false);
+                        setViewingPreviousMeetings(false);
+                    }
+                }}
             >
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex-1">
@@ -406,57 +448,28 @@ const PlanningManager = ({ currentUser }) => {
                     <>
                         {/* Recent Meetings */}
                         <div className="space-y-3">
-                            <h4 className="text-sm font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
-                                <Clock size={16} /> Recientes
-                            </h4>
+                            <div className="flex items-center justify-between mb-2">
+                                <h4 className="text-sm font-bold text-gray-500 uppercase flex items-center gap-2">
+                                    <Clock size={16} /> Reuniones Recientes
+                                </h4>
+                                {filteredPreviousMeetings.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleOpenPreviousMeetings}
+                                        className="text-xs"
+                                    >
+                                        <Calendar size={14} className="mr-1" />
+                                        Ver Reuniones Anteriores ({filteredPreviousMeetings.length})
+                                    </Button>
+                                )}
+                            </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {recentMeetings.map(meeting => (
                                     <MeetingItem key={meeting.id} meeting={meeting} isRecent={true} />
                                 ))}
                             </div>
                         </div>
-
-                        {/* Previous Meetings */}
-                        {previousMeetings.length > 0 && (() => {
-                            const totalPages = Math.ceil(previousMeetings.length / ITEMS_PER_PAGE);
-                            const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-                            const currentPreviousMeetings = previousMeetings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-                            return (
-                                <div className="space-y-3 pt-4 border-t">
-                                    <h4 className="text-sm font-bold text-gray-500 uppercase flex items-center gap-2 mb-2">
-                                        <Calendar size={16} /> Reuniones Anteriores
-                                    </h4>
-
-                                    <div className="space-y-3">
-                                        {currentPreviousMeetings.map(meeting => (
-                                            <MeetingItem key={meeting.id} meeting={meeting} isRecent={false} />
-                                        ))}
-                                    </div>
-
-                                    {/* Pagination Controls */}
-                                    {totalPages > 1 && (
-                                        <div className="flex justify-center items-center gap-4 mt-4 text-sm text-gray-600">
-                                            <button
-                                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                                disabled={currentPage === 1}
-                                                className={`px-3 py-1 rounded-md border ${currentPage === 1 ? 'bg-gray-50 text-gray-300' : 'bg-white hover:bg-gray-50'}`}
-                                            >
-                                                Anterior
-                                            </button>
-                                            <span>Página {currentPage} de {totalPages}</span>
-                                            <button
-                                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                                                disabled={currentPage === totalPages}
-                                                className={`px-3 py-1 rounded-md border ${currentPage === totalPages ? 'bg-gray-50 text-gray-300' : 'bg-white hover:bg-gray-50'}`}
-                                            >
-                                                Siguiente
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            );
-                        })()}
                     </>
                 )}
             </div>
@@ -638,7 +651,13 @@ const PlanningManager = ({ currentUser }) => {
             {/* Meeting Details Modal (Enhanced) */}
             <Modal
                 isOpen={viewingMeetingDetails !== null}
-                onClose={() => setViewingMeetingDetails(null)}
+                onClose={() => {
+                    setViewingMeetingDetails(null);
+                    if (openedFromPreviousMeetings) {
+                        setViewingPreviousMeetings(true);
+                        setOpenedFromPreviousMeetings(false);
+                    }
+                }}
                 title="Detalles de la Reunión"
                 size="3xl"
             >
@@ -756,7 +775,7 @@ const PlanningManager = ({ currentUser }) => {
                                         onClick={() => handlePrintMeeting(viewingMeetingDetails)}
                                         className="gap-2"
                                     >
-                                        <div className="w-4 h-4 rounded-sm border-2 border-current" />
+                                        <Printer size={16} />
                                         Imprimir Acta
                                     </Button>
                                 </div>
@@ -880,37 +899,288 @@ const PlanningManager = ({ currentUser }) => {
                                             </div>
                                         ) : (
                                             <div className="divide-y divide-gray-100">
-                                                {meetingTasks.map(task => (
-                                                    <div key={task.id} className="p-4 hover:bg-gray-50 flex justify-between items-center">
-                                                        <div>
-                                                            <p className="font-medium text-gray-800 text-sm">{task.title}</p>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                                                                    {getUserName(task.assignedTo)}
-                                                                </span>
-                                                                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${task.status === 'completed' ? 'border-green-200 text-green-700 bg-green-50' :
-                                                                    task.status === 'in_progress' ? 'border-blue-200 text-blue-700 bg-blue-50' :
-                                                                        'border-gray-200 text-gray-600 bg-gray-50'
-                                                                    }`}>
-                                                                    {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En Progreso' : 'Pendiente'}
-                                                                </span>
-                                                            </div>
-                                                        </div>
+                                                {meetingTasks.map(task => {
+                                                    const assignedUser = users.find(u => u.id === task.assignedTo);
 
-                                                        {/* View Task Button? Or maybe simple status toggle if we had space. For now simple view */}
-                                                        {/* Only allow editing if meeting is open? Usually tasks live beyond meeting closing potentially. 
-                                                            Let's assume tasks can still be updated status-wise, but maybe not added/deleted if meeting closed?
-                                                            The user requirement said "no se podra modificar" referring to agreements/tasks assignment.
-                                                            So we hide edit buttons if closed? Or just Add button which we did. 
-                                                        */}
-                                                    </div>
-                                                ))}
+                                                    return (
+                                                        <div key={task.id} className="p-4 hover:bg-gray-50 border-b border-gray-100 last:border-0">
+                                                            {/* Header de la tarea */}
+                                                            <div className="flex justify-between items-start mb-3">
+                                                                <div className="flex-1">
+                                                                    <p className="font-medium text-gray-800 text-sm mb-1">{task.title}</p>
+                                                                    <div className="flex items-center gap-2 flex-wrap">
+                                                                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded flex items-center gap-1">
+                                                                            <Users size={12} />
+                                                                            {assignedUser?.name || 'Sin asignar'}
+                                                                        </span>
+                                                                        {task.dueDate && (
+                                                                            <span className="text-xs text-gray-500 flex items-center gap-1">
+                                                                                <Clock size={12} />
+                                                                                {new Date(task.dueDate).toLocaleDateString('es-PE')}
+                                                                            </span>
+                                                                        )}
+                                                                        {task.priority && (
+                                                                            <span className={`text-[10px] px-2 py-0.5 rounded-full ${task.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                                                                task.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                                                    'bg-gray-100 text-gray-600'
+                                                                                }`}>
+                                                                                {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                {/* Botón para ver detalles */}
+                                                                <button
+                                                                    onClick={() => setViewingTaskDetails(task)}
+                                                                    className="text-blue-600 hover:text-blue-700 p-1.5 hover:bg-blue-50 rounded transition-colors"
+                                                                    title="Ver detalles y comentarios"
+                                                                >
+                                                                    <Eye size={16} />
+                                                                </button>
+                                                            </div>
+
+                                                            {/* Barra de progreso */}
+                                                            <div className="space-y-1">
+                                                                <div className="flex justify-between items-center text-xs">
+                                                                    <span className="text-gray-500">Progreso</span>
+                                                                    <span className="font-bold text-blue-600">{task.progress || 0}%</span>
+                                                                </div>
+                                                                <div className="bg-gray-100 rounded-full h-2">
+                                                                    <div
+                                                                        className={`rounded-full h-2 transition-all ${(task.progress || 0) === 100 ? 'bg-green-500' :
+                                                                            (task.progress || 0) >= 50 ? 'bg-blue-500' :
+                                                                                'bg-yellow-500'
+                                                                            }`}
+                                                                        style={{ width: `${task.progress || 0}%` }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Último comentario (si existe) */}
+                                                            {task.comments && task.comments.length > 0 && (
+                                                                <div className="mt-2 text-xs text-gray-500 italic bg-gray-50 p-2 rounded">
+                                                                    <MessageSquare size={12} className="inline mr-1" />
+                                                                    {task.comments[task.comments.length - 1].text}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })}
                                             </div>
                                         )}
                                     </div>
                                 </div>
                             </div>
 
+                        </div>
+                    );
+                })()}
+            </Modal>
+
+            {/* Task Details Modal */}
+            <Modal
+                isOpen={!!viewingTaskDetails}
+                onClose={() => setViewingTaskDetails(null)}
+                title="Detalles de la Tarea"
+                size="lg"
+            >
+                {viewingTaskDetails && (() => {
+                    const assignedUser = users.find(u => u.id === viewingTaskDetails.assignedTo);
+                    const meeting = meetings.find(m => m.id === viewingTaskDetails.meetingId);
+
+                    return (
+                        <div className="space-y-4">
+                            {/* Información básica */}
+                            <div className="bg-gray-50 rounded-lg p-4 space-y-2">
+                                <h4 className="font-bold text-gray-800">{viewingTaskDetails.title}</h4>
+                                {viewingTaskDetails.description && (
+                                    <p className="text-sm text-gray-600">{viewingTaskDetails.description}</p>
+                                )}
+                                <div className="flex items-center gap-4 text-sm text-gray-600 flex-wrap">
+                                    <span className="flex items-center gap-1">
+                                        <Users size={14} />
+                                        {assignedUser?.name || 'Sin asignar'}
+                                    </span>
+                                    {viewingTaskDetails.dueDate && (
+                                        <span className="flex items-center gap-1">
+                                            <Clock size={14} />
+                                            {new Date(viewingTaskDetails.dueDate).toLocaleDateString('es-PE')}
+                                        </span>
+                                    )}
+                                    {viewingTaskDetails.priority && (
+                                        <span className={`px-2 py-0.5 rounded-full text-xs ${viewingTaskDetails.priority === 'high' ? 'bg-red-100 text-red-700' :
+                                            viewingTaskDetails.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                                                'bg-gray-100 text-gray-600'
+                                            }`}>
+                                            Prioridad: {viewingTaskDetails.priority === 'high' ? 'Alta' :
+                                                viewingTaskDetails.priority === 'medium' ? 'Media' : 'Baja'}
+                                        </span>
+                                    )}
+                                </div>
+                                {meeting && (
+                                    <p className="text-xs text-gray-500 flex items-center gap-1">
+                                        <Calendar size={12} />
+                                        Reunión: {meeting.title} - {new Date(meeting.date).toLocaleDateString('es-PE')}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Progreso */}
+                            <div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-sm font-medium text-gray-700">Progreso</span>
+                                    <span className="text-lg font-bold text-blue-600">{viewingTaskDetails.progress || 0}%</span>
+                                </div>
+                                <div className="bg-gray-100 rounded-full h-3">
+                                    <div
+                                        className={`rounded-full h-3 transition-all ${(viewingTaskDetails.progress || 0) === 100 ? 'bg-green-500' :
+                                            (viewingTaskDetails.progress || 0) >= 50 ? 'bg-blue-500' :
+                                                'bg-yellow-500'
+                                            }`}
+                                        style={{ width: `${viewingTaskDetails.progress || 0}%` }}
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Historial de comentarios */}
+                            <div>
+                                <h5 className="font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                    <MessageSquare size={16} />
+                                    Historial de Comentarios
+                                </h5>
+                                {viewingTaskDetails.comments && viewingTaskDetails.comments.length > 0 ? (
+                                    <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2">
+                                        {viewingTaskDetails.comments.map((comment, idx) => (
+                                            <div key={idx} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                                                <div className="flex justify-between items-start mb-1">
+                                                    <span className="text-xs text-gray-500">
+                                                        {new Date(comment.timestamp).toLocaleString('es-PE', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                    <span className="text-xs font-medium text-blue-600">
+                                                        Progreso: {comment.progress}%
+                                                    </span>
+                                                </div>
+                                                <p className="text-sm text-gray-700">{comment.text}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-8 text-gray-400 text-sm">
+                                        No hay comentarios registrados
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal>
+
+            {/* Previous Meetings Modal */}
+            <Modal
+                isOpen={viewingPreviousMeetings}
+                onClose={() => setViewingPreviousMeetings(false)}
+                title="Reuniones Anteriores"
+                size="3xl"
+            >
+                {(() => {
+                    const totalPages = Math.ceil(filteredPreviousMeetings.length / ITEMS_PER_PAGE);
+                    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+                    const currentPreviousMeetings = filteredPreviousMeetings.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
+                    return (
+                        <div className="space-y-4">
+                            {/* Header with count */}
+                            <div className="flex items-center justify-between pb-3 border-b">
+                                <span className="text-sm text-gray-600">
+                                    {filteredPreviousMeetings.length} reunión{filteredPreviousMeetings.length !== 1 ? 'es' : ''} encontrada{filteredPreviousMeetings.length !== 1 ? 's' : ''}
+                                </span>
+                            </div>
+
+                            {/* Date Filters */}
+                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                                <div className="flex items-center gap-4 flex-wrap">
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">
+                                            Desde
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={dateFilter.startDate}
+                                            onChange={(e) => {
+                                                setDateFilter({ ...dateFilter, startDate: e.target.value });
+                                                setCurrentPage(1);
+                                            }}
+                                            className="w-full p-2 border rounded-lg text-sm"
+                                        />
+                                    </div>
+                                    <div className="flex-1 min-w-[200px]">
+                                        <label className="block text-xs font-bold text-gray-600 mb-1">
+                                            Hasta
+                                        </label>
+                                        <input
+                                            type="date"
+                                            value={dateFilter.endDate}
+                                            onChange={(e) => {
+                                                setDateFilter({ ...dateFilter, endDate: e.target.value });
+                                                setCurrentPage(1);
+                                            }}
+                                            className="w-full p-2 border rounded-lg text-sm"
+                                        />
+                                    </div>
+                                    {(dateFilter.startDate || dateFilter.endDate) && (
+                                        <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            onClick={handleClearFilters}
+                                            className="self-end text-xs"
+                                        >
+                                            Limpiar Filtros
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Meetings List */}
+                            {currentPreviousMeetings.length > 0 ? (
+                                <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                                    {currentPreviousMeetings.map(meeting => (
+                                        <MeetingItem key={meeting.id} meeting={meeting} isRecent={false} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 text-gray-400">
+                                    <Calendar size={48} className="mx-auto mb-3 opacity-50" />
+                                    <p className="text-sm">No se encontraron reuniones con los filtros aplicados</p>
+                                </div>
+                            )}
+
+                            {/* Pagination Controls */}
+                            {totalPages > 1 && (
+                                <div className="flex justify-center items-center gap-4 pt-4 border-t text-sm text-gray-600">
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                        disabled={currentPage === 1}
+                                        className={`px-4 py-2 rounded-md border font-medium ${currentPage === 1 ? 'bg-gray-50 text-gray-300 cursor-not-allowed' : 'bg-white hover:bg-gray-50 hover:border-blue-300'}`}
+                                    >
+                                        Anterior
+                                    </button>
+                                    <span className="font-medium">Página {currentPage} de {totalPages}</span>
+                                    <button
+                                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={currentPage === totalPages}
+                                        className={`px-4 py-2 rounded-md border font-medium ${currentPage === totalPages ? 'bg-gray-50 text-gray-300 cursor-not-allowed' : 'bg-white hover:bg-gray-50 hover:border-blue-300'}`}
+                                    >
+                                        Siguiente
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     );
                 })()}
