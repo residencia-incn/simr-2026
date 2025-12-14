@@ -183,20 +183,22 @@ const GalleryView = () => {
                                 <X size={24} />
                             </button>
 
-                            <button onClick={prevImage} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors z-[110] hidden md:block">
-                                <ChevronLeft size={40} />
-                            </button>
+                            {displayItems.length > 1 && (
+                                <button onClick={prevImage} className="absolute left-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors z-[110] hidden md:block">
+                                    <ChevronLeft size={40} />
+                                </button>
+                            )}
 
                             <div className="relative max-h-full max-w-full">
                                 <img
-                                    src={filteredItems[lightboxIndex].url}
-                                    alt={filteredItems[lightboxIndex].title}
+                                    src={displayItems[lightboxIndex]?.url}
+                                    alt={displayItems[lightboxIndex]?.title}
                                     className="max-h-[calc(100vh-160px)] max-w-full object-contain rounded-lg shadow-2xl"
                                 />
                                 {/* Overlays */}
                                 <div className="absolute top-4 left-0 right-0 flex justify-center gap-2 pointer-events-none">
-                                    <span className="px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/20 shadow-lg">{filteredItems[lightboxIndex].year}</span>
-                                    <span className="px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/20 shadow-lg">{filteredItems[lightboxIndex].category}</span>
+                                    <span className="px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/20 shadow-lg">{displayItems[lightboxIndex]?.year}</span>
+                                    <span className="px-3 py-1 bg-black/40 backdrop-blur-md rounded-full text-white text-sm border border-white/20 shadow-lg">{displayItems[lightboxIndex]?.category}</span>
                                 </div>
                                 <button
                                     onClick={handleShare}
@@ -207,24 +209,26 @@ const GalleryView = () => {
                                 </button>
                             </div>
 
-                            <button onClick={nextImage} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors z-[110] hidden md:block">
-                                <ChevronRight size={40} />
-                            </button>
+                            {displayItems.length > 1 && (
+                                <button onClick={nextImage} className="absolute right-4 top-1/2 -translate-y-1/2 p-3 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors z-[110] hidden md:block">
+                                    <ChevronRight size={40} />
+                                </button>
+                            )}
                         </div>
 
                         {/* Right: Info Sidebar */}
                         <div className="w-full md:w-96 bg-gray-900/50 backdrop-blur-xl border-l border-white/10 flex flex-col overflow-y-auto absolute md:relative inset-0 md:inset-auto z-[120] md:z-auto translate-y-full md:translate-y-0 transition-transform duration-300 no-scrollbar">
                             <div className="p-6 flex-1">
                                 <div className="flex justify-between items-start mb-6">
-                                    <h3 className="text-2xl font-bold text-white leading-tight">{filteredItems[lightboxIndex].title}</h3>
+                                    <h3 className="text-2xl font-bold text-white leading-tight">{displayItems[lightboxIndex]?.title}</h3>
                                     <button onClick={closeLightbox} className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-full transition-colors -mr-2 -mt-2 hidden md:block">
                                         <X size={24} />
                                     </button>
                                 </div>
 
-                                {filteredItems[lightboxIndex].description && (
+                                {displayItems[lightboxIndex]?.description && (
                                     <div className="prose prose-invert prose-sm">
-                                        <p className="text-gray-300 leading-relaxed text-base">{filteredItems[lightboxIndex].description}</p>
+                                        <p className="text-gray-300 leading-relaxed text-base">{displayItems[lightboxIndex]?.description}</p>
                                     </div>
                                 )}
 
@@ -235,7 +239,7 @@ const GalleryView = () => {
 
                     {/* Bottom: Thumbnails Strip */}
                     <div className="h-24 bg-black/80 border-t border-white/10 p-4 flex items-center gap-3 overflow-x-auto z-[110] no-scrollbar">
-                        {filteredItems.map((item, index) => (
+                        {displayItems.map((item, index) => (
                             <button
                                 key={item.id}
                                 onClick={(e) => { e.stopPropagation(); openLightbox(index); }}

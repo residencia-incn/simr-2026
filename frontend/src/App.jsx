@@ -5,7 +5,7 @@ import Button from './components/ui/Button';
 import ChatWidget from './components/layout/ChatWidget';
 import HomeView from './views/HomeView';
 import CommitteeView from './views/CommitteeView';
-import RegistrationView from './views/RegistrationView';
+// import RegistrationView from './views/RegistrationView'; // Removed old view
 import ProgramView from './views/ProgramView';
 import GalleryView from './views/GalleryView';
 import PostersView from './views/PostersView';
@@ -23,6 +23,8 @@ import NotificationMenu from './components/common/NotificationMenu';
 import TasksQuickAccess from './components/common/TasksQuickAccess';
 import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
+import SmartRegistrationForm from './views/RegistrationView';
+// import StudentDashboard from './views/StudentDashboard';
 
 export default function SIMRApp() {
   // Persistent User State
@@ -33,6 +35,13 @@ export default function SIMRApp() {
     }
     return null;
   });
+
+  // Auto-persist user state changes
+  useEffect(() => {
+    if (user) {
+      window.localStorage.setItem('simr_user', JSON.stringify(user));
+    }
+  }, [user]);
 
   // Persistent Active Role
   const [activeRole, setActiveRole] = useState(() => {
@@ -51,12 +60,15 @@ export default function SIMRApp() {
 
   // Restore view based on role if just loaded and logged in
   useEffect(() => {
+    // Check if opened with virtual classroom param
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('virtual') === 'true') {
+      setActiveRole('participant');
+      setCurrentView('participant-dashboard'); // Redirect to the dark, video-centric dashboard (Crehana style)
+      return;
+    }
+
     if (user && currentView === 'home' && activeRole) {
-      // Optional: could redirect to dashboard, but keeping 'home' is also fine.
-      // The user requested F5 keeps them logged in, which this does.
-      // If they were on a dashboard, we might want to put them back there, but
-      // for now let's just ensure they are logged in.
-      // Actually, let's redirect to their dashboard if they were logged in.
       updateViewForRole(activeRole);
     }
   }, []); // Run once on mount
@@ -113,6 +125,17 @@ export default function SIMRApp() {
   };
 
   const handleRoleSwitch = (newRole) => {
+    // Special handling for Aula Virtual - open in new tab
+    if (newRole === 'participant') {
+      // Open the same app in a new tab with a special parameter
+      const url = `${window.location.origin}${window.location.pathname}?virtual=true`;
+      window.open(url, '_blank');
+
+      setIsRoleMenuOpen(false);
+      return;
+    }
+
+    // Normal role switching for other roles
     setActiveRole(newRole);
     window.localStorage.setItem('simr_active_role', newRole);
     updateViewForRole(newRole);
@@ -120,7 +143,7 @@ export default function SIMRApp() {
   };
 
   const getDashboardView = (role) => {
-    return role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
+    return role === 'admin' || role === 'superadmin' || role === 'secretary' ? 'admin-dashboard' :
       role === 'academic' ? 'academic-dashboard' :
         role === 'admission' ? 'admission-dashboard' :
           role === 'jury' ? 'jury-dashboard' :
@@ -153,6 +176,7 @@ export default function SIMRApp() {
 
   const ROLE_LABELS = {
     admin: 'Organización',
+    secretary: 'Secretaría',
     academic: 'Académica',
     admission: 'Asistencia',
     jury: 'Jurado',
@@ -164,6 +188,7 @@ export default function SIMRApp() {
   const ROLE_ICONS = {
     superadmin: Shield,
     admin: Users,
+    secretary: FileText,
     academic: BookOpen,
     admission: Users, // Or another icon if preferred
     jury: Award,
@@ -203,6 +228,9 @@ export default function SIMRApp() {
 
             {/* Tasks Quick Access */}
             {user && <TasksQuickAccess user={user} />}
+
+
+
 
             {user ? (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative" ref={roleMenuRef}>
@@ -326,7 +354,7 @@ export default function SIMRApp() {
       </nav>
 
       {/* Main Content Area */}
-      <main className="max-w-7xl mx-auto px-4 md:px-8 py-8 md:py-12">
+      <main className={`max-w-7xl mx-auto px-4 md:px-8 ${['home', 'login'].includes(currentView) ? 'py-0' : 'py-8'}`}>
         {currentView === 'home' && <HomeView navigate={navigate} user={user} />}
         {currentView === 'roadmap' && <RoadmapView />}
         {currentView === 'bases' && <BasesView activeTab={basesTab} />}
@@ -334,7 +362,7 @@ export default function SIMRApp() {
         {currentView === 'committee' && <CommitteeView />}
         {currentView === 'gallery' && <GalleryView />}
         {currentView === 'posters' && <PostersView />}
-        {currentView === 'registration' && <RegistrationView />}
+        {currentView === 'registration' && <SmartRegistrationForm />}
         {currentView === 'resident-dashboard' && <ResidentDashboard user={user} navigate={navigate} />}
         {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} navigate={navigate} />}
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
@@ -343,6 +371,8 @@ export default function SIMRApp() {
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
+
+        {/* {currentView === 'student-dashboard' && <StudentDashboard />} */}
 
         {currentView === 'profile' && <ProfileView user={user} onSave={(updatedUser) => setUser({ ...user, ...updatedUser })} />}
         {currentView === 'login' && <LoginModal setCurrentView={setCurrentView} handleLogin={handleLogin} />}

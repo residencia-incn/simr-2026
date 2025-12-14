@@ -690,7 +690,7 @@ export const api = {
                     name: 'Super Usuario',
                     email: 'admin@simr.pe',
                     role: 'superadmin',
-                    roles: ['superadmin', 'admin', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission']
+                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission']
                 };
             }
 

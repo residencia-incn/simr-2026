@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
-    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode
+    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode, MonitorPlay
 } from 'lucide-react';
 import SuperAdminAnalytics from '../components/admin/SuperAdminAnalytics';
 import Button from '../components/ui/Button';
@@ -21,6 +21,7 @@ import PlanningManager from '../components/admin/PlanningManager';
 import VerificationList from '../components/common/VerificationList';
 import DocumentationView from './DocumentationView';
 import AttendanceManager from './AttendanceManager';
+// import VirtualClassroomManager from '../components/admin/VirtualClassroomManager';
 import { api } from '../services/api';
 
 const AdminDashboard = ({ user }) => {
@@ -142,20 +143,22 @@ const AdminDashboard = ({ user }) => {
         ...(isSuperAdmin ? [{ id: 'analytics', label: 'Analítica', icon: TrendingUp }] : []),
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
         ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : []),
-        { id: 'attendance', label: 'Asistencia', icon: QrCode }
+        { id: 'attendance', label: 'Asistencia', icon: QrCode },
+        // { id: 'virtual-classroom', label: 'Aula Virtual', icon: MonitorPlay }
     ];
 
     return (
-        <div className="animate-fadeIn min-h-[600px] flex flex-col md:flex-row gap-6">
+        <div className="animate-fadeIn min-h-[600px] flex flex-col gap-6">
             {/* Sidebar Navigation */}
             {/* Sidebar Navigation */}
             {/* Sidebar Navigation */}
-            <div className="w-full md:w-16 bg-white shadow-sm border border-gray-200 rounded-2xl flex md:flex-col items-center justify-between md:justify-center py-4 px-2 gap-2 sticky top-24 max-h-[calc(100vh-8rem)] overflow-y-auto md:overflow-visible z-10">
+            {/* Top Navigation Bar */}
+            <div className="w-full bg-white shadow-sm border-b border-gray-200 rounded-2xl flex flex-row items-center justify-start py-2 px-4 gap-4 sticky top-16 overflow-x-auto scrollbar-hide z-20">
                 {navItems.map(item => {
                     const Icon = item.icon;
                     const isActive = activeTab === item.id;
                     return (
-                        <div key={item.id} className="relative group">
+                        <div key={item.id} className="relative group shrink-0">
                             <button
                                 onClick={() => handleTabChange(item.id)}
                                 className={`p-2 rounded-xl transition-all relative
@@ -175,11 +178,11 @@ const AdminDashboard = ({ user }) => {
                                 )}
                             </button>
 
-                            {/* Tooltip */}
-                            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 hidden md:block">
+                            {/* Tooltip (Bottom) */}
+                            <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 hidden md:block">
                                 {item.label}
-                                {/* Arrow */}
-                                <div className="absolute left-0 top-1/2 -translate-y-1/2 -ml-1 border-4 border-transparent border-r-gray-900"></div>
+                                {/* Arrow (Up) */}
+                                <div className="absolute left-1/2 -translate-x-1/2 -top-1 border-4 border-transparent border-b-gray-900"></div>
                             </div>
                         </div>
                     );
@@ -375,6 +378,12 @@ const AdminDashboard = ({ user }) => {
                         <SuperAdminAnalytics />
                     </div>
                 )}
+
+                {/* {activeTab === 'virtual-classroom' && (
+                    <div className="animate-fadeIn">
+                        <VirtualClassroomManager />
+                    </div>
+                )} */}
             </div>
         </div>
     );
