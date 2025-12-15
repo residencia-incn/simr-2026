@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Card, Button, FormField, SectionHeader } from '../components/ui';
 import { useForm, useFileUpload, useApi } from '../hooks';
 import QRCode from 'react-qr-code';
@@ -268,6 +268,117 @@ const ProfileView = ({ user, onSave }) => {
                 {/* Attendance Tab Content */}
                 {activeTab === 'attendance' && (
                     <div className="md:col-span-2 space-y-6">
+                        {/* Attendance Progress Card */}
+                        <Card className="p-6 bg-gradient-to-br from-blue-50 to-white border-2 border-blue-100">
+                            <h3 className="font-bold text-lg text-gray-900 mb-6 flex items-center gap-2">
+                                <Camera size={20} className="text-blue-600" />
+                                Progreso de Asistencia
+                            </h3>
+
+                            {/* Progress Bar */}
+                            <div className="mb-6">
+                                {(() => {
+                                    // Mock attendance calculation - replace with actual data
+                                    const totalSessions = 10;
+                                    const attendedSessions = attendanceHistory.length;
+                                    const attendancePercentage = totalSessions > 0
+                                        ? Math.round((attendedSessions / totalSessions) * 100)
+                                        : 0;
+                                    const meetsRequirement = attendancePercentage >= 60;
+
+                                    return (
+                                        <>
+                                            <div className="flex items-center justify-between mb-3">
+                                                <span className="text-sm font-medium text-gray-700">
+                                                    Asistencia Total
+                                                </span>
+                                                <span className={`text-2xl font-bold ${meetsRequirement ? 'text-green-600' : 'text-orange-600'}`}>
+                                                    {attendancePercentage}%
+                                                </span>
+                                            </div>
+
+                                            {/* Progress Bar */}
+                                            <div className="relative w-full h-4 bg-gray-200 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full transition-all duration-500 ${meetsRequirement
+                                                        ? 'bg-gradient-to-r from-green-500 to-green-600'
+                                                        : 'bg-gradient-to-r from-orange-400 to-orange-500'
+                                                        }`}
+                                                    style={{ width: `${attendancePercentage}%` }}
+                                                />
+                                                {/* 60% marker */}
+                                                <div
+                                                    className="absolute top-0 h-full w-0.5 bg-gray-400"
+                                                    style={{ left: '60%' }}
+                                                />
+                                            </div>
+
+                                            <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                                                <span>{attendedSessions} de {totalSessions} sesiones</span>
+                                                <span className="flex items-center gap-1">
+                                                    <span className="inline-block w-0.5 h-3 bg-gray-400"></span>
+                                                    60% requerido
+                                                </span>
+                                            </div>
+
+                                            {/* Requirement Notice */}
+                                            <div className={`mt-4 p-4 rounded-lg border ${meetsRequirement
+                                                ? 'bg-green-50 border-green-200 text-green-800'
+                                                : 'bg-orange-50 border-orange-200 text-orange-800'
+                                                }`}>
+                                                <p className="text-sm font-medium flex items-center gap-2">
+                                                    {meetsRequirement ? (
+                                                        <>
+                                                            <CheckCircle size={16} />
+                                                            ¡Felicidades! Cumples con el requisito de asistencia para obtener tu certificación.
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <AlertTriangle size={16} />
+                                                            Requieres 60% de asistencia para obtener tu certificación. Sigue asistiendo a las sesiones.
+                                                        </>
+                                                    )}
+                                                </p>
+                                            </div>
+
+                                            {/* Certificate Download Button */}
+                                            <div className="mt-6 pt-6 border-t border-gray-200">
+                                                <h4 className="font-bold text-gray-900 mb-3">Certificado de Participación</h4>
+                                                {meetsRequirement && user?.paymentVerified ? (
+                                                    <Button
+                                                        className="w-full bg-green-600 hover:bg-green-700 justify-center gap-2"
+                                                        onClick={() => alert('Descargando certificado...')}
+                                                    >
+                                                        <FileText size={18} />
+                                                        Descargar Certificado
+                                                    </Button>
+                                                ) : (
+                                                    <div>
+                                                        <Button
+                                                            disabled
+                                                            className="w-full bg-gray-300 text-gray-500 cursor-not-allowed justify-center gap-2"
+                                                        >
+                                                            <Lock size={18} />
+                                                            Certificado Bloqueado
+                                                        </Button>
+                                                        <p className="text-xs text-gray-500 mt-2 text-center">
+                                                            {!meetsRequirement && !user?.paymentVerified
+                                                                ? 'Requieres 60% de asistencia y pago verificado'
+                                                                : !meetsRequirement
+                                                                    ? 'Requieres 60% de asistencia'
+                                                                    : 'Requieres pago verificado'
+                                                            }
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </>
+                                    );
+                                })()}
+                            </div>
+                        </Card>
+
+                        {/* QR Code Card */}
                         <Card className="p-6">
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">

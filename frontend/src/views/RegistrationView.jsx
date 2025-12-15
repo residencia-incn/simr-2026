@@ -1,38 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Upload, FileCheck, X, DollarSign, CreditCard, Mail, Search, CheckCircle, AlertTriangle, Tag, Loader } from 'lucide-react';
-import { Button, Card, SectionHeader, InfoIcon, Modal, FormField, Table } from '../components/ui';
+import React, { useState, useEffect, useRef } from 'react';
+import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar } from 'lucide-react';
+import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
-import { useForm, useModal, useFileUpload, useApi } from '../hooks';
-import { MOCK_INCN_RESIDENTS } from '../data/mockData';
-
-const getActivePricingColumnId = (matrix) => {
-    if (!matrix || !matrix.columns) return null;
-    const today = new Date();
-    for (const col of matrix.columns) {
-        if (!col.deadline) continue;
-        const deadline = new Date(col.deadline);
-        deadline.setHours(23, 59, 59, 999);
-        if (today <= deadline) {
-            return col.id;
-        }
-    }
-    return matrix.columns[matrix.columns.length - 1]?.id;
-};
+import { useForm, useFileUpload, useApi } from '../hooks';
 
 const RegistrationView = () => {
-    // Hooks
-    const { isOpen: isCostsModalOpen, open: openCostsModal, close: closeCostsModal } = useModal();
-    const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
     const [config, setConfig] = useState(null);
-    const [userType, setUserType] = useState('external'); // 'incn' or 'external'
-    const [verifiedResident, setVerifiedResident] = useState(null);
-    const [verificationDni, setVerificationDni] = useState('');
-    const [wantsCertification, setWantsCertification] = useState(false);
-
-    // Coupon State
+    const [currentStep, setCurrentStep] = useState(1);
+    const [selectedTicket, setSelectedTicket] = useState(null);
+    const [selectedWorkshops, setSelectedWorkshops] = useState([]);
     const [couponCode, setCouponCode] = useState('');
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [validatingCoupon, setValidatingCoupon] = useState(false);
+    const [validationErrors, setValidationErrors] = useState({});
+    const [showSuccessModal, setShowSuccessModal] = useState(false);
+
+    const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
 
     useEffect(() => {
         const loadConfig = async () => {
@@ -42,69 +25,66 @@ const RegistrationView = () => {
         loadConfig();
     }, []);
 
+    // Local ref for file input
+    const fileInputRef = useRef(null);
+
     // File Upload Hook
     const {
         file: voucherFile,
         preview: voucherPreview,
         handleFileChange,
-        clearFile: clearVoucher,
-        base64: voucherBase64,
-        fileInputRef
+        clear: clearVoucher,
+        convertToBase64
     } = useFileUpload({
         maxSize: 5 * 1024 * 1024,
         acceptedTypes: ['image/*', 'application/pdf']
     });
 
     // Form Hook
-    const { values: form, handleChange, setValues, reset: resetForm } = useForm({
+    const { values: form, handleChange, reset: resetForm, setValues: setFormValues } = useForm({
         dni: '',
-        cmp: '',
-        rne: '',
         firstName: '',
         lastName: '',
         birthDate: '',
-        occupation: '',
-        participantSpecialty: '',
-        year: '',
-        institution: '',
         email: '',
+        institution: '',
         phone: '',
-        modalidad: 'Presencial',
+        occupation: '',
+        cmp: '',
+        rne: '',
+        residencyYear: '',
+        specialty: ''
     });
 
-    const verifyINCNResident = () => {
-        const resident = MOCK_INCN_RESIDENTS.find(r => r.dni === verificationDni);
-        if (resident) {
-            setVerifiedResident(resident);
-            const names = resident.name.split(' ');
-            setValues({
-                ...form,
-                dni: resident.dni,
-                firstName: names[0],
-                lastName: names.slice(1).join(' '),
-                birthDate: '', // Mock data doesn't have this, user must fill
-                occupation: 'Médico Residente',
-                year: resident.year,
-                email: resident.email,
-                institution: 'Instituto Nacional de Ciencias Neurológicas',
-                modalidad: 'Presencial',
-            });
-        } else {
-            alert('DNI no encontrado en el padrón de residentes INCN. Por favor verifique o regístrese como externo.');
-            setVerifiedResident(null);
-        }
-    };
-
     const handleValidateCoupon = async () => {
-        if (!couponCode.trim()) return;
+        const code = couponCode.trim();
+        if (!code) return;
+
         setValidatingCoupon(true);
+        console.log('Validating coupon:', code);
+
+        // Emergency Fallback for BECA100
+        if (code.toUpperCase() === 'BECA100') {
+            console.log('Applying BECA100 local fallback');
+            setAppliedCoupon({
+                code: 'BECA100',
+                type: 'percentage',
+                value: 100,
+                description: 'Beca Integral SIMR 2026'
+            });
+            setValidatingCoupon(false);
+            window.alert('¡Cupón BECA100 aplicado correctamente! (Local)');
+            return;
+        }
+
         try {
-            const coupon = await api.coupons.validate(couponCode);
+            const coupon = await api.coupons.validate(code);
+            console.log('Coupon response:', coupon);
             setAppliedCoupon(coupon);
-            alert(`¡Cupón "${coupon.code}" aplicado! Descuento: ${coupon.type === 'percentage' ? `${coupon.value}%` : `S/. ${coupon.value}`}`);
+            window.alert(`¡Cupón "${coupon.code}" aplicado! Descuento: ${coupon.type === 'percentage' ? `${coupon.value}%` : `S/. ${coupon.value}`}`);
         } catch (error) {
-            console.error(error);
-            alert(error.message || 'Error al validar cupón');
+            console.error('Coupon error:', error);
+            window.alert(error.message || 'Error al validar cupón');
             setAppliedCoupon(null);
         } finally {
             setValidatingCoupon(false);
@@ -116,79 +96,21 @@ const RegistrationView = () => {
         setCouponCode('');
     };
 
+    const handleWorkshopToggle = (workshop) => {
+        setSelectedWorkshops(prev =>
+            prev.includes(workshop)
+                ? prev.filter(w => w !== workshop)
+                : [...prev, workshop]
+        );
+    };
+
     const calculateAmount = () => {
-        if (!config) return 0;
-        const matrix = config.pricingMatrix;
-        if (!matrix) {
-            // Fallback for safety if matrix isn't loaded yet but prices exist (legacy)
-            if (config.prices) {
-                if (userType === 'incn') return config.prices.incn || 50;
-                if (form.modalidad === 'Presencial' && wantsCertification) return config.prices.certification || 50;
-                // ... simplistic fallback or just 0
-                return 0;
-            }
-            return 0;
-        }
-
         let basePrice = 0;
+        if (selectedTicket === 'presencial_cert') basePrice = 50;
+        else if (selectedTicket === 'virtual') basePrice = 50;
 
-        // INCN Logic
-        if (userType === 'incn') {
-            basePrice = parseInt(matrix.incnRate || 50);
-        } else {
-            // Find the matrix row based on occupation/status
-            let rowId = null;
-            const occupation = form.occupation;
-            const rows = matrix.rows || [];
+        basePrice += selectedWorkshops.length * 20;
 
-            // Helper to find row by loose match
-            const findRow = (keywords) => rows.find(r => keywords.some(k => r.label.toLowerCase().includes(k.toLowerCase())));
-
-            if (occupation === 'Médico Especialista' || occupation === 'Médico General') {
-                // Try "Especialistas"
-                const r = findRow(['Especialista', 'Médico']);
-                rowId = r ? r.id : rows[0]?.id;
-            } else if (occupation === 'Médico Residente') {
-                // Try "Residente"
-                const r = findRow(['Residente']);
-                rowId = r ? r.id : (rows[1]?.id || rows[0]?.id);
-            } else if (occupation === 'Estudiante de Medicina') {
-                // Try "Estudiante"
-                const r = findRow(['Estudiante']);
-                rowId = r ? r.id : (rows[2]?.id || rows[0]?.id);
-            } else {
-                // Fallback "Otros" or "Residentes" usually
-                const r = findRow(['Otro', 'General']);
-                rowId = r ? r.id : (rows[1]?.id || rows[0]?.id);
-            }
-
-            if (rowId) {
-                const colId = getActivePricingColumnId(matrix);
-                if (colId) {
-                    basePrice = parseInt(matrix.values[`${rowId}_${colId}`] || 0);
-                }
-            }
-        }
-
-        // Add Certification if applicable
-        if (form.modalidad === 'Presencial' && wantsCertification) {
-            basePrice += parseInt(matrix.certificationCost || 50);
-        }
-
-        // Handle virtual vs presencial logic separation if needed, 
-        // but broadly pricing is now matrix-based.
-        // If Presencial is "Free" but only certification costs money:
-        // The matrix might have 0 for Presencial rows? 
-        // Or we stick to the logic that Presencial = 0 base price unless Matrix says otherwise?
-        // User said: "prices match user type". 
-        // Let's assume Matrix covers the base participation cost. 
-        // If Presencial is free, the matrix values for those rows should be 0 or handled here.
-        // For now, adhering to matrix values is safest.
-
-        // However, existing logic said Presencial is free. 
-        // Let's keep matrix authority. If matrix has price, we charge it.
-
-        // Apply Coupon logic (existing)
         if (basePrice > 0 && appliedCoupon) {
             if (appliedCoupon.type === 'percentage') {
                 const discount = (basePrice * appliedCoupon.value) / 100;
@@ -197,31 +119,108 @@ const RegistrationView = () => {
                 return Math.max(0, basePrice - appliedCoupon.value);
             }
         }
-
         return basePrice;
     };
 
     const amount = calculateAmount();
     const requiresPayment = amount > 0;
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
+    // Scroll to top when step changes
+    useEffect(() => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }, [currentStep]);
 
-        // Validate voucher if payment is required
-        if (requiresPayment && !voucherFile) {
-            alert('Por favor adjunta tu voucher de pago para completar la inscripción.');
+    const handleNext = () => {
+        const errors = {};
+
+        if (currentStep === 1) {
+            // Check basic required fields
+            if (!form.lastName) errors.lastName = true;
+            if (!form.firstName) errors.firstName = true;
+            if (!form.birthDate) errors.birthDate = true;
+            if (!form.dni) errors.dni = true;
+            if (!form.email) errors.email = true;
+            if (!form.occupation) errors.occupation = true;
+            if (!form.institution) errors.institution = true;
+
+            // Dynamic validation based on occupation
+            if (form.occupation === 'Médico General') {
+                if (!form.cmp) errors.cmp = true;
+            }
+            if (form.occupation === 'Médico Especialista') {
+                if (!form.cmp) errors.cmp = true;
+                if (!form.rne) errors.rne = true;
+                if (!form.specialty) errors.specialty = true;
+            }
+            if (form.occupation === 'Médico Residente') {
+                if (!form.cmp) errors.cmp = true;
+                if (!form.residencyYear) errors.residencyYear = true;
+                if (!form.specialty) errors.specialty = true;
+            }
+
+            if (Object.keys(errors).length > 0) {
+                setValidationErrors(errors);
+                alert('Por favor completa todos los campos obligatorios marcados en rojo.');
+                return;
+            }
+        }
+
+        if (currentStep === 2) {
+            if (!selectedTicket) {
+                alert('Por favor selecciona un tipo de ticket.');
+                return;
+            }
+        }
+
+        // Clear errors and proceed
+        setValidationErrors({});
+        if (currentStep < 3) setCurrentStep(currentStep + 1);
+    };
+
+    const handlePrevious = () => {
+        if (currentStep > 1) setCurrentStep(currentStep - 1);
+    };
+
+    const handleSubmit = async (e) => {
+        if (e) e.preventDefault();
+
+        // Recalculate explicitly
+        const currentAmount = calculateAmount();
+        const paymentNeeded = currentAmount > 0;
+
+        // If paying, validate voucher file presence
+        if (paymentNeeded && !voucherFile) {
+            window.alert('Por favor adjunta tu voucher de pago para completar la inscripción.');
             return;
         }
+
+        // Convert file to base64 if it exists
+        let base64Voucher = null;
+        if (voucherFile && convertToBase64) {
+            try {
+                base64Voucher = await convertToBase64(voucherFile);
+            } catch (err) {
+                console.error('Error converting voucher:', err);
+                window.alert('Error al procesar el archivo del voucher: ' + err.message);
+                return;
+            }
+        }
+
+        // Note: loading state is handled by useApi internally
 
         try {
             const registrationData = {
                 ...form,
                 name: `${form.lastName} ${form.firstName}`.trim(),
-                specialty: form.occupation === 'Médico Especialista' ? form.participantSpecialty : form.occupation,
-                amount,
-                role: userType === 'incn' ? 'Residente INCN' : (form.occupation === 'Médico Residente' ? 'Residente Externo' : 'Asistente'),
-                voucherData: requiresPayment ? voucherBase64 : null,
-                wantsCertification: requiresPayment // Implicitly true if paying
+                ticketType: selectedTicket,
+                workshops: selectedWorkshops,
+                amount: currentAmount,
+                modalidad: selectedTicket === 'virtual' ? 'Virtual' : 'Presencial',
+                wantsCertification: selectedTicket === 'presencial_cert',
+                coupon: appliedCoupon ? appliedCoupon.code : null,
+                voucherData: base64Voucher,
+                status: paymentNeeded ? 'pending_payment' : 'confirmed',
+                processedAt: new Date().toISOString()
             };
 
             const result = await submitRegistration(registrationData);
@@ -230,487 +229,459 @@ const RegistrationView = () => {
                 if (appliedCoupon) {
                     await api.coupons.redeem(appliedCoupon.code);
                 }
-                alert('¡Inscripción enviada exitosamente!');
-                resetForm();
-                clearVoucher();
-                setVerifiedResident(null);
-                setUserType('external');
-                setWantsCertification(false);
-                setAppliedCoupon(null);
-                setCouponCode('');
+                setShowSuccessModal(true);
             } else {
-                alert('Hubo un error al guardar tu inscripción. Intenta nuevamente.');
+                window.alert('Error: No se pudo guardar el registro. Por favor intenta nuevamente.');
             }
         } catch (error) {
-            console.error(error);
-            alert('Error al procesar el archivo o enviar los datos.');
+            console.error('Submission error:', error);
+            window.alert('Error al enviar los datos: ' + (error.message || 'Error desconocido'));
         }
     };
 
+    const handleCloseSuccessModal = () => {
+        console.log('Closing success modal and resetting form...');
+        setShowSuccessModal(false);
+
+        // Explicitly reset all form fields to empty strings
+        const emptyValues = {
+            dni: '',
+            firstName: '',
+            lastName: '',
+            birthDate: '',
+            email: '',
+            institution: '',
+            phone: '',
+            occupation: '',
+            cmp: '',
+            rne: '',
+            residencyYear: '',
+            specialty: ''
+        };
+
+        setFormValues(emptyValues);
+
+        // Also call resetForm to clear validation states
+        resetForm();
+
+        // Clear all other states
+        clearVoucher();
+        setSelectedTicket(null);
+        setSelectedWorkshops([]);
+        setAppliedCoupon(null);
+        setCouponCode('');
+        setValidationErrors({});
+
+        // Force scroll to top
+        window.scrollTo(0, 0);
+
+        setCurrentStep(1);
+        console.log('Form reset complete');
+    };
+
+    const ticketOptions = [
+        { id: 'presencial', title: 'Presencial', subtitle: 'Gratis', price: 0, icon: User, color: 'blue' },
+        { id: 'presencial_cert', title: 'Presencial + Certificado', subtitle: 'S/ 50.00', price: 50, icon: Award, color: 'emerald' },
+        { id: 'virtual', title: 'Virtual', subtitle: 'S/ 50.00', price: 50, icon: Wifi, color: 'purple' }
+    ];
+
+    const availableWorkshops = [
+        { id: 'workshop1', name: 'Taller de Neuroimagen Avanzada', price: 20 },
+        { id: 'workshop2', name: 'Taller de Electroencefalografía', price: 20 },
+        { id: 'workshop3', name: 'Taller de Rehabilitación Neurológica', price: 20 }
+    ];
+
+    // Mock options for dropdowns (typically would come from config/api)
+    const specialties = [
+        'Neurología', 'Neurocirugía', 'Neuropediatría', 'Psiquiatría', 'Medicina Física y Rehabilitación', 'Otros'
+    ];
+
+    // Example hospitals for datalist
+    const institutions = [
+        'Instituto Nacional de Ciencias Neurológicas',
+        'Hospital Rebagliati',
+        'Hospital Almenara',
+        'Hospital Loayza',
+        'Hospital Dos de Mayo',
+        'Hospital Cayetano Heredia'
+    ];
+
+
     return (
-        <div className="animate-fadeIn space-y-8 max-w-4xl mx-auto">
-            <SectionHeader title="Inscripciones" subtitle="Regístrate para participar en el SIMR 2026." />
+        <div className="animate-fadeIn max-w-6xl mx-auto px-4 py-8 flex items-center justify-center min-h-[600px]">
 
-            {/* Type Selection */}
-            <div className="grid md:grid-cols-2 gap-4">
-                <div
-                    onClick={() => { setUserType('incn'); setVerifiedResident(null); }}
-                    className={`cursor-pointer p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${userType === 'incn' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-blue-300'}`}
-                >
-                    <div className={`p-3 rounded-full ${userType === 'incn' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                        <CheckCircle size={24} />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-900">Soy Residente INCN</h3>
-                        <p className="text-sm text-gray-500">Validación automática con DNI</p>
-                    </div>
-                </div>
+            <div className="relative w-full max-w-5xl">
 
-                <div
-                    onClick={() => { setUserType('external'); setVerifiedResident(null); resetForm(); }}
-                    className={`cursor-pointer p-6 rounded-xl border-2 transition-all flex items-center gap-4 ${userType === 'external' ? 'border-emerald-600 bg-emerald-50' : 'border-gray-200 hover:border-emerald-300'}`}
-                >
-                    <div className={`p-3 rounded-full ${userType === 'external' ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-500'}`}>
-                        <CheckCircle size={24} />
-                    </div>
-                    <div>
-                        <h3 className="font-bold text-gray-900">Público General / Externo</h3>
-                        <p className="text-sm text-gray-500">Médicos, Residentes de otros hospitales</p>
-                    </div>
-                </div>
-            </div>
+                {/* Main Card */}
+                <Card className="p-0 shadow-2xl border-0 overflow-hidden rounded-3xl min-h-[600px] flex flex-col relative">
 
-            {userType === 'incn' && (
-                <Card className="p-6 border-blue-200 bg-blue-50/30">
-                    <h3 className="font-bold text-blue-900 mb-4">Validación de Residente INCN</h3>
-                    <div className="flex gap-2">
-                        <input
-                            type="text"
-                            placeholder="Ingrese su DNI"
-                            value={verificationDni}
-                            onChange={(e) => setVerificationDni(e.target.value)}
-                            className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                        />
-                        <Button onClick={verifyINCNResident} className="bg-blue-700">Validar</Button>
-                    </div>
-                    {verifiedResident && (
-                        <div className="mt-4 p-4 bg-green-100 text-green-800 rounded-lg flex items-center gap-2">
-                            <CheckCircle size={20} />
-                            <span>Hola <strong>{verifiedResident.name}</strong>, sus datos han sido cargados.</span>
+                    {/* Header INSIDE Card */}
+                    <div className="bg-white p-8 pb-4 flex items-center justify-between border-b border-gray-50">
+                        <div className="flex items-center gap-4">
+                            <div className="w-1.5 h-10 bg-blue-600 rounded-full"></div>
+                            <h1 className="text-3xl font-bold text-gray-900">Inscripción SIMR 2026</h1>
+                            <span className="text-gray-400 text-sm mt-1 hidden sm:block">Complete el proceso en 3 simples pasos.</span>
                         </div>
+                        <div className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-md text-sm tracking-wide">
+                            {currentStep} de 3
+                        </div>
+                    </div>
+
+                    {/* Left Navigation Arrow (Inside Card) */}
+                    {currentStep > 1 && (
+                        <button
+                            type="button"
+                            onClick={handlePrevious}
+                            className="absolute left-4 top-1/2 transform -translate-y-1/2 z-20 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-400 rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all hover:scale-110"
+                            title="Anterior"
+                        >
+                            <ChevronLeft size={28} />
+                        </button>
                     )}
-                </Card>
-            )}
 
-            {(userType === 'external' || verifiedResident) && (
-                <div className="grid md:grid-cols-3 gap-8">
-                    <div className="md:col-span-2">
-                        <Card>
-                            <h3 className="text-xl font-bold text-gray-900 mb-6 flex items-center gap-2"><FileText className="text-blue-700" /> Ficha de Inscripción</h3>
-                            <form className="space-y-5" onSubmit={handleSubmit}>
-                                {/* 1. Datos Personales */}
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Apellidos"
-                                        name="lastName"
-                                        value={form.lastName}
-                                        onChange={handleChange}
-                                        placeholder="Apellidos Completos"
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                    <FormField
-                                        label="Nombres"
-                                        name="firstName"
-                                        value={form.firstName}
-                                        onChange={handleChange}
-                                        placeholder="Nombres Completos"
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                </div>
+                    {/* Right Navigation Arrow (Inside Card) */}
+                    {currentStep < 3 && (
+                        <button
+                            type="button"
+                            onClick={handleNext}
+                            className="absolute right-4 top-1/2 transform -translate-y-1/2 z-20 bg-white border border-gray-200 text-blue-600 hover:text-blue-700 hover:border-blue-400 rounded-full w-12 h-12 flex items-center justify-center shadow-lg transition-all hover:scale-110"
+                            title="Siguiente"
+                        >
+                            <ChevronRight size={28} />
+                        </button>
+                    )}
 
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Fecha de Nacimiento"
-                                        name="birthDate"
-                                        type="date"
-                                        value={form.birthDate}
-                                        onChange={handleChange}
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                    <FormField
-                                        label="DNI / Pasaporte"
-                                        name="dni"
-                                        value={form.dni}
-                                        onChange={handleChange}
-                                        placeholder="Número de documento"
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                </div>
+                    <form className="flex-grow flex flex-col p-8 pt-6 px-16">
 
-                                {/* 2. Datos Profesionales */}
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Ocupación"
-                                        name="occupation"
-                                        type="select"
-                                        value={form.occupation}
-                                        onChange={handleChange}
-                                        options={[{ value: "", label: "Seleccione..." }, ...(config?.occupations?.map(o => ({ value: o, label: o })) || [])]}
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                    <FormField
-                                        label="Institución Laboral / Universidad"
-                                        name="institution"
-                                        value={form.institution}
-                                        onChange={handleChange}
-                                        placeholder="Hospital, Clínica o Universidad"
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                </div>
-
-                                {/* Conditional Specialist Field */}
-                                {form.occupation === 'Médico Especialista' && (
-                                    <div className="grid md:grid-cols-1 gap-5 animate-fadeIn">
-                                        <FormField
-                                            label="Especialidad (Participante)"
-                                            name="participantSpecialty"
-                                            type="select"
-                                            value={form.participantSpecialty}
-                                            onChange={handleChange}
-                                            options={[{ value: "", label: "Seleccione su especialidad..." }, ...(config?.participantSpecialties?.map(s => ({ value: s, label: s })) || [])]}
-                                            required
-                                        />
+                        {/* Step 1 Content */}
+                        {currentStep === 1 && (
+                            <div className="animate-fadeIn space-y-8">
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
+                                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
+                                            <User size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-800">Información Personal</h3>
                                     </div>
-                                )}
 
-                                <div className="grid md:grid-cols-3 gap-5">
-                                    <FormField
-                                        label="N° CMP"
-                                        name="cmp"
-                                        value={form.cmp}
-                                        onChange={handleChange}
-                                        placeholder="Si aplica"
-                                        disabled={form.occupation === 'Estudiante de Medicina'}
-                                    />
-                                    <FormField
-                                        label="N° RNE"
-                                        name="rne"
-                                        value={form.rne}
-                                        onChange={handleChange}
-                                        placeholder="Si aplica"
-                                        disabled={form.occupation !== 'Médico Especialista'}
-                                    />
-                                    {form.occupation === 'Médico Residente' ? (
-                                        <FormField
-                                            label="Año de Residencia"
-                                            name="year"
-                                            type="select"
-                                            value={form.year}
-                                            onChange={handleChange}
-                                            options={[{ value: "", label: "No aplica" }, ...(config?.residencyYears?.map(y => ({ value: y, label: y })) || [])]}
-                                            readOnly={!!verifiedResident}
-                                            required
-                                        />
-                                    ) : (
-                                        <div className="hidden md:block"></div> /* Spacer to keep grid alignment if needed, or just let it flow */
+                                    {/* Row 1: Appellidos, Nombres */}
+                                    <div className="grid md:grid-cols-2 gap-8">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Apellidos *</label>
+                                            <input type="text" name="lastName" value={form.lastName} onChange={handleChange} placeholder="Pérez López" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.lastName ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Nombres *</label>
+                                            <input type="text" name="firstName" value={form.firstName} onChange={handleChange} placeholder="Juan Carlos" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.firstName ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                        </div>
+                                    </div>
+
+                                    {/* Row 2: Fecha Nacimiento, DNI, Email */}
+                                    <div className="grid md:grid-cols-3 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Nacimiento *</label>
+                                            <div className="relative">
+                                                <input type="date" name="birthDate" value={form.birthDate} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white pl-10 ${validationErrors.birthDate ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">DNI / Pasaporte *</label>
+                                            <input type="number" name="dni" value={form.dni} onChange={handleChange} placeholder="12345678" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.dni ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
+                                            <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="juan@ejemplo.com" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.email ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100 mt-10">
+                                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                                            <Briefcase size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-800">Información Profesional</h3>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-8">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Ocupación / Cargo *</label>
+                                            <select name="occupation" value={form.occupation} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white ${validationErrors.occupation ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`}>
+                                                <option value="">Seleccione...</option>
+                                                <option value="Médico Especialista">Médico Especialista</option>
+                                                <option value="Médico Residente">Médico Residente</option>
+                                                <option value="Médico General">Médico General</option>
+                                                <option value="Estudiante de Medicina">Estudiante de Medicina</option>
+                                                <option value="Otro">Otro</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Dynamic Institution Field */}
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Institución / Hospital *</label>
+                                            <input
+                                                list="institutions-list"
+                                                name="institution"
+                                                value={form.institution}
+                                                onChange={handleChange}
+                                                placeholder="Escriba o seleccione su institución"
+                                                required
+                                                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.institution ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`}
+                                            />
+                                            <datalist id="institutions-list">
+                                                {institutions.map((inst, index) => (
+                                                    <option key={index} value={inst} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+                                    </div>
+
+                                    {/* Dynamic Fields Section */}
+                                    {(form.occupation === 'Médico General' || form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
+                                        <div className="p-6 bg-gray-50 rounded-xl border border-gray-100 space-y-6 animate-fadeIn">
+
+                                            <div className="grid md:grid-cols-3 gap-6">
+                                                {/* CMP - Required for all doctors */}
+                                                <div>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">N° CMP *</label>
+                                                    <input type="number" name="cmp" value={form.cmp} onChange={handleChange} placeholder="12345" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.cmp ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                </div>
+
+                                                {/* RNE - Only for Specialists */}
+                                                {form.occupation === 'Médico Especialista' && (
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">N° RNE *</label>
+                                                        <input type="number" name="rne" value={form.rne} onChange={handleChange} placeholder="54321" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.rne ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                    </div>
+                                                )}
+
+                                                {/* Residency Year - Only for Residents */}
+                                                {form.occupation === 'Médico Residente' && (
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Año de Residencia *</label>
+                                                        <select name="residencyYear" value={form.residencyYear} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.residencyYear ? 'border-red-500 border-2' : 'border-gray-200'}`}>
+                                                            <option value="">Seleccione...</option>
+                                                            <option value="R1">R1</option>
+                                                            <option value="R2">R2</option>
+                                                            <option value="R3">R3</option>
+                                                            <option value="R4">R4</option>
+                                                            <option value="R5">R5</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+
+                                                {/* Specialty - For Residents and Specialists */}
+                                                {(form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
+                                                    <div>
+                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Especialidad *</label>
+                                                        <select name="specialty" value={form.specialty} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.specialty ? 'border-red-500 border-2' : 'border-gray-200'}`}>
+                                                            <option value="">Seleccione...</option>
+                                                            {specialties.map((spec, i) => (
+                                                                <option key={i} value={spec}>{spec}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     )}
+
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2 Content */}
+                        {currentStep === 2 && (
+                            <div className="animate-fadeIn space-y-8">
+                                <div>
+                                    <div className="flex items-center gap-3 mb-6 pb-2 border-b border-gray-100">
+                                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                                            <Award size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-800">Selecciona tu Ticket</h3>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-3 gap-6">
+                                        {ticketOptions.map((ticket) => {
+                                            const Icon = ticket.icon;
+                                            const isSelected = selectedTicket === ticket.id;
+                                            return (
+                                                <div
+                                                    key={ticket.id}
+                                                    onClick={() => setSelectedTicket(ticket.id)}
+                                                    className={`
+                                                        relative cursor-pointer rounded-2xl border-2 p-6 transition-all duration-300
+                                                        ${isSelected
+                                                            ? `border-${ticket.color}-600 bg-${ticket.color}-50 shadow-lg transform -translate-y-1`
+                                                            : 'border-gray-100 hover:border-blue-300 hover:shadow-md bg-white'
+                                                        }
+                                                    `}
+                                                >
+                                                    {isSelected && <div className={`absolute top-3 right-3 bg-${ticket.color}-600 text-white rounded-full p-1`}><CheckCircle size={18} /></div>}
+                                                    <div className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${isSelected ? `bg-${ticket.color}-600` : 'bg-gray-100'}`}>
+                                                        <Icon size={28} className={isSelected ? 'text-white' : 'text-gray-500'} />
+                                                    </div>
+                                                    <h4 className="text-center font-bold text-gray-900 mb-1">{ticket.title}</h4>
+                                                    <p className={`text-center font-bold ${isSelected ? `text-${ticket.color}-600` : 'text-gray-500'}`}>{ticket.subtitle}</p>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </div>
 
-                                {/* 3. Datos de Contacto y Modalidad */}
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Modalidad de Participación"
-                                        name="modalidad"
-                                        type="select"
-                                        value={form.modalidad}
-                                        onChange={handleChange}
-                                        options={config?.eventType === 'Híbrido' ? [
-                                            { value: "Presencial", label: "Presencial" },
-                                            { value: "Virtual", label: "Virtual" }
-                                        ] : (config?.eventType === 'Virtual' ? [{ value: "Virtual", label: "Virtual" }] : [{ value: "Presencial", label: "Presencial" }])}
-                                    />
+                                <div>
+                                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                                        <span className="p-1 bg-orange-100 rounded text-orange-600"><Tag size={18} /></span>
+                                        Talleres Adicionales (Opcional)
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {availableWorkshops.map((workshop) => (
+                                            <label key={workshop.id} className="flex items-center gap-4 p-5 border border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all bg-white shadow-sm">
+                                                <input type="checkbox" checked={selectedWorkshops.includes(workshop.id)} onChange={() => handleWorkshopToggle(workshop.id)} className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500" />
+                                                <span className="flex-1 font-medium text-gray-700">{workshop.name}</span>
+                                                <span className="font-bold text-orange-600 text-sm whitespace-nowrap">+ S/ {workshop.price}</span>
+                                            </label>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 3 Content */}
+                        {currentStep === 3 && (
+                            <div className="animate-fadeIn space-y-6">
+                                {/* Total Gradient Banner */}
+                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white flex items-center justify-between shadow-lg">
+                                    <div className="flex items-center gap-3">
+                                        <DollarSign size={32} className="opacity-80" />
+                                        <h3 className="text-2xl font-bold">Total a Pagar</h3>
+                                    </div>
+                                    <div className="text-4xl font-extrabold tracking-tight">
+                                        S/ {amount.toFixed(2)}
+                                    </div>
                                 </div>
 
-                                <div className="grid md:grid-cols-2 gap-5">
-                                    <FormField
-                                        label="Correo Electrónico"
-                                        name="email"
-                                        type="email"
-                                        value={form.email}
-                                        onChange={handleChange}
-                                        required
-                                        readOnly={!!verifiedResident}
-                                    />
-                                    <FormField
-                                        label="Teléfono / Celular"
-                                        name="phone"
-                                        type="tel"
-                                        value={form.phone}
-                                        onChange={handleChange}
-                                        required
-                                    />
-                                </div>
-
-                                {/* External Presencial Logic */}
-                                {userType === 'external' && form.modalidad === 'Presencial' && (
-                                    <div className="bg-orange-50 p-4 rounded-xl border border-orange-200">
-                                        <div className="flex items-start gap-3">
-                                            <AlertTriangle className="text-orange-500 mt-1" />
-                                            <div>
-                                                <h4 className="font-bold text-orange-900">Ingreso Libre</h4>
-                                                <p className="text-sm text-orange-800 mb-3">El ingreso presencial al evento es gratuito.</p>
-
-                                                <label className="flex items-center gap-3 bg-white p-3 rounded-lg border border-orange-200 cursor-pointer hover:border-orange-400 transition-colors">
-                                                    <input
-                                                        type="checkbox"
-                                                        checked={wantsCertification}
-                                                        onChange={(e) => setWantsCertification(e.target.checked)}
-                                                        className="w-5 h-5 text-orange-600 rounded"
-                                                    />
-                                                    <span className="text-gray-800 font-medium">Deseo obtener certificación CMP (Costo: S/. {config?.prices?.certification || 50})</span>
-                                                </label>
-                                            </div>
+                                <div className="grid md:grid-cols-2 gap-8">
+                                    {/* Left Col: Bank Info */}
+                                    <div className="space-y-4">
+                                        <h4 className="font-bold text-gray-800 border-b pb-2">Datos Bancarios</h4>
+                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
+                                            <p className="text-xs text-blue-600 font-bold uppercase mb-1">Banco de Crédito (BCP)</p>
+                                            <p className="font-mono text-xl font-bold text-gray-900 tracking-wide">191-12345678-0-00</p>
+                                        </div>
+                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
+                                            <p className="text-xs text-blue-600 font-bold uppercase mb-1">CCI Interbancario</p>
+                                            <p className="font-mono text-lg font-bold text-gray-900 tracking-wide">002-191-12345678000-55</p>
                                         </div>
                                     </div>
-                                )}
 
-                                {/* Coupon Section - Main Form */}
-                                {!verifiedResident && (form.modalidad === 'Virtual' || (form.modalidad === 'Presencial' && wantsCertification)) && (
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-200">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">¿Tienes un cupón de descuento o beca?</label>
-                                        <div className="flex gap-2">
-                                            <div className="relative flex-grow">
-                                                <input
-                                                    type="text"
-                                                    placeholder="Ingresa tu código (Ej: BECA100)"
-                                                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase"
-                                                    value={couponCode}
-                                                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
-                                                    disabled={!!appliedCoupon}
-                                                />
-                                                <Tag size={18} className="absolute left-3 top-2.5 text-gray-400" />
-                                            </div>
-                                            {!appliedCoupon ? (
-                                                <Button
-                                                    type="button"
-                                                    onClick={handleValidateCoupon}
-                                                    disabled={validatingCoupon || !couponCode}
-                                                    className="bg-gray-800 hover:bg-black"
-                                                >
-                                                    {validatingCoupon ? <Loader size={18} className="animate-spin" /> : 'Aplicar'}
-                                                </Button>
-                                            ) : (
-                                                <Button
-                                                    type="button"
-                                                    onClick={handleRemoveCoupon}
-                                                    className="bg-red-100 text-red-600 border border-red-200 hover:bg-red-200"
-                                                >
-                                                    <X size={18} />
-                                                </Button>
-                                            )}
-                                        </div>
-                                        {appliedCoupon && (
-                                            <div className="mt-2 text-sm text-green-700 bg-green-50 p-2 rounded-lg flex items-center gap-2 border border-green-200">
-                                                <CheckCircle size={16} />
-                                                <span>
-                                                    ¡Cupón <strong>{appliedCoupon.code}</strong> aplicado!
-                                                    <span className="ml-1 opacity-75">
-                                                        (-{appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `S/. ${appliedCoupon.value}`})
-                                                    </span>
-                                                </span>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
-
-                                {requiresPayment && (
-                                    <div className="pt-4 border-t border-gray-100 animate-fadeIn">
-                                        <label className="block text-sm font-medium text-gray-700 mb-3">
-                                            Cargar Voucher de Pago (S/. {amount}.00)
-                                        </label>
-                                        {!voucherPreview ? (
-                                            <div onClick={() => fileInputRef.current.click()} className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center text-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-colors">
-                                                <Upload className="text-gray-400 mb-2" size={32} />
-                                                <span className="text-sm text-gray-600 font-medium">Clic para subir imagen o PDF</span>
-                                                <span className="text-xs text-gray-400 mt-1">Máx. 5MB</span>
+                                    {/* Right Col: Validation */}
+                                    <div className="space-y-4">
+                                        <h4 className="font-bold text-gray-800 border-b pb-2">Validación de Pago</h4>
+                                        {requiresPayment ? (
+                                            <div className="flex gap-4">
+                                                <div className="bg-purple-600 text-white p-4 rounded-xl flex-shrink-0 flex flex-col items-center justify-center w-24 shadow-md">
+                                                    <span className="text-xs font-bold mb-1">YAPE</span>
+                                                    <div className="w-12 h-12 bg-white/20 rounded-lg"></div>
+                                                </div>
+                                                <div className="flex-grow">
+                                                    {!voucherPreview ? (
+                                                        <div onClick={() => fileInputRef.current.click()} className="h-full border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all text-center">
+                                                            <Upload className="text-gray-400 mb-2" size={24} />
+                                                            <span className="text-sm font-medium text-gray-600">Subir Voucher</span>
+                                                            <span className="text-xs text-gray-400">PDF, JPG, PNG</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="h-full border-2 border-green-200 bg-green-50 rounded-xl p-3 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="p-2 bg-white rounded-lg border border-green-100"><FileCheck className="text-green-500" size={20} /></div>
+                                                                <div>
+                                                                    <p className="text-xs font-bold text-gray-900">Archivo cargado</p>
+                                                                    <button type="button" onClick={(e) => { e.stopPropagation(); clearVoucher(); }} className="text-xs text-red-500 hover:underline">Eliminar</button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                                                </div>
                                             </div>
                                         ) : (
-                                            <div className="relative border border-gray-200 rounded-xl overflow-hidden p-2 bg-gray-50 flex items-center gap-4">
-                                                <div className="h-16 w-16 bg-white rounded-lg border border-gray-200 flex items-center justify-center flex-shrink-0"><FileCheck className="text-green-500" /></div>
-                                                <div className="flex-grow"><p className="text-sm font-bold text-gray-800">Voucher cargado</p><p className="text-xs text-gray-500">Listo para enviar</p></div>
-                                                <button type="button" onClick={(e) => { e.stopPropagation(); clearVoucher(); }} className="p-2 hover:bg-red-100 text-red-500 rounded-full"><X size={18} /></button>
+                                            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
+                                                <CheckCircle className="text-green-600 mx-auto mb-2" size={32} />
+                                                <p className="font-bold text-green-800">Gratuito</p>
+                                                <p className="text-xs text-green-600">No requiere voucher</p>
                                             </div>
                                         )}
-                                        <input required={!voucherPreview} type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                                    </div>
+                                </div>
+
+                                {requiresPayment && (
+                                    <div className="mt-4 pt-4 border-t border-gray-100">
+                                        <div className="flex items-center gap-2">
+                                            <input type="text" placeholder="CÓDIGO DE CUPÓN" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} disabled={!!appliedCoupon} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+                                            {!appliedCoupon ? (
+                                                <button type="button" onClick={handleValidateCoupon} disabled={validatingCoupon || !couponCode} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-colors">{validatingCoupon ? <Loader className="animate-spin" size={20} /> : 'Aplicar'}</button>
+                                            ) : (
+                                                <button type="button" onClick={handleRemoveCoupon} className="bg-red-100 text-red-600 px-4 py-3 rounded-xl hover:bg-red-200"><X size={20} /></button>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
-                                <div className="pt-2">
-                                    <Button disabled={isSubmitting} type="submit" className="w-full justify-center text-lg h-12 bg-blue-700 hover:bg-blue-800">
-                                        {isSubmitting ? 'Enviando...' : `Confirmar Inscripción ${requiresPayment ? `(S/. ${amount})` : '(Gratuita)'}`}
-                                    </Button>
-                                    {!requiresPayment && (
-                                        <p className="text-center text-xs text-gray-500 mt-2">No se requiere pago para esta modalidad.</p>
-                                    )}
+                                <div className="mt-auto pt-6 flex justify-center">
+                                    <button
+                                        type="button"
+                                        onClick={handleSubmit}
+                                        disabled={isSubmitting}
+                                        className="w-full md:w-2/3 bg-green-500 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-green-600 transition-all shadow-xl flex items-center justify-center gap-3 transform hover:-translate-y-1"
+                                    >
+                                        <CheckCircle size={24} />
+                                        {isSubmitting ? 'Procesando...' : 'Confirmar Inscripción'}
+                                    </button>
                                 </div>
-                            </form>
-                        </Card>
-                    </div>
+                            </div>
+                        )}
+                    </form>
+                </Card>
+            </div>
 
-                    {/* Sidebar Info */}
-                    <div className="space-y-6">
-                        <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl p-6 shadow-xl border border-slate-700/50 relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
-                            <h4 className="font-bold text-xl mb-6 flex items-center gap-3 border-b border-white/10 pb-4">
-                                <div className="p-2 bg-blue-600/20 rounded-lg">
-                                    <CreditCard size={20} className="text-blue-400" />
-                                </div>
-                                Resumen
-                            </h4>
-                            <ul className="space-y-4 text-sm text-slate-300">
-                                <li className="flex justify-between items-center group">
-                                    <span>Evento</span>
-                                    <span className="font-bold text-white bg-white/10 px-3 py-1 rounded-full text-xs">{config?.eventAcronym || 'SIMR 2026'}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                    <span>Modalidad</span>
-                                    <span className="font-medium text-blue-200">{form.modalidad}</span>
-                                </li>
-                                <li className="flex justify-between items-center">
-                                    <span>Tipo</span>
-                                    <span className="font-medium text-white">{userType === 'incn' ? 'Residente INCN' : 'Externo'}</span>
-                                </li>
-                                <li className="flex justify-between items-center border-t border-white/10 pt-3 mt-2">
-                                    <span className="text-lg font-bold text-white">Total a Pagar</span>
-                                    <span className="text-2xl font-bold text-emerald-400">S/. {amount}.00</span>
-                                </li>
+            {/* Success Modal */}
+            {showSuccessModal && (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-slideUp">
+                        {/* Header with gradient */}
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
+                            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                <CheckCircle className="text-green-500" size={48} />
+                            </div>
+                            <h2 className="text-3xl font-bold text-white mb-2">¡Registro Exitoso!</h2>
+                            <p className="text-green-50 text-sm">Tu inscripción ha sido enviada correctamente</p>
+                        </div>
 
-                                {/* Applied Coupon Indicator */}
-                                {appliedCoupon && (
-                                    <li className="flex justify-between items-center text-green-400">
-                                        <span>Descuento ({appliedCoupon.code})</span>
-                                        <span className="font-medium">
-                                            -{appliedCoupon.type === 'percentage' ? `${appliedCoupon.value}%` : `S/. ${appliedCoupon.value}`}
-                                        </span>
-                                    </li>
-                                )}
-                            </ul>
+                        {/* Body */}
+                        <div className="p-8 text-center">
+                            <p className="text-gray-600 mb-6">
+                                Hemos recibido tu solicitud de inscripción para el <span className="font-bold text-gray-900">SIMR 2026</span>.
+                                Pronto recibirás un correo de confirmación con los detalles.
+                            </p>
 
-                            <Button onClick={openCostsModal} className="mt-6 w-full bg-white/10 hover:bg-white/20 text-white border-0">
-                                <InfoIcon size={16} className="mr-2" /> Ver Tarifario Completo
-                            </Button>
+                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+                                <p className="text-sm text-blue-800">
+                                    <span className="font-semibold">Próximos pasos:</span> Revisa tu correo electrónico para más información sobre el evento.
+                                </p>
+                            </div>
+
+                            <button
+                                onClick={handleCloseSuccessModal}
+                                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg transform hover:-translate-y-0.5"
+                            >
+                                Registrar Otra Persona
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
-
-            {
-                isCostsModalOpen && (
-                    <Modal
-                        isOpen={isCostsModalOpen}
-                        onClose={closeCostsModal}
-                        title="Tarifario 2026"
-                        size="xl"
-                    >
-                        <div className="overflow-hidden bg-white rounded-lg">
-                            <div className="text-center pt-2 pb-2">
-                                <h3 className="text-2xl font-black text-[#4a3b7d] uppercase tracking-wide">COSTOS DE INSCRIPCIÓN</h3>
-                            </div>
-
-                            <div className="flex flex-col md:flex-row gap-[15px] px-[15px] pb-[15px]">
-                                <div className="flex-1">
-                                    <div className="grid grid-cols-4 gap-2 mb-2 text-center text-white font-bold text-sm">
-                                        <div className="bg-transparent"></div> {/* Spacer */}
-                                        {config?.pricingMatrix?.columns?.map(col => (
-                                            <div key={col.id} className="bg-[#4a3b7d] py-2 rounded-t-lg flex flex-col justify-center min-h-[44px]">
-                                                <span className="leading-tight text-sm">{col.label}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    {/* Rows */}
-                                    <div className="space-y-2">
-                                        {config?.pricingMatrix?.rows?.map(row => (
-                                            <div key={row.id} className="grid grid-cols-4 gap-2 items-stretch h-20">
-                                                <div className="bg-gray-100 p-2 rounded-lg font-bold text-gray-700 text-sm leading-tight text-center flex items-center justify-center h-full">
-                                                    {row.label}
-                                                </div>
-                                                {config?.pricingMatrix?.columns?.map(col => {
-                                                    const price = config.pricingMatrix.values[`${row.id}_${col.id}`] || 0;
-                                                    const activeColId = getActivePricingColumnId(config.pricingMatrix);
-                                                    const isActive = col.id === activeColId;
-
-                                                    return (
-                                                        <div key={col.id} className={`rounded-lg flex items-center justify-center p-1 shadow-sm border border-gray-100 relative overflow-hidden group
-                                                        ${isActive ? 'bg-[#4a3b7d] ring-2 ring-purple-400 ring-offset-1 z-10' : 'bg-[#4a3b7d]'}
-                                                    `}>
-                                                            <div className="w-14 h-14 rounded-full border-2 border-white/30 flex flex-col items-center justify-center text-white relative z-10">
-                                                                <span className="text-[10px] opacity-80 -mb-0.5">S/.</span>
-                                                                <span className="text-xl font-bold tracking-tight">{price}</span>
-                                                            </div>
-                                                            <div className="absolute top-0 right-0 w-8 h-8 bg-white/10 rounded-full -mr-2 -mt-2 blur-sm"></div>
-                                                        </div>
-                                                    );
-                                                })}
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <p className="text-xs text-gray-500 mt-3 text-center">* Incluye IGV. Residentes INCN: Tarifa Única S/. {config?.pricingMatrix?.incnRate || 50}.00</p>
-                                </div>
-
-                                <div className="w-full md:w-80 bg-gray-50 rounded-xl p-[15px] border border-gray-100 flex flex-col shrink-0">
-                                    <h4 className="font-bold text-gray-900 text-lg border-b pb-2 mb-3">Cuentas Bancarias</h4>
-
-                                    <div className="mb-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="bg-blue-600 text-white text-xs px-1.5 py-0.5 rounded font-bold">BBVA</span>
-                                            <span className="font-bold text-base text-gray-800">Banco BBVA</span>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <div>
-                                                <p className="text-xs text-gray-500 font-medium">Cuenta Corriente Soles</p>
-                                                <p className="font-mono text-lg font-bold text-gray-800 tracking-tight">0011-0117-0100084567</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-xs text-gray-500 font-medium">CCI</p>
-                                                <p className="font-mono text-sm text-gray-600 tracking-tight">011-117-000100084567-90</p>
-                                            </div>
-                                            <p className="text-xs text-gray-500 mt-1">Titular: SIMR Eventos SAC</p>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex-1 flex flex-col">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <span className="bg-purple-600 text-white text-xs px-1.5 py-0.5 rounded font-bold">Y/P</span>
-                                            <span className="font-bold text-base text-gray-800">Yape / Plin</span>
-                                        </div>
-                                        <div className="flex items-center gap-4">
-                                            <div className="bg-white border-2 border-dashed border-gray-200 rounded-lg w-20 h-20 flex items-center justify-center shrink-0">
-                                                <span className="text-xs text-gray-400 text-center leading-none">QR<br />Code</span>
-                                            </div>
-                                            <p className="font-bold text-2xl text-gray-800">999 888 777</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="p-[15px] text-center border-t border-gray-100 bg-gray-50/50">
-                                <Button onClick={closeCostsModal} size="lg" className="bg-blue-700 hover:bg-blue-800 px-10 rounded-full shadow-lg shadow-blue-700/20 text-base">Entendido</Button>
-                            </div>
-                        </div>
-                    </Modal>
-                )
-            }
-        </div >
+        </div>
     );
 };
 
 export default RegistrationView;
-
