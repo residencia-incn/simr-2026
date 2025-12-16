@@ -15,14 +15,15 @@ const RoleAssignmentModal = ({ user, isOpen, onClose, onSave }) => {
     }, [user]);
 
     const availableRoles = [
-        { id: 'participant', label: 'Soy Asistente', icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-100' },
-        { id: 'resident', label: 'Soy Residente', icon: User, color: 'text-blue-600', bg: 'bg-blue-100' },
-        { id: 'jury', label: 'Soy Jurado', icon: Award, color: 'text-purple-600', bg: 'bg-purple-100' },
-        { id: 'academic', label: 'Soy Académico', icon: BookOpen, color: 'text-blue-700', bg: 'bg-blue-200' },
-        { id: 'admin', label: 'Comité Organizador', icon: Users, color: 'text-gray-700', bg: 'bg-gray-200' },
-        { id: 'treasurer', label: 'Soy Tesorero', icon: DollarSign, color: 'text-emerald-700', bg: 'bg-emerald-200' },
-        { id: 'admission', label: 'Soy Admisión', icon: Users, color: 'text-teal-700', bg: 'bg-teal-200' },
-        { id: 'superadmin', label: 'Soy Administrador', icon: Shield, color: 'text-red-600', bg: 'bg-red-100' },
+        { id: 'admin', label: 'Organización', icon: Shield, color: 'text-purple-600', bg: 'bg-purple-100' },
+        { id: 'secretary', label: 'Secretaría', icon: User, color: 'text-pink-600', bg: 'bg-pink-100' },
+        { id: 'academic', label: 'Académica', icon: BookOpen, color: 'text-blue-700', bg: 'bg-blue-200' },
+        { id: 'admission', label: 'Asistencia', icon: Users, color: 'text-teal-700', bg: 'bg-teal-200' },
+        { id: 'jury', label: 'Jurado', icon: Award, color: 'text-amber-600', bg: 'bg-amber-100' },
+        { id: 'treasurer', label: 'Contabilidad', icon: DollarSign, color: 'text-emerald-700', bg: 'bg-emerald-200' },
+        { id: 'participant', label: 'Aula Virtual', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-100' },
+        { id: 'resident', label: 'Trabajos', icon: User, color: 'text-cyan-600', bg: 'bg-cyan-100' },
+        { id: 'superadmin', label: 'Super Admin', icon: Shield, color: 'text-red-600', bg: 'bg-red-100' },
     ];
 
     const toggleRole = (roleId) => {

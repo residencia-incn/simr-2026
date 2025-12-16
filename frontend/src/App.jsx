@@ -14,6 +14,7 @@ import SubmitWorkForm from './views/SubmitWorkForm';
 import JuryDashboard from './views/JuryDashboard';
 import AdminDashboard from './views/AdminDashboard';
 import ParticipantDashboard from './views/ParticipantDashboard';
+import SecretaryDashboard from './views/SecretaryDashboard';
 import AdmissionDashboard from './views/AdmissionDashboard';
 import TreasurerDashboard from './views/TreasurerDashboard';
 import AcademicDashboard from './views/AcademicDashboard';
@@ -143,13 +144,15 @@ export default function SIMRApp() {
   };
 
   const getDashboardView = (role) => {
-    return role === 'admin' || role === 'superadmin' || role === 'secretary' ? 'admin-dashboard' :
-      role === 'academic' ? 'academic-dashboard' :
-        role === 'admission' ? 'admission-dashboard' :
-          role === 'jury' ? 'jury-dashboard' :
-            role === 'treasurer' ? 'treasurer-dashboard' :
-              role === 'participant' ? 'participant-dashboard' :
-                'resident-dashboard';
+    return role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
+      role === 'secretary' ? 'secretary-dashboard' :
+        role === 'academic' ? 'academic-dashboard' :
+          role === 'admission' ? 'admission-dashboard' :
+            role === 'jury' ? 'jury-dashboard' :
+              role === 'treasurer' ? 'treasurer-dashboard' :
+                role === 'participant' ? 'participant-dashboard' :
+                  role === 'resident' ? 'resident-dashboard' :
+                    'profile';
   };
 
   const updateViewForRole = (role) => {
@@ -267,9 +270,9 @@ export default function SIMRApp() {
                       </button>
                     </div>
 
-                    {user.roles && user.roles.length > 1 && (
+                    {user.roles && user.roles.length > 0 && (
                       <>
-                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Cambiar Perfil</div>
+                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
                         {user.roles.filter(role => role !== 'superadmin').map(role => {
                           const Icon = ROLE_ICONS[role] || Users;
                           const isDashboardActive = currentView === getDashboardView(role);
@@ -368,6 +371,7 @@ export default function SIMRApp() {
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
         {currentView === 'jury-dashboard' && <JuryDashboard user={user} />}
         {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}
+        {currentView === 'secretary-dashboard' && <SecretaryDashboard user={user} navigate={navigate} />}
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}

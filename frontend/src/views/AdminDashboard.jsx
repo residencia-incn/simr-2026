@@ -107,7 +107,44 @@ const AdminDashboard = ({ user }) => {
                     await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
                     await api.registrations.remove(reg.id);
 
-                    alert('Inscripción aprobada exitosamente.');
+                    // User Creation / Role Assignment Logic
+                    const allUsers = await api.users.getAll();
+                    const existingUser = allUsers.find(u => u.email === reg.email);
+
+                    // Determine if the user should get the "Aula Virtual" (participant) role
+                    // Logic:
+                    // - "Solo Presencial" (ticket: presencial) -> No "participant" role.
+                    // - "Presencial + Certificado" (ticket: presencial_cert) -> Gets "participant" role.
+                    // - "Virtual" (ticket: virtual) -> Gets "participant" role.
+
+                    let shouldHaveVirtualAccess = false;
+
+                    if (reg.ticketType) {
+                        shouldHaveVirtualAccess = reg.ticketType !== 'presencial';
+                    } else {
+                        // Fallback using modality and certification flag if ticketType is missing
+                        // Assuming 'Presencial' without explicit type is just Presencial
+                        const isVirtual = reg.modalidad && reg.modalidad.toLowerCase() === 'virtual';
+                        const wantsCert = reg.wantsCertification === true;
+                        shouldHaveVirtualAccess = isVirtual || wantsCert;
+                    }
+
+                    const assignedRoles = shouldHaveVirtualAccess ? ['participant'] : [];
+
+                    const userPayload = {
+                        id: existingUser ? existingUser.id : Date.now(),
+                        name: reg.name,
+                        email: reg.email,
+                        role: shouldHaveVirtualAccess ? 'participant' : 'user', // Set primary role correctly
+                        roles: existingUser ? [...new Set([...(existingUser.roles || []), ...assignedRoles])] : assignedRoles,
+                        institution: reg.institution,
+                        password: existingUser ? existingUser.password : '123456',
+                        specialty: reg.specialty
+                    };
+
+                    await api.users.update(userPayload);
+
+                    alert('Inscripción aprobada exitosamente y cuenta de usuario actualizada.');
                     loadData(); // Refresh all data
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
                 } catch (error) {

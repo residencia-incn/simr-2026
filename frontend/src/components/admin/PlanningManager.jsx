@@ -790,18 +790,79 @@ const PlanningManager = ({ currentUser }) => {
                                         <h4 className="font-bold">Acuerdos Tomados</h4>
                                     </div>
 
-                                    {viewingMeetingDetails.agreements && viewingMeetingDetails.agreements.length > 0 ? (
-                                        <ul className="space-y-3">
-                                            {viewingMeetingDetails.agreements.map((agreement, idx) => (
-                                                <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                                                    <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                                                    <span>{agreement}</span>
-                                                </li>
-                                            ))}
-                                        </ul>
+                                    {isClosed ? (
+                                        viewingMeetingDetails.agreements && viewingMeetingDetails.agreements.length > 0 ? (
+                                            <ul className="space-y-3">
+                                                {viewingMeetingDetails.agreements.map((agreement, idx) => (
+                                                    <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
+                                                        <span>{agreement}</span>
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        ) : (
+                                            <div className="text-center py-8 text-gray-400 text-sm italic">
+                                                No hay acuerdos registrados
+                                            </div>
+                                        )
                                     ) : (
-                                        <div className="text-center py-8 text-gray-400 text-sm italic">
-                                            No hay acuerdos registrados
+                                        <div className="space-y-3">
+                                            {viewingMeetingDetails.agreements && viewingMeetingDetails.agreements.map((agreement, idx) => (
+                                                <div key={idx} className="flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        value={agreement}
+                                                        onChange={async (e) => {
+                                                            const newAgreements = [...viewingMeetingDetails.agreements];
+                                                            newAgreements[idx] = e.target.value;
+                                                            // We update local state immediately for responsiveness
+                                                            // But usually we should wait for a save button or debounce.
+                                                            // Given the requirement "allows to edit", let's update local state and implement a mini-save or auto-save.
+                                                            // Ideally, we just update the specific meeting object in state and let user save?
+                                                            // Wait, the requirement implies real-time or direct interaction.
+                                                            // Let's defer strict saving to 'onBlur' or a specific 'save' action if possible, 
+                                                            // but simplest UX is updating the viewingMeetingDetails state and persisting it.
+
+                                                            const updatedMeeting = { ...viewingMeetingDetails, agreements: newAgreements };
+                                                            setViewingMeetingDetails(updatedMeeting);
+                                                            // Debounced or direct save? Direct save for now for simplicity as they are strings.
+                                                            await api.planning.saveMeeting(updatedMeeting);
+                                                            loadData(); // To keep sync
+                                                        }}
+                                                        className="flex-1 p-2 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none"
+                                                        placeholder="Descripción del acuerdo..."
+                                                    />
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                                                        onClick={async () => {
+                                                            const newAgreements = viewingMeetingDetails.agreements.filter((_, i) => i !== idx);
+                                                            const updatedMeeting = { ...viewingMeetingDetails, agreements: newAgreements };
+                                                            setViewingMeetingDetails(updatedMeeting);
+                                                            await api.planning.saveMeeting(updatedMeeting);
+                                                            loadData();
+                                                        }}
+                                                    >
+                                                        <Trash2 size={16} />
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 mt-2"
+                                                onClick={async () => {
+                                                    const currentAgreements = viewingMeetingDetails.agreements || [];
+                                                    const updatedMeeting = { ...viewingMeetingDetails, agreements: [...currentAgreements, ''] };
+                                                    setViewingMeetingDetails(updatedMeeting);
+                                                    await api.planning.saveMeeting(updatedMeeting);
+                                                    loadData();
+                                                }}
+                                            >
+                                                <Plus size={14} className="mr-1" />
+                                                Agregar Acuerdo
+                                            </Button>
                                         </div>
                                     )}
                                 </div>

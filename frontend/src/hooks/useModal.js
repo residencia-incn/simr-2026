@@ -29,7 +29,8 @@ export const useModal = (initialState = false) => {
         data,
         open,
         close,
-        toggle
+        toggle,
+        updateData: setData
     };
 };
 

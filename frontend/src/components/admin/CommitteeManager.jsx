@@ -11,6 +11,7 @@ const CommitteeManager = () => {
     const [activeGroup, setActiveGroup] = useState(null);
     const [isAddingGroup, setIsAddingGroup] = useState(false);
     const [newGroupTitle, setNewGroupTitle] = useState('');
+    const [editingGroupTitle, setEditingGroupTitle] = useState({ id: null, title: '' });
 
     // Use custom hook for modal management
     const {
@@ -29,6 +30,23 @@ const CommitteeManager = () => {
     const saveGroups = async (newGroups) => {
         await api.committee.save(newGroups);
         refetch(); // Reload data after save
+    };
+
+    const startEditingTitle = (group) => {
+        setEditingGroupTitle({ id: group.id, title: group.title });
+    };
+
+    const saveGroupTitle = () => {
+        if (!editingGroupTitle.title.trim()) return;
+        const newGroups = (groups || []).map(g =>
+            g.id === editingGroupTitle.id ? { ...g, title: editingGroupTitle.title } : g
+        );
+        saveGroups(newGroups);
+        setEditingGroupTitle({ id: null, title: '' });
+    };
+
+    const cancelEditingTitle = () => {
+        setEditingGroupTitle({ id: null, title: '' });
     };
 
     const handleAddGroup = () => {
@@ -86,14 +104,31 @@ const CommitteeManager = () => {
         }, '¿Eliminar miembro?');
     };
 
-    const handleImageUpload = (e) => {
+    const [isUploading, setIsUploading] = useState(false);
+
+    // ... existing saveGroups ...
+
+    const handleImageUpload = async (e) => {
         const file = e.target.files[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setEditingMember({ ...editingMember, image: reader.result });
-            };
-            reader.readAsDataURL(file);
+            setIsUploading(true);
+            try {
+                // Simulate Cloud Upload
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    // Simulate network delay
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+
+                    // In a real app, here we would receive the URL from the cloud service
+                    // For now, we use the Base64 as our "Cloud URL"
+                    setEditingMember({ ...editingMember, image: reader.result });
+                    setIsUploading(false);
+                };
+                reader.readAsDataURL(file);
+            } catch (error) {
+                console.error("Upload failed", error);
+                setIsUploading(false);
+            }
         }
     };
 
@@ -134,18 +169,37 @@ const CommitteeManager = () => {
                         description="Crea una comisión para empezar a agregar miembros."
                     />
                 ) : (
-                    groups.map(group => (
+                    groups.map((group, index) => (
                         <div key={group.id} className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
                             <div className="bg-gray-50 p-4 border-b border-gray-200 flex justify-between items-center">
-                                <h4 className="font-bold text-gray-800">{group.title}</h4>
-                                {!group.isLocked && (
+                                {editingGroupTitle.id === group.id ? (
+                                    <div className="flex items-center gap-2 flex-1 mr-4">
+                                        <input
+                                            className="border rounded px-2 py-1 flex-1 text-sm text-gray-800"
+                                            value={editingGroupTitle.title}
+                                            onChange={e => setEditingGroupTitle({ ...editingGroupTitle, title: e.target.value })}
+                                            autoFocus
+                                        />
+                                        <Button size="xs" onClick={saveGroupTitle}>Guardar</Button>
+                                        <Button size="xs" variant="ghost" onClick={cancelEditingTitle}>Cancelar</Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-bold text-gray-800">{group.title}</h4>
+                                        <button onClick={() => startEditingTitle(group)} className="text-gray-400 hover:text-blue-600">
+                                            <Edit2 size={14} />
+                                        </button>
+                                    </div>
+                                )}
+
+                                {!group.isLocked && editingGroupTitle.id !== group.id && (
                                     <button onClick={() => handleDeleteGroup(group.id)} className="text-gray-400 hover:text-red-500">
                                         <Trash2 size={16} />
                                     </button>
                                 )}
                             </div>
 
-                            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className={`p-4 grid gap-4 ${index === 0 ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-2'}`}>
                                 {group.members.map(member => (
                                     <div key={member.id} className="flex items-center gap-3 p-3 border rounded-lg hover:bg-gray-50 transition-colors group relative">
                                         <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-200 flex-shrink-0">
@@ -192,19 +246,28 @@ const CommitteeManager = () => {
                     <div className="space-y-4">
                         <div className="flex justify-center mb-6">
                             <div className="relative w-28 h-28 rounded-full overflow-hidden bg-gray-100 border-2 border-dashed border-gray-300 group cursor-pointer hover:border-blue-500 transition-colors">
-                                {editingMember.image ? (
+                                {isUploading ? (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-50 z-10">
+                                        <LoadingSpinner size="sm" />
+                                        <span className="text-xs text-gray-500 mt-1">Subiendo...</span>
+                                    </div>
+                                ) : editingMember.image ? (
                                     <img src={editingMember.image} alt="Preview" className="w-full h-full object-cover" />
                                 ) : (
                                     <User className="w-full h-full p-8 text-gray-300" />
                                 )}
-                                <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                                    <Upload className="text-white" size={24} />
-                                </div>
+
+                                {!isUploading && (
+                                    <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                                        <Upload className="text-white" size={24} />
+                                    </div>
+                                )}
                                 <input
                                     type="file"
                                     accept="image/*"
                                     className="absolute inset-0 opacity-0 cursor-pointer"
                                     onChange={handleImageUpload}
+                                    disabled={isUploading}
                                 />
                             </div>
                         </div>

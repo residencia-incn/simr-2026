@@ -641,6 +641,12 @@ const RegistrationView = () => {
                                                     setCouponCode(e.target.value.toUpperCase());
                                                     if (couponError) setCouponError(''); // Clear error on typing
                                                 }}
+                                                onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') {
+                                                        e.preventDefault();
+                                                        handleValidateCoupon();
+                                                    }
+                                                }}
                                                 disabled={!!appliedCoupon}
                                                 className={`flex-1 px-4 py-3 border ${couponError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'} rounded-xl focus:ring-2 outline-none transition-all`}
                                             />
