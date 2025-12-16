@@ -1,5 +1,6 @@
 import React from 'react';
 import { Search, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
+import AttendeeDetailsModal from './AttendeeDetailsModal';
 import PhotocheckModal from './PhotocheckModal';
 import { useSearch, useSortableData, useModal } from '../../hooks';
 import { Button, Table, FormField, Badge } from '../ui';
@@ -24,12 +25,20 @@ const AttendeeList = ({ attendees }) => {
         sortConfig
     } = useSortableData(filteredAttendees);
 
-    // Use custom hook for modal
+    // Modal for Photocheck
     const {
-        isOpen: isModalOpen,
-        data: selectedAttendee,
-        open: openPrintModal,
-        close: closeModal
+        isOpen: isPhotocheckOpen,
+        data: photocheckAttendee,
+        open: openPhotocheck,
+        close: closePhotocheck
+    } = useModal();
+
+    // Modal for Details
+    const {
+        isOpen: isDetailsOpen,
+        data: detailsAttendee,
+        open: openDetails,
+        close: closeDetails
     } = useModal();
 
     // Pagination State
@@ -50,11 +59,9 @@ const AttendeeList = ({ attendees }) => {
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     const columns = [
-        { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || item.name.split(' ').slice(0, 2).join(' ') }, // Fallback logic
-        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') }, // Fallback logic
+        { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || item.name.split(' ').slice(0, 2).join(' ') },
+        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') },
         { header: 'DNI', key: 'dni', sortable: true },
-        { header: 'CMP', key: 'cmp', sortable: true },
-        { header: 'RNE', key: 'rne', sortable: true },
         { header: 'Ocupación', key: 'occupation' },
         {
             header: 'Rol',
@@ -96,9 +103,8 @@ const AttendeeList = ({ attendees }) => {
                 );
             }
         },
-        { header: 'Email', key: 'email', sortable: true },
         {
-            header: 'Modality',
+            header: 'Modalidad',
             key: 'modality',
             className: 'text-center w-16',
             render: (item) => {
@@ -160,9 +166,13 @@ const AttendeeList = ({ attendees }) => {
                 onSort={requestSort}
                 sortConfig={{ key: sortedAttendees.sortKey, direction: sortedAttendees.sortDirection }}
                 emptyMessage="No se encontraron asistentes."
+                onRowClick={openDetails} // Open details modal on row click
                 actions={(item) => (
                     <button
-                        onClick={() => openPrintModal(item)}
+                        onClick={(e) => {
+                            e.stopPropagation(); // Prevent opening the details modal
+                            openPhotocheck(item);
+                        }}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                         title="Imprimir Fotocheck"
                     >
@@ -212,14 +222,18 @@ const AttendeeList = ({ attendees }) => {
                 )}
             </div>
 
-            {/* Modal */}
-            {isModalOpen && (
-                <PhotocheckModal
-                    isOpen={isModalOpen}
-                    onClose={closeModal}
-                    attendee={selectedAttendee}
-                />
-            )}
+            {/* Modals */}
+            <PhotocheckModal
+                isOpen={isPhotocheckOpen}
+                onClose={closePhotocheck}
+                attendee={photocheckAttendee}
+            />
+
+            <AttendeeDetailsModal
+                isOpen={isDetailsOpen}
+                onClose={closeDetails}
+                attendee={detailsAttendee}
+            />
         </div>
     );
 };

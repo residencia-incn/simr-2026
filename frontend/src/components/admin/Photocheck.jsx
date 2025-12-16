@@ -27,6 +27,25 @@ const Photocheck = ({ attendee, width = 9, height = 13 }) => {
     // The inner container will be standard width, but very tall. Flex gap will handle it.
     const scale = Math.min(scaleX, scaleY);
 
+    // Format Name: First Name (first word) + Last Name (first word)
+    const displayName = React.useMemo(() => {
+        if (attendee?.firstName || attendee?.lastName) {
+            const first = (attendee.firstName || '').trim().split(' ')[0];
+            const last = (attendee.lastName || '').trim().split(' ')[0];
+            return `${first} ${last}`.trim();
+        }
+        return attendee?.name || 'Nombre del Participante';
+    }, [attendee]);
+
+    // Dynamic Font Size based on name length
+    const fontSizeClass = React.useMemo(() => {
+        const len = displayName.length;
+        if (len > 22) return 'text-lg uppercase';
+        if (len > 16) return 'text-xl uppercase';
+        if (len > 10) return 'text-2xl uppercase';
+        return 'text-3xl uppercase';
+    }, [displayName]);
+
     return (
         <>
             <style type="text/css" media="print">
@@ -78,7 +97,7 @@ const Photocheck = ({ attendee, width = 9, height = 13 }) => {
 
                     {/* Content */}
                     <div className="flex-grow flex flex-col items-center justify-center p-2 w-full min-h-0">
-                        <h2 className="text-4xl font-bold text-gray-900 mb-2 leading-tight line-clamp-2">{attendee?.name || 'Nombre del Participante'}</h2>
+                        <h2 className={`${fontSizeClass} font-bold text-gray-900 mb-1 leading-tight line-clamp-2`}>{displayName}</h2>
                         <p className="text-2xl text-gray-600 font-medium mb-1 line-clamp-1">{attendee?.specialty || 'Especialidad'}</p>
                         <p className="text-lg text-gray-400 mb-4 line-clamp-1">{attendee?.institution || 'Institución'}</p>
 
