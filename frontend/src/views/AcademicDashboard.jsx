@@ -28,6 +28,7 @@ const AcademicDashboard = () => {
     const [activeTab, setActiveTab] = useState('pending'); // pending, approved, observation
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSpecialty, setSelectedSpecialty] = useState('all');
+    const [juryCountFilter, setJuryCountFilter] = useState('all');
 
     // Fetch Data
     const { data: works, loading, refetch } = useApi(api.works.getAll);
@@ -92,7 +93,17 @@ const AcademicDashboard = () => {
             author.toLowerCase().includes(lowerSearch);
         const matchesSpecialty = selectedSpecialty === 'all' || specialty === selectedSpecialty;
 
-        if (!matchesSearch || !matchesSpecialty) return false;
+
+
+        // Jury Count Filter
+        let matchesJuryCount = true;
+        if (juryCountFilter !== 'all') {
+            const juryCount = work.jury ? (Array.isArray(work.jury) ? work.jury.length : 1) : 0;
+            if (juryCountFilter === 'none') matchesJuryCount = juryCount === 0;
+            else matchesJuryCount = juryCount === parseInt(juryCountFilter);
+        }
+
+        if (!matchesSearch || !matchesSpecialty || !matchesJuryCount) return false;
 
         if (activeTab === 'pending') return work.status === 'En Evaluación' || work.status === 'Pending' || work.status === 'Pendiente';
         if (activeTab === 'approved') return work.status === 'Aceptado';
@@ -341,6 +352,19 @@ const AcademicDashboard = () => {
                                     {specialties.map(spec => (
                                         <option key={spec} value={spec}>{spec}</option>
                                     ))}
+                                </select>
+
+                                {/* New Jury Count Filter */}
+                                <select
+                                    className="border border-gray-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[150px]"
+                                    value={juryCountFilter}
+                                    onChange={(e) => setJuryCountFilter(e.target.value)}
+                                >
+                                    <option value="all">Todos los trabajos</option>
+                                    <option value="none">Sin Jurado (0)</option>
+                                    <option value="1">1 Jurado</option>
+                                    <option value="2">2 Jurados</option>
+                                    <option value="3">3 Jurados</option>
                                 </select>
                             </div>
 
