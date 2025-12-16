@@ -14,6 +14,7 @@ const ProfileView = ({ user, onSave }) => {
     const [activeTab, setActiveTab] = useState('personal'); // 'personal' or 'attendance'
     const [showScanner, setShowScanner] = useState(false);
     const [attendanceHistory, setAttendanceHistory] = useState([]);
+    const [currentPage, setCurrentPage] = useState(1); // Added for pagination
 
     // Fetch attendance history
     const { execute: loadHistory } = useApi(async () => {
@@ -412,36 +413,81 @@ const ProfileView = ({ user, onSave }) => {
                                         No hay registros de asistencia aún.
                                     </div>
                                 ) : (
-                                    <div className="overflow-hidden rounded-lg border border-gray-200">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-50 text-gray-700 font-medium">
-                                                <tr>
-                                                    <th className="p-3">Fecha y Hora</th>
-                                                    <th className="p-3">Tipo</th>
-                                                    <th className="p-3">Método</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-100">
-                                                {attendanceHistory.map((record) => (
-                                                    <tr key={record.id} className="hover:bg-gray-50">
-                                                        <td className="p-3 text-gray-900">
-                                                            {new Date(record.timestamp).toLocaleString('es-PE')}
-                                                        </td>
-                                                        <td className="p-3">
-                                                            <span className={`px-2 py-1 rounded-full text-xs font-medium ${record.type === 'entry'
-                                                                ? 'bg-green-100 text-green-700'
-                                                                : 'bg-orange-100 text-orange-700'
-                                                                }`}>
-                                                                {record.type === 'entry' ? 'Entrada' : 'Salida'}
-                                                            </span>
-                                                        </td>
-                                                        <td className="p-3 text-gray-600">
-                                                            {record.method === 'self_scan' ? 'Auto-escaneo' : 'Staff'}
-                                                        </td>
+                                    <div className="flex flex-col gap-4">
+                                        <div className="overflow-hidden rounded-lg border border-gray-200">
+                                            <table className="w-full text-sm text-left">
+                                                <thead className="bg-gray-50 text-gray-700 font-medium">
+                                                    <tr>
+                                                        <th className="p-3">Fecha y Hora</th>
+                                                        <th className="p-3">Tipo</th>
+                                                        <th className="p-3">Método</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody className="divide-y divide-gray-100">
+
+                                                    {/* Using slice based on top-level state I will add */}
+                                                    {attendanceHistory.slice((currentPage - 1) * 10, currentPage * 10).map((record) => (
+                                                        <tr key={record.id} className="hover:bg-gray-50">
+                                                            <td className="p-3 text-gray-900">
+                                                                {new Date(record.timestamp).toLocaleString('es-PE')}
+                                                            </td>
+                                                            <td className="p-3">
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${record.type === 'entry'
+                                                                    ? 'bg-green-100 text-green-700'
+                                                                    : 'bg-orange-100 text-orange-700'
+                                                                    }`}>
+                                                                    {record.type === 'entry' ? 'Entrada' : 'Salida'}
+                                                                </span>
+                                                            </td>
+                                                            <td className="p-3 text-gray-600">
+                                                                {record.method === 'self_scan' ? 'Auto-escaneo' : 'Staff'}
+                                                            </td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                            </table>
+                                        </div>
+
+                                        {/* Pagination Controls */}
+                                        {Math.ceil(attendanceHistory.length / 10) > 1 && (
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-sm text-gray-500">
+                                                    Mostrando {(currentPage - 1) * 10 + 1}-{Math.min(currentPage * 10, attendanceHistory.length)} de {attendanceHistory.length}
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                                                        disabled={currentPage === 1}
+                                                        className="h-8 w-8 p-0 flex items-center justify-center"
+                                                    >
+                                                        &lt;
+                                                    </Button>
+                                                    {[...Array(Math.ceil(attendanceHistory.length / 10))].map((_, i) => (
+                                                        <button
+                                                            key={i}
+                                                            onClick={() => setCurrentPage(i + 1)}
+                                                            className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors ${currentPage === i + 1
+                                                                ? 'bg-blue-600 text-white shadow-sm'
+                                                                : 'text-gray-600 hover:bg-gray-100'
+                                                                }`}
+                                                        >
+                                                            {i + 1}
+                                                        </button>
+                                                    ))}
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(attendanceHistory.length / 10)))}
+                                                        disabled={currentPage === Math.ceil(attendanceHistory.length / 10)}
+                                                        className="h-8 w-8 p-0 flex items-center justify-center"
+                                                    >
+                                                        &gt;
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

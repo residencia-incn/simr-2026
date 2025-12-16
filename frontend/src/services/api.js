@@ -111,6 +111,22 @@ export const api = {
             storage.set(STORAGE_KEYS.TREASURY, updated);
             return true;
         },
+        addIncome: async (amount, description, category) => {
+            return await api.treasury.addTransaction({
+                type: 'income',
+                amount: parseFloat(amount),
+                description,
+                category
+            });
+        },
+        addExpense: async (amount, description, category) => {
+            return await api.treasury.addTransaction({
+                type: 'expense',
+                amount: parseFloat(amount),
+                description,
+                category
+            });
+        },
         // ... categories methods ...
         getBudgets: async () => {
             await delay();

@@ -32,9 +32,26 @@ const AttendeeList = ({ attendees }) => {
         close: closeModal
     } = useModal();
 
+    // Pagination State
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 10;
+
+    // Reset pagination when search or filter changes
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filterRole]);
+
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = sortedAttendees.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(sortedAttendees.length / itemsPerPage);
+
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
+
     const columns = [
         { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || item.name.split(' ').slice(0, 2).join(' ') }, // Fallback logic
-        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') },
+        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') }, // Fallback logic
         { header: 'DNI', key: 'dni', sortable: true },
         { header: 'CMP', key: 'cmp', sortable: true },
         { header: 'RNE', key: 'rne', sortable: true },
@@ -105,7 +122,6 @@ const AttendeeList = ({ attendees }) => {
         { header: 'Fecha Reg.', key: 'date', sortable: true }
     ];
 
-
     return (
         <div className="space-y-4">
             {/* Filters and Actions */}
@@ -140,9 +156,9 @@ const AttendeeList = ({ attendees }) => {
             {/* Table */}
             <Table
                 columns={columns}
-                data={sortedAttendees}
+                data={currentItems}
                 onSort={requestSort}
-                sortConfig={{ key: sortedAttendees.sortKey, direction: sortedAttendees.sortDirection }} // useSortableData might not return sortConfig directly, check implementation
+                sortConfig={{ key: sortedAttendees.sortKey, direction: sortedAttendees.sortDirection }}
                 emptyMessage="No se encontraron asistentes."
                 actions={(item) => (
                     <button
@@ -154,8 +170,46 @@ const AttendeeList = ({ attendees }) => {
                     </button>
                 )}
             />
-            <div className="text-xs text-gray-500 text-right px-2">
-                Mostrando {filteredAttendees.length} de {attendees.length} asistentes
+
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                <div className="text-sm text-gray-500">
+                    Mostrando {filteredAttendees.length > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, filteredAttendees.length)} de {filteredAttendees.length} asistentes
+                </div>
+                {totalPages > 1 && (
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => paginate(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                            &lt;
+                        </Button>
+                        {[...Array(totalPages)].map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => paginate(i + 1)}
+                                className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors ${currentPage === i + 1
+                                    ? 'bg-blue-600 text-white shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                            >
+                                {i + 1}
+                            </button>
+                        ))}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => paginate(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                            &gt;
+                        </Button>
+                    </div>
+                )}
             </div>
 
             {/* Modal */}

@@ -8,6 +8,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import StatsOverview from '../components/admin/StatsOverview';
 import AttendeeList from '../components/admin/AttendeeList';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
 
 import CertificationManager from '../components/admin/CertificationManager';
 import SystemConfiguration from '../components/admin/SystemConfiguration';
@@ -26,6 +27,7 @@ import { api } from '../services/api';
 
 const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
+    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
     const [admissionTab, setAdmissionTab] = useState('list'); // 'list' or 'verification'
     const isSuperAdmin = user?.role === 'superadmin' || user?.roles?.includes('admin') || user?.role === 'admin';
 
@@ -73,51 +75,65 @@ const AdminDashboard = ({ user }) => {
     };
 
     const handleApproveRegistration = async (reg) => {
-        if (confirm(`¿Confirmar inscripción de ${reg.name}?`)) {
-            try {
-                const newAttendee = {
-                    id: Date.now(),
-                    name: reg.name,
-                    firstName: reg.firstName,
-                    lastName: reg.lastName,
-                    role: 'Asistente',
-                    occupation: reg.occupation,
-                    specialty: reg.specialty,
-                    modality: reg.modalidad,
-                    date: new Date().toISOString().split('T')[0],
-                    status: 'Confirmado',
-                    amount: reg.amount,
-                    institution: reg.institution,
-                    grade: null,
-                    certificationApproved: false,
-                    dni: reg.dni,
-                    cmp: reg.cmp,
-                    rne: reg.rne,
-                    email: reg.email
-                };
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Confirmar Inscripción',
+            message: `¿Confirmar inscripción de ${reg.name}?`,
+            type: 'warning',
+            onConfirm: async () => {
+                try {
+                    const newAttendee = {
+                        id: Date.now(),
+                        name: reg.name,
+                        firstName: reg.firstName,
+                        lastName: reg.lastName,
+                        role: 'Asistente',
+                        occupation: reg.occupation,
+                        specialty: reg.specialty,
+                        modality: reg.modalidad,
+                        date: new Date().toISOString().split('T')[0],
+                        status: 'Confirmado',
+                        amount: reg.amount,
+                        institution: reg.institution,
+                        grade: null,
+                        certificationApproved: false,
+                        dni: reg.dni,
+                        cmp: reg.cmp,
+                        rne: reg.rne,
+                        email: reg.email
+                    };
 
-                await api.attendees.add(newAttendee);
-                await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
-                await api.registrations.remove(reg.id);
+                    await api.attendees.add(newAttendee);
+                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
+                    await api.registrations.remove(reg.id);
 
-                alert('Inscripción aprobada exitosamente.');
-                loadData(); // Refresh all data
-            } catch (error) {
-                console.error("Error approving registration", error);
-                alert("Hubo un error al procesar la inscripción.");
+                    alert('Inscripción aprobada exitosamente.');
+                    loadData(); // Refresh all data
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                } catch (error) {
+                    console.error("Error approving registration", error);
+                    alert("Hubo un error al procesar la inscripción.");
+                }
             }
-        }
+        });
     };
 
     const handleRejectRegistration = async (id) => {
-        if (confirm('¿Rechazar esta inscripción?')) {
-            try {
-                await api.registrations.remove(id);
-                loadData();
-            } catch (error) {
-                console.error("Error rejecting", error);
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Rechazar Inscripción',
+            message: '¿Rechazar esta inscripción? Se eliminará de la lista de pendientes.',
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    await api.registrations.remove(id);
+                    loadData();
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                } catch (error) {
+                    console.error("Error rejecting", error);
+                }
             }
-        }
+        });
     };
 
     if (loading && attendees.length === 0) {
@@ -385,6 +401,15 @@ const AdminDashboard = ({ user }) => {
                     </div>
                 )} */}
             </div>
+
+            <ConfirmDialog
+                isOpen={confirmConfig.isOpen}
+                onClose={() => setConfirmConfig(prev => ({ ...prev, isOpen: false }))}
+                title={confirmConfig.title}
+                message={confirmConfig.message}
+                onConfirm={confirmConfig.onConfirm}
+                type={confirmConfig.type}
+            />
         </div>
     );
 };

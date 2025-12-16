@@ -50,7 +50,7 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', className = '' }
                 aria-modal="true"
             >
                 {/* Header */}
-                <div className="flex items-center justify-between p-4 md:p-6 border-b border-gray-100 bg-white z-10">
+                <div className="flex items-center justify-between px-4 md:px-6 py-2.5 border-b border-gray-100 bg-white z-10">
                     <h3 className="text-xl font-bold text-gray-900">{title}</h3>
                     <button
                         onClick={onClose}
