@@ -1,22 +1,61 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, Key, Shield, AlertTriangle } from 'lucide-react';
+import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
 import { api } from '../../services/api';
-import { Button, FormField, Table, Modal } from '../ui';
+import { Button, FormField, Table, Modal, Badge } from '../ui';
+
+import { useModal, useSearch, useSortableData } from '../../hooks';
+import AttendeeDetailsModal from './AttendeeDetailsModal';
 
 import RoleAssignmentModal from './RoleAssignmentModal';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [searchTerm, setSearchTerm] = useState('');
     const [selectedUser, setSelectedUser] = useState(null);
     const [actionType, setActionType] = useState(null); // 'delete', 'reset', 'roles'
+
+    // Modal for Details
+    const {
+        isOpen: isDetailsOpen,
+        data: detailsAttendee,
+        open: openDetails,
+        close: closeDetails
+    } = useModal();
 
     const loadUsers = async () => {
         setLoading(true);
         try {
-            const data = await api.users.getAll();
-            setUsers(data);
+            const [usersData, attendeesData] = await Promise.all([
+                api.users.getAll(),
+                api.attendees.getAll()
+            ]);
+
+            // Merge strategies:
+            // We primarily want the "Attendees" list visual, but augmented with User data (roles).
+            // Or we want Users list, augmented with Attendees data (specialty, dni).
+            // User requirement: "The list ... must be the same as attendance".
+            // So we treat Attendees as the base list.
+
+            // Map attendees to include user data if email matches
+            const merged = attendeesData.map(att => {
+                const user = usersData.find(u => u.email === att.email);
+                return {
+                    ...att,
+                    ...(user || {}), // User properties overwrite attendee if overlap, but we want to keep attendee visuals
+                    // Ensure we have both IDs if needed. 
+                    attendeeId: att.id,
+                    userId: user?.id,
+                    // Prefer attendee name for the split logic if it's formatted well, or keep as is.
+                    // IMPORTANT: columns use lastName/firstName.
+                };
+            });
+
+            // Also include users who are NOT in attendees? 
+            // The prompt implies "all attendees have an account". 
+            // If we include non-attendee users, they might have missing fields (DNI, Specialty).
+            // For now, let's stick to the merged list based on attendees to ensure the "Look" is 1:1.
+
+            setUsers(merged);
         } catch (error) {
             console.error("Error loading users", error);
         } finally {
@@ -28,21 +67,60 @@ const UserManagement = () => {
         loadUsers();
     }, []);
 
-    const filteredUsers = users.filter(user =>
-        user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.institution.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // Use custom hooks for search/filter
+    const {
+        searchTerm,
+        setSearchTerm,
+        filterValue: filterRole,
+        setFilterValue: setFilterRole,
+        filteredItems: filteredUsers
+    } = useSearch(users, {
+        searchFields: ['name', 'firstName', 'lastName', 'email', 'specialty', 'dni'],
+        filterField: 'role'
+    });
+
+    // Use custom hook for sorting
+    const {
+        items: sortedUsers,
+        requestSort,
+        sortConfig
+    } = useSortableData(filteredUsers);
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 10;
+
+    // Reset pagination when search or filter changes
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [searchTerm, filterRole]);
+
+    // Pagination Logic
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    const currentItems = sortedUsers.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+
+    const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
     const handleAction = async () => {
         if (!selectedUser || !actionType) return;
 
         try {
             if (actionType === 'delete') {
-                await api.users.delete(selectedUser.id);
-                // For mock users we can't really delete them from the array permanently unless api handles it,
-                // but we'll reflect it in UI
-                alert(`Usuario ${selectedUser.name} eliminado.`);
+                // Delete from Users (Account)
+                if (selectedUser.userId) {
+                    await api.users.delete(selectedUser.userId);
+                }
+
+                // Delete from Attendees (Registration Record)
+                if (selectedUser.attendeeId) {
+                    await api.attendees.delete(selectedUser.attendeeId);
+                }
+
+                // NOTE: Treasury records are intentionally PRESERVED per requirements.
+
+                alert(`Usuario ${selectedUser.name} y sus datos de asistencia eliminados. Los registros de tesorería ("Contabilidad") se mantienen intactos.`);
                 loadUsers();
             } else if (actionType === 'reset') {
                 await api.users.resetPassword(selectedUser.id);
@@ -72,9 +150,10 @@ const UserManagement = () => {
     };
 
     const columns = [
-        { header: 'Nombre', key: 'name', sortable: true, className: 'font-medium' },
-        { header: 'Email', key: 'email', sortable: true },
-        { header: 'Institución', key: 'institution', sortable: true },
+        { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || (item.name || '').split(' ').slice(0, 2).join(' ') },
+        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || (item.name || '').split(' ').slice(2).join(' ') },
+        { header: 'DNI', key: 'dni', sortable: true },
+        { header: 'Ocupación', key: 'occupation' },
         {
             header: 'Rol',
             key: 'role',
@@ -94,7 +173,55 @@ const UserManagement = () => {
                     ))}
                 </div>
             )
-        }
+        },
+        {
+            header: 'Especialidad',
+            key: 'specialty',
+            sortable: true,
+            className: 'text-center w-16',
+            render: (item) => {
+                const spec = item.specialty || '';
+                let Icon = Stethoscope;
+                let color = 'text-gray-400';
+
+                if (spec.toLowerCase().includes('neurología')) { Icon = Brain; color = 'text-purple-600'; }
+                else if (spec.toLowerCase().includes('pediatría')) { Icon = Baby; color = 'text-pink-500'; }
+                else if (spec.toLowerCase().includes('cirugía')) { Icon = Activity; color = 'text-red-500'; }
+                else if (spec.toLowerCase().includes('medicina')) { Icon = Stethoscope; color = 'text-blue-500'; }
+
+                return (
+                    <div className="flex justify-center group relative cursor-help">
+                        <Icon size={20} className={color} strokeWidth={1.5} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
+                            {spec}
+                        </span>
+                    </div>
+                );
+            }
+        },
+        {
+            header: 'Modalidad',
+            key: 'modality',
+            className: 'text-center w-16',
+            render: (item) => {
+                const mod = item.modality || 'Presencial';
+                let Icon = MapPin;
+                let color = 'text-green-600';
+
+                if (mod === 'Virtual') { Icon = Wifi; color = 'text-blue-500'; }
+                else if (mod === 'Híbrido') { Icon = Monitor; color = 'text-purple-600'; }
+
+                return (
+                    <div className="flex justify-center group relative cursor-help">
+                        <Icon size={18} className={color} strokeWidth={2} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
+                            {mod}
+                        </span>
+                    </div>
+                );
+            }
+        },
+        { header: 'Fecha Reg.', key: 'date', sortable: true }
     ];
 
     return (
@@ -107,39 +234,58 @@ const UserManagement = () => {
                     </h3>
                     <p className="text-gray-500 text-sm">Administración de cuentas y seguridad</p>
                 </div>
-                <div className="relative w-64">
+                <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-center">
+                    <div className="relative w-64">
+                        <FormField
+                            placeholder="Buscar usuario..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            className="mb-0"
+                        />
+                        <Search className="absolute right-3 top-3 text-gray-400" size={18} />
+                    </div>
                     <FormField
-                        placeholder="Buscar usuario..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="mb-0"
+                        type="select"
+                        value={filterRole}
+                        onChange={(e) => setFilterRole(e.target.value)}
+                        options={[
+                            { value: "All", label: "Todos los Roles" },
+                            { value: "Asistente", label: "Asistentes" },
+                            { value: "Ponente", label: "Ponentes" },
+                            { value: "Jurado", label: "Jurados" },
+                            { value: "Comité Organizador", label: "Comité" },
+                            { value: "admin", label: "Administradores" }
+                        ]}
+                        className="mb-0 min-w-[180px]"
                     />
-                    <Search className="absolute right-3 top-3 text-gray-400" size={18} />
                 </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <Table
                     columns={columns}
-                    data={filteredUsers}
+                    data={currentItems}
+                    onSort={requestSort}
+                    sortConfig={{ key: sortedUsers.sortKey, direction: sortedUsers.sortDirection }}
+                    onRowClick={openDetails}
                     actions={(user) => (
                         <div className="flex gap-2">
                             <button
-                                onClick={() => { setSelectedUser(user); setActionType('roles'); }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('roles'); }}
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                 title="Gestionar Roles"
                             >
                                 <Shield size={18} />
                             </button>
                             <button
-                                onClick={() => { setSelectedUser(user); setActionType('reset'); }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('reset'); }}
                                 className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
                                 title="Resetear Contraseña"
                             >
                                 <Key size={18} />
                             </button>
                             <button
-                                onClick={() => { setSelectedUser(user); setActionType('delete'); }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('delete'); }}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                                 title="Eliminar Usuario"
                             >
@@ -150,11 +296,58 @@ const UserManagement = () => {
                 />
             </div>
 
+            {/* Pagination Controls */}
+            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
+                <div className="text-sm text-gray-500">
+                    Mostrando {filteredUsers.length > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, filteredUsers.length)} de {filteredUsers.length} usuarios
+                </div>
+                {totalPages > 1 && (
+                    <div className="flex gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => paginate(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                            &lt;
+                        </Button>
+                        {[...Array(totalPages)].map((_, i) => (
+                            <button
+                                key={i}
+                                onClick={() => paginate(i + 1)}
+                                className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors ${currentPage === i + 1
+                                    ? 'bg-purple-600 text-white shadow-sm'
+                                    : 'text-gray-600 hover:bg-gray-100'
+                                    }`}
+                            >
+                                {i + 1}
+                            </button>
+                        ))}
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => paginate(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                            &gt;
+                        </Button>
+                    </div>
+                )}
+            </div>
+
             <RoleAssignmentModal
                 isOpen={actionType === 'roles'}
                 onClose={() => { setSelectedUser(null); setActionType(null); }}
                 user={selectedUser}
                 onSave={handleUpdateRoles}
+            />
+
+            <AttendeeDetailsModal
+                isOpen={isDetailsOpen}
+                onClose={closeDetails}
+                attendee={detailsAttendee}
             />
 
             {/* Confirmation Modal */}

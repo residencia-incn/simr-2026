@@ -5,9 +5,11 @@ import {
     AlertCircle,
     Clock,
     User,
+    Users,
     Calendar,
     Filter,
-    Search
+    Search,
+    FileText
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useApi, useSortableData, useModal } from '../hooks';
@@ -15,6 +17,7 @@ import { Button, Card, Table, Badge, LoadingSpinner, EmptyState } from '../compo
 import WorkReviewModal from '../components/academic/WorkReviewModal';
 import AssignJuryModal from '../components/academic/AssignJuryModal';
 import AssignScheduleModal from '../components/academic/AssignScheduleModal';
+import WorkDetailsModal from '../components/academic/WorkDetailsModal';
 import AcademicConfig from '../components/academic/AcademicConfig';
 import AcademicResults from '../components/academic/AcademicResults';
 import AcademicRubricConfig from '../components/academic/AcademicRubricConfig';
@@ -46,6 +49,12 @@ const AcademicDashboard = () => {
         close: closeSchedule
     } = useModal();
 
+    const {
+        isOpen: isDetailsOpen,
+        open: openDetails,
+        close: closeDetails
+    } = useModal();
+
     const [selectedWork, setSelectedWork] = useState(null);
 
     const handleOpenReview = (work) => {
@@ -61,6 +70,11 @@ const AcademicDashboard = () => {
     const handleOpenSchedule = (work) => {
         setSelectedWork(work);
         openSchedule();
+    };
+
+    const handleOpenDetails = (work) => {
+        setSelectedWork(work);
+        openDetails();
     };
 
     // Derived Data
@@ -103,7 +117,7 @@ const AcademicDashboard = () => {
                     <div className="text-xs text-gray-500 mt-1">{item.specialty} • {item.type}</div>
                     {item.jury && (Array.isArray(item.jury) ? item.jury.length > 0 : item.jury) && (
                         <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
-                            <User size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
+                            <Users size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
                         </span>
                     )}
                     {item.slidesUrl && (
@@ -357,7 +371,7 @@ const AcademicDashboard = () => {
                 ) : activeTab === 'rubrics' ? (
                     <AcademicRubricConfig />
                 ) : activeTab === 'juries' ? (
-                    <AcademicJurers works={works} />
+                    <AcademicJurers works={works} onUpdate={refetch} />
                 ) : activeTab === 'results' ? (
                     <AcademicResults works={works} />
                 ) : (
@@ -369,7 +383,7 @@ const AcademicDashboard = () => {
                         actions={renderActions}
                         onRowClick={(item) => {
                             if (activeTab === 'pending' || activeTab === 'observation') handleOpenReview(item);
-                            else if (activeTab === 'approved') handleOpenJury(item);
+                            else if (activeTab === 'approved') handleOpenDetails(item);
                         }}
                         emptyMessage={
                             <EmptyState
@@ -401,6 +415,11 @@ const AcademicDashboard = () => {
                 onClose={closeSchedule}
                 work={selectedWork}
                 onUpdate={refetch}
+            />
+            <WorkDetailsModal
+                isOpen={isDetailsOpen}
+                onClose={closeDetails}
+                work={selectedWork}
             />
         </div>
     );

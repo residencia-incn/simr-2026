@@ -78,6 +78,13 @@ export const api = {
             const updated = [attendee, ...current];
             storage.set(STORAGE_KEYS.ATTENDEES, updated);
             return attendee;
+        },
+        delete: async (id) => {
+            await delay();
+            const local = storage.get(STORAGE_KEYS.ATTENDEES, []);
+            const updated = local.filter(a => a.id !== id);
+            storage.set(STORAGE_KEYS.ATTENDEES, updated);
+            return true;
         }
     },
 
@@ -311,7 +318,7 @@ export const api = {
         getAll: async () => {
             await delay();
             const local = storage.get(STORAGE_KEYS.WORKS, []);
-            const allWorks = [...local, ...INITIAL_WORKS];
+            const allWorks = [...INITIAL_WORKS, ...local];
             const uniqueWorks = Array.from(new Map(allWorks.map(item => [item.id, item])).values());
             return uniqueWorks;
         },

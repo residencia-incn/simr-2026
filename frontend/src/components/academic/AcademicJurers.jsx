@@ -1,15 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import { Search, UserPlus, User, Mail, Shield, CheckCircle, XCircle, FileText, ChevronRight } from 'lucide-react';
+import { Search, UserPlus, User, Mail, Shield, CheckCircle, XCircle, FileText, ChevronRight, Plus } from 'lucide-react';
 import { api } from '../../services/api';
+import { useModal } from '../../hooks';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
+import AssignWorkToJuryModal from './AssignWorkToJuryModal';
 
-const AcademicJurers = ({ works }) => {
+const AcademicJurers = ({ works, onUpdate }) => {
     const [jurors, setJurors] = useState([]);
     const [selectedJurorId, setSelectedJurorId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+
+    const {
+        isOpen: isAssignOpen,
+        open: openAssign,
+        close: closeAssign
+    } = useModal();
 
     // Load jurors from API
     useEffect(() => {
@@ -154,10 +162,15 @@ const AcademicJurers = ({ works }) => {
                         </div>
 
                         <div className="flex-1">
-                            <h3 className="font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                <FileText size={18} className="text-blue-500" />
-                                Trabajos Asignados ({assignedWorks.length})
-                            </h3>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-bold text-gray-800 flex items-center gap-2">
+                                    <FileText size={18} className="text-blue-500" />
+                                    Trabajos Asignados ({assignedWorks.length})
+                                </h3>
+                                <Button size="xs" onClick={openAssign}>
+                                    <Plus size={14} className="mr-1" /> Asignar Trabajo
+                                </Button>
+                            </div>
 
                             {assignedWorks.length > 0 ? (
                                 <div className="space-y-3 overflow-y-auto max-h-[400px] pr-2 custom-scrollbar">
@@ -202,6 +215,14 @@ const AcademicJurers = ({ works }) => {
                     </div>
                 )}
             </div>
+            {/* Assign Work Modal */}
+            <AssignWorkToJuryModal
+                isOpen={isAssignOpen}
+                onClose={closeAssign}
+                juror={selectedJuror}
+                works={works}
+                onUpdate={onUpdate}
+            />
         </div>
     );
 };

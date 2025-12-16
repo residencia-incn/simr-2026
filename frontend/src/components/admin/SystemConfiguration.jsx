@@ -33,6 +33,7 @@ const SystemConfiguration = () => {
     const [newOccupation, setNewOccupation] = useState("");
     const [newParticipantSpecialty, setNewParticipantSpecialty] = useState("");
     const [newResidencyYear, setNewResidencyYear] = useState("");
+    const [newRole, setNewRole] = useState("");
 
     useEffect(() => {
         const loadConfig = async () => {
@@ -45,6 +46,7 @@ const SystemConfiguration = () => {
                 showHeroCountdown: data.showHeroCountdown,
                 specialties: data.specialties || [],
                 occupations: data.occupations || ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
+                roles: data.roles || ["Participante", "Ponente", "Comité Organizador", "Asistente", "Jurado", "Residente"],
                 participantSpecialties: data.participantSpecialties || ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"],
                 residencyYears: data.residencyYears || ["R1", "R2", "R3", "R4"],
                 prices: data.prices || {
@@ -142,6 +144,17 @@ const SystemConfiguration = () => {
 
     const handleRemoveResidencyYear = (year) => {
         setConfig({ ...config, residencyYears: config.residencyYears.filter(y => y !== year) });
+    };
+
+    const handleAddRole = () => {
+        if (newRole.trim() && !config.roles.includes(newRole.trim())) {
+            setConfig({ ...config, roles: [...config.roles, newRole.trim()] });
+            setNewRole("");
+        }
+    };
+
+    const handleRemoveRole = (role) => {
+        setConfig({ ...config, roles: config.roles.filter(r => r !== role) });
     };
 
     const handleDurationChange = (e) => {
@@ -344,6 +357,40 @@ const SystemConfiguration = () => {
 
                 {activeTab === 'lists' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
+                        {/* Roles Management (New) */}
+                        <Card className="p-6 h-[500px] flex flex-col">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
+                                <Settings size={20} className="text-gray-500" />
+                                Gestión de Roles
+                            </h4>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0">Define los roles disponibles para asignar a los usuarios (Ej. Ponente, Jurado).</p>
+
+                            <div className="flex gap-2 mb-4 shrink-0">
+                                <input
+                                    type="text"
+                                    value={newRole}
+                                    onChange={(e) => setNewRole(e.target.value)}
+                                    placeholder="Nuevo rol..."
+                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
+                                />
+                                <Button onClick={handleAddRole} disabled={!newRole.trim()} size="sm">
+                                    <Plus size={16} /> Agregar
+                                </Button>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                                {config.roles?.map((role, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-100 h-8">
+                                        {role}
+                                        <button onClick={() => handleRemoveRole(role)} className="hover:text-red-500 transition-colors">
+                                            <X size={12} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </Card>
+
                         {/* Subspecialties */}
                         <Card className="p-6 h-[500px] flex flex-col">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
