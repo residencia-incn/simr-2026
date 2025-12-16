@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar } from 'lucide-react';
+import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar, AlertCircle } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useFileUpload, useApi } from '../hooks';
 
 const RegistrationView = () => {
     const [config, setConfig] = useState(null);
+    const [couponError, setCouponError] = useState('');
+    const [voucherError, setVoucherError] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [selectedWorkshops, setSelectedWorkshops] = useState([]);
@@ -57,34 +59,34 @@ const RegistrationView = () => {
     });
 
     const handleValidateCoupon = async () => {
-        const code = couponCode.trim();
-        if (!code) return;
+        if (!couponCode) return;
 
-        setValidatingCoupon(true);
-        console.log('Validating coupon:', code);
-
-        // Emergency Fallback for BECA100
-        if (code.toUpperCase() === 'BECA100') {
+        // EMERGENCY LOCAL FALLBACK FOR DEBUGGING
+        if (couponCode === 'BECA100') {
             console.log('Applying BECA100 local fallback');
             setAppliedCoupon({
                 code: 'BECA100',
                 type: 'percentage',
                 value: 100,
-                description: 'Beca Integral SIMR 2026'
+                description: 'Beca 100% (Local)',
+                maxUses: 999
             });
-            setValidatingCoupon(false);
-            window.alert('¡Cupón BECA100 aplicado correctamente! (Local)');
+            window.alert('Cupón BECA100 aplicado (Modo Debug Local)');
             return;
         }
 
+        setValidatingCoupon(true);
+        setCouponError(''); // Clear previous errors
+
         try {
-            const coupon = await api.coupons.validate(code);
-            console.log('Coupon response:', coupon);
+            console.log('Validating coupon:', couponCode);
+            const coupon = await api.coupons.validate(couponCode);
+            console.log('Coupon valid:', coupon);
             setAppliedCoupon(coupon);
-            window.alert(`¡Cupón "${coupon.code}" aplicado! Descuento: ${coupon.type === 'percentage' ? `${coupon.value}%` : `S/. ${coupon.value}`}`);
+            window.alert(`Cupón "${coupon.code}" aplicado correctamente: ${coupon.description}`);
         } catch (error) {
             console.error('Coupon error:', error);
-            window.alert(error.message || 'Error al validar cupón');
+            setCouponError(error.message || 'Cupón inválido o expirado');
             setAppliedCoupon(null);
         } finally {
             setValidatingCoupon(false);
@@ -190,7 +192,9 @@ const RegistrationView = () => {
 
         // If paying, validate voucher file presence
         if (paymentNeeded && !voucherFile) {
-            window.alert('Por favor adjunta tu voucher de pago para completar la inscripción.');
+            setVoucherError(true);
+            window.alert('⚠️ ATENCIÓN: Es obligatorio adjuntar el voucher de pago cuando hay un monto a pagar.\n\nPor favor sube la imagen de tu constancia en el recuadro "Validación de Pago".');
+            // Scroll to voucher section if possible or just let the user see the red border
             return;
         }
 
@@ -576,7 +580,10 @@ const RegistrationView = () => {
 
                                     {/* Right Col: Validation */}
                                     <div className="space-y-4">
-                                        <h4 className="font-bold text-gray-800 border-b pb-2">Validación de Pago</h4>
+                                        <h4 className={`font-bold ${voucherError ? 'text-red-600' : 'text-gray-800'} border-b pb-2 flex justify-between`}>
+                                            Validación de Pago
+                                            {voucherError && <span className="text-red-500 text-xs font-normal flex items-center gap-1"><AlertCircle size={12} /> Requerido</span>}
+                                        </h4>
                                         {requiresPayment ? (
                                             <div className="flex gap-4">
                                                 <div className="bg-purple-600 text-white p-4 rounded-xl flex-shrink-0 flex flex-col items-center justify-center w-24 shadow-md">
@@ -585,9 +592,9 @@ const RegistrationView = () => {
                                                 </div>
                                                 <div className="flex-grow">
                                                     {!voucherPreview ? (
-                                                        <div onClick={() => fileInputRef.current.click()} className="h-full border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all text-center">
-                                                            <Upload className="text-gray-400 mb-2" size={24} />
-                                                            <span className="text-sm font-medium text-gray-600">Subir Voucher</span>
+                                                        <div onClick={() => fileInputRef.current.click()} className={`h-full border-2 border-dashed ${voucherError ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'} rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer transition-all text-center group`}>
+                                                            <Upload className={`${voucherError ? 'text-red-400' : 'text-gray-400'} mb-2 group-hover:scale-110 transition-transform`} size={24} />
+                                                            <span className={`text-sm font-medium ${voucherError ? 'text-red-600' : 'text-gray-600'}`}>Subir Voucher</span>
                                                             <span className="text-xs text-gray-400">PDF, JPG, PNG</span>
                                                         </div>
                                                     ) : (
@@ -601,7 +608,16 @@ const RegistrationView = () => {
                                                             </div>
                                                         </div>
                                                     )}
-                                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*,.pdf" onChange={handleFileChange} />
+                                                    <input
+                                                        type="file"
+                                                        ref={fileInputRef}
+                                                        className="hidden"
+                                                        accept="image/*,.pdf"
+                                                        onChange={(e) => {
+                                                            setVoucherError(false); // Clear error on interaction
+                                                            handleFileChange(e);
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
                                         ) : (
@@ -617,13 +633,29 @@ const RegistrationView = () => {
                                 {requiresPayment && (
                                     <div className="mt-4 pt-4 border-t border-gray-100">
                                         <div className="flex items-center gap-2">
-                                            <input type="text" placeholder="CÓDIGO DE CUPÓN" value={couponCode} onChange={(e) => setCouponCode(e.target.value.toUpperCase())} disabled={!!appliedCoupon} className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none" />
+                                            <input
+                                                type="text"
+                                                placeholder="CÓDIGO DE CUPÓN"
+                                                value={couponCode}
+                                                onChange={(e) => {
+                                                    setCouponCode(e.target.value.toUpperCase());
+                                                    if (couponError) setCouponError(''); // Clear error on typing
+                                                }}
+                                                disabled={!!appliedCoupon}
+                                                className={`flex-1 px-4 py-3 border ${couponError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'} rounded-xl focus:ring-2 outline-none transition-all`}
+                                            />
                                             {!appliedCoupon ? (
                                                 <button type="button" onClick={handleValidateCoupon} disabled={validatingCoupon || !couponCode} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-colors">{validatingCoupon ? <Loader className="animate-spin" size={20} /> : 'Aplicar'}</button>
                                             ) : (
                                                 <button type="button" onClick={handleRemoveCoupon} className="bg-red-100 text-red-600 px-4 py-3 rounded-xl hover:bg-red-200"><X size={20} /></button>
                                             )}
                                         </div>
+                                        {couponError && (
+                                            <div className="flex items-center gap-2 mt-2 text-red-500 text-sm animate-fadeIn pl-1">
+                                                <AlertCircle size={16} />
+                                                <span className="font-medium">{couponError}</span>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
 

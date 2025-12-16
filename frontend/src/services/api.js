@@ -414,7 +414,7 @@ export const api = {
             if (!coupon) throw new Error("Cupón no encontrado");
             if (!coupon.active) throw new Error("Cupón inactivo");
             if (new Date(coupon.expiry) < new Date()) throw new Error("Cupón expirado");
-            if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) throw new Error("Cupón agorades");
+            if (coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses) throw new Error("Este cupón ya ha alcanzado su límite de usos permitidos.");
 
             return coupon;
         },
