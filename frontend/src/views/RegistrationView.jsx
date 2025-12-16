@@ -132,7 +132,7 @@ const RegistrationView = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [currentStep]);
 
-    const handleNext = () => {
+    const handleNext = async () => {
         const errors = {};
 
         if (currentStep === 1) {
@@ -165,6 +165,24 @@ const RegistrationView = () => {
                 alert('Por favor completa todos los campos obligatorios marcados en rojo.');
                 return;
             }
+
+            // --- REAL-TIME VALIDATION ---
+            try {
+                // Show loading indicator if possible, but for now simple await is fast enough.
+                const check = await api.registrations.checkDuplicates(form);
+                if (check.isDuplicate) {
+                    setValidationErrors({ [check.field]: check.message });
+                    // Removed window.alert to rely on inline message
+                    // window.alert(`⚠️ Validación: ${check.message}`);
+                    return; // Stop here, do not proceed to step 2
+                }
+            } catch (err) {
+                console.error("Validation check failed", err);
+                // Optional: decide if we block or proceed on API failure. Blocking is safer.
+                window.alert("Error validando datos. Intente nuevamente.");
+                return;
+            }
+            // -----------------------------
         }
 
         if (currentStep === 2) {
@@ -239,7 +257,8 @@ const RegistrationView = () => {
             }
         } catch (error) {
             console.error('Submission error:', error);
-            window.alert('Error al enviar los datos: ' + (error.message || 'Error desconocido'));
+            // Show specific API error message if available
+            window.alert('⚠️ Error en la inscripción:\n\n' + (error.message || 'Ocurrió un error desconocido. Por favor intenta nuevamente.'));
         }
     };
 
@@ -392,10 +411,12 @@ const RegistrationView = () => {
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">DNI / Pasaporte *</label>
                                             <input type="number" name="dni" value={form.dni} onChange={handleChange} placeholder="12345678" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.dni ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                            {typeof validationErrors.dni === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.dni}</p>}
                                         </div>
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
                                             <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="juan@ejemplo.com" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.email ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                            {typeof validationErrors.email === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.email}</p>}
                                         </div>
                                     </div>
 
@@ -448,6 +469,7 @@ const RegistrationView = () => {
                                                 <div>
                                                     <label className="block text-sm font-semibold text-gray-700 mb-2">N° CMP *</label>
                                                     <input type="number" name="cmp" value={form.cmp} onChange={handleChange} placeholder="12345" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.cmp ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                    {typeof validationErrors.cmp === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.cmp}</p>}
                                                 </div>
 
                                                 {/* RNE - Only for Specialists */}
@@ -455,6 +477,7 @@ const RegistrationView = () => {
                                                     <div>
                                                         <label className="block text-sm font-semibold text-gray-700 mb-2">N° RNE *</label>
                                                         <input type="number" name="rne" value={form.rne} onChange={handleChange} placeholder="54321" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.rne ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                        {typeof validationErrors.rne === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.rne}</p>}
                                                     </div>
                                                 )}
 

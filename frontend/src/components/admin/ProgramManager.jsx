@@ -242,7 +242,7 @@ const ProgramManager = () => {
         saveHalls(updated);
     };
 
-    const handleAddDay = () => {
+    const handleAddDay = async () => {
         const newDayId = `day${days.length + 1}${Date.now()}`;
         const newDay = {
             id: newDayId,
@@ -257,6 +257,29 @@ const ProgramManager = () => {
             api.program.save(newProgram);
         }
         setActiveDay(newDayId);
+
+        // Sync with System Configuration
+        try {
+            const config = await api.content.getConfig();
+            if (config) {
+                const newSchedule = [...(config.schedule || [])];
+                if (newSchedule.length < newDays.length) {
+                    newSchedule.push({
+                        day: newDays.length,
+                        open: '08:00 a.m.',
+                        close: '06:00 p.m.'
+                    });
+                }
+                await api.content.saveConfig({
+                    ...config,
+                    duration: newDays.length,
+                    schedule: newSchedule
+                });
+                window.dispatchEvent(new Event('config-updated'));
+            }
+        } catch (error) {
+            console.error("Error syncing config:", error);
+        }
     };
 
     const handleRemoveDay = (dayId) => {
@@ -278,6 +301,22 @@ const ProgramManager = () => {
                 delete newProgram[dayId];
                 setProgram(newProgram);
                 await api.program.save(newProgram);
+
+                // Sync with System Configuration
+                try {
+                    const config = await api.content.getConfig();
+                    if (config) {
+                        const newSchedule = (config.schedule || []).slice(0, newDays.length);
+                        await api.content.saveConfig({
+                            ...config,
+                            duration: newDays.length,
+                            schedule: newSchedule
+                        });
+                        window.dispatchEvent(new Event('config-updated'));
+                    }
+                } catch (error) {
+                    console.error("Error syncing config:", error);
+                }
 
                 if (activeDay === dayId) {
                     setActiveDay(newDays[0].id);

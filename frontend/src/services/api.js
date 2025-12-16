@@ -44,9 +44,43 @@ export const api = {
             await delay();
             return storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
         },
+        checkDuplicates: async (registration) => {
+            await delay(300);
+            const current = storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
+            const normalize = (str) => str ? str.toString().trim().toLowerCase() : '';
+
+            const existingDni = current.find(r => normalize(r.dni) === normalize(registration.dni));
+            if (existingDni) return { isDuplicate: true, field: 'dni', message: `El DNI ${registration.dni} ya se encuentra registrado.` };
+
+            const existingEmail = current.find(r => normalize(r.email) === normalize(registration.email));
+            if (existingEmail) return { isDuplicate: true, field: 'email', message: `El correo ${registration.email} ya se encuentra registrado.` };
+
+            if (registration.cmp) {
+                const existingCmp = current.find(r => normalize(r.cmp) === normalize(registration.cmp));
+                if (existingCmp) return { isDuplicate: true, field: 'cmp', message: `El CMP ${registration.cmp} ya se encuentra registrado.` };
+            }
+
+            if (registration.rne) {
+                const existingRne = current.find(r => normalize(r.rne) === normalize(registration.rne));
+                if (existingRne) return { isDuplicate: true, field: 'rne', message: `El RNE ${registration.rne} ya se encuentra registrado.` };
+            }
+
+            return { isDuplicate: false };
+        },
         add: async (registration) => {
             await delay();
             const current = storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
+
+            // Basic failsafe reuse of logic logic if needed, but we rely on checkDuplicates in UI.
+            // Keeping minimal check here just in case.
+            // ... (We could call checkDuplicates here too, but to avoid double delay/logic, let's keep the throw logic or assume UI handled it. 
+            // For robustness, I'll leave the direct check I added previously, ensuring data integrity even if UI bypasses)
+
+            // --- SIMULATED BACKEND VALIDATION REPEAT ---
+            const normalize = (str) => str ? str.toString().trim().toLowerCase() : '';
+            if (current.some(r => normalize(r.dni) === normalize(registration.dni))) throw new Error("Ya registrado.");
+            // ------------------------------------------
+
             const newReg = {
                 id: `REG-${Date.now()}`,
                 timestamp: new Date().toISOString(),
@@ -225,7 +259,17 @@ export const api = {
     committee: {
         getAll: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.COMMITTEE, COMMITTEE_DATA);
+            let data = storage.get(STORAGE_KEYS.COMMITTEE, COMMITTEE_DATA);
+
+            // Self-healing: if any item lacks an ID, assign one and save
+            if (data.some(d => !d.id)) {
+                data = data.map((d, i) => ({
+                    ...d,
+                    id: d.id || `com-fixed-${Date.now()}-${i}`
+                }));
+                storage.set(STORAGE_KEYS.COMMITTEE, data);
+            }
+            return data;
         },
         save: async (committeeData) => {
             await delay();

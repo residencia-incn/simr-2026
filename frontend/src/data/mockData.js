@@ -121,47 +121,61 @@ export const SPONSORS = [
 
 export const COMMITTEE_DATA = [
     {
+        id: 'com-001',
         role: "Presidenta",
+        title: "Presidenta", // Also ensuring title property matches what component expects (it uses title, mock had role acting as title or title missing? Let's check component)
         members: [
-            { name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" }
+            { id: 'm-1', name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" }
         ]
     },
     {
+        id: 'com-002',
         role: "Secretaría y Tesorería",
+        title: "Secretaría y Tesorería",
         members: [
-            { name: "Dr. Carlos Gutiérrez", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=200", subRole: "Secretario y Tesorero" }
+            { id: 'm-2', name: "Dr. Carlos Gutiérrez", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?auto=format&fit=crop&q=80&w=200", subRole: "Secretario y Tesorero" }
         ]
     },
     {
+        id: 'com-003',
         role: "Difusión",
+        title: "Difusión",
         members: [
-            { name: "Dr. Henderson Vasquez", year: "R2 Neurocirugía", img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200" }
+            { id: 'm-3', name: "Dr. Henderson Vasquez", year: "R2 Neurocirugía", img: "https://images.unsplash.com/photo-1537368910025-700350fe46c7?auto=format&fit=crop&q=80&w=200" }
         ]
     },
     {
+        id: 'com-004',
         role: "Comité Científico y Académico",
+        title: "Comité Científico y Académico",
         members: [
-            { name: "Dr. Luis Trujillo", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200", subRole: "Director Científico" }
+            { id: 'm-4', name: "Dr. Luis Trujillo", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200", subRole: "Director Científico" }
         ]
     },
     {
+        id: 'com-005',
         role: "Auspicios y Relaciones Internacionales",
+        title: "Auspicios y Relaciones Internacionales",
         members: [
-            { name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" },
-            { name: "Dr. Daniel Ospina", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=200" }
+            { id: 'm-5', name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" },
+            { id: 'm-6', name: "Dr. Daniel Ospina", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=200" }
         ]
     },
     {
+        id: 'com-006',
         role: "Logística y Finanzas",
+        title: "Logística y Finanzas",
         members: [
-            { name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" },
-            { name: "Dr. Daniel Ospina", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=200" }
+            { id: 'm-7', name: "Dra. Luciana Jara", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&q=80&w=200" },
+            { id: 'm-8', name: "Dr. Daniel Ospina", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1556157382-97eda2d62296?auto=format&fit=crop&q=80&w=200" }
         ]
     },
     {
+        id: 'com-007',
         role: "Ponencias y Talleres",
+        title: "Ponencias y Talleres",
         members: [
-            { name: "Dr. Luis Trujillo", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200" }
+            { id: 'm-9', name: "Dr. Luis Trujillo", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200" }
         ]
     }
 ];

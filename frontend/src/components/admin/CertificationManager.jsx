@@ -1,16 +1,41 @@
 import React, { useState } from 'react';
-import { Search, CheckCircle, XCircle, Award, Download } from 'lucide-react';
+import { Search, CheckCircle, XCircle, Award, Download, Eye } from 'lucide-react';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
+import CertificateDetailsModal from './CertificateDetailsModal';
+// import { toast } from 'react-hot-toast'; // Removed due to missing dependency
 
 const CertificationManager = ({ attendees }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [localAttendees, setLocalAttendees] = useState(attendees);
+    const [selectedAttendee, setSelectedAttendee] = useState(null);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-    const toggleApproval = (id) => {
-        setLocalAttendees(prev => prev.map(att =>
-            att.id === id ? { ...att, certificationApproved: !att.certificationApproved } : att
-        ));
+    const handleRowClick = (attendee) => {
+        setSelectedAttendee(attendee);
+        setIsModalOpen(true);
+    };
+
+    const handleValidate = (id, type) => {
+        setLocalAttendees(prev => prev.map(att => {
+            if (att.id === id) {
+                if (type === 'approval') {
+                    // Logic for full approval
+                    return { ...att, certificationApproved: true };
+                } else if (type === 'attendance') {
+                    // Logic for attendance only (could add a specific flag if needed)
+                    return { ...att, attendanceCertificateGenerated: true };
+                }
+            }
+            return att;
+        }));
+
+        setIsModalOpen(false);
+        // Simulate generation feedback
+        const message = type === 'approval'
+            ? 'Certificado de Aprobación generado validado con éxito.'
+            : 'Constancia de Asistencia generada con éxito.';
+        window.alert(message); // Or use a toast if available
     };
 
     const filteredAttendees = localAttendees.filter(attendee =>
@@ -36,7 +61,10 @@ const CertificationManager = ({ attendees }) => {
                     <div>
                         <div className="text-sm text-gray-600">Promedio General</div>
                         <div className="text-2xl font-bold text-gray-900">
-                            {(localAttendees.reduce((acc, curr) => acc + (curr.grade || 0), 0) / localAttendees.filter(a => a.grade).length).toFixed(1)}
+                            {(localAttendees.filter(a => a.grade).length > 0)
+                                ? (localAttendees.reduce((acc, curr) => acc + (curr.grade || 0), 0) / localAttendees.filter(a => a.grade).length).toFixed(1)
+                                : '0.0'
+                            }
                         </div>
                     </div>
                 </div>
@@ -70,11 +98,15 @@ const CertificationManager = ({ attendees }) => {
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredAttendees.map((attendee) => (
-                                <tr key={attendee.id} className="hover:bg-gray-50 transition-colors">
+                                <tr
+                                    key={attendee.id}
+                                    onClick={() => handleRowClick(attendee)}
+                                    className="hover:bg-gray-50 transition-colors cursor-pointer"
+                                >
                                     <td className="py-3 px-4 font-medium text-gray-900">{attendee.name}</td>
                                     <td className="py-3 px-4 text-gray-600">{attendee.role}</td>
                                     <td className="py-3 px-4 text-center font-bold text-blue-700">
-                                        {attendee.grade !== null ? attendee.grade : '-'}
+                                        {attendee.grade !== null && attendee.grade !== undefined ? attendee.grade : '-'}
                                     </td>
                                     <td className="py-3 px-4 text-center">
                                         {attendee.certificationApproved ? (
@@ -86,11 +118,10 @@ const CertificationManager = ({ attendees }) => {
                                     <td className="py-3 px-4 text-center">
                                         <div className="flex justify-center gap-2">
                                             <button
-                                                onClick={() => toggleApproval(attendee.id)}
-                                                className={`p-2 rounded-lg transition-colors ${attendee.certificationApproved ? 'text-red-600 hover:bg-red-50' : 'text-green-600 hover:bg-green-50'}`}
-                                                title={attendee.certificationApproved ? "Revocar Aprobación" : "Aprobar Certificado"}
+                                                className="p-2 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                                title="Ver Detalles"
                                             >
-                                                {attendee.certificationApproved ? <XCircle size={18} /> : <CheckCircle size={18} />}
+                                                <Eye size={18} />
                                             </button>
                                         </div>
                                     </td>
@@ -100,6 +131,13 @@ const CertificationManager = ({ attendees }) => {
                     </table>
                 </div>
             </div>
+
+            <CertificateDetailsModal
+                isOpen={isModalOpen}
+                onClose={() => setIsModalOpen(false)}
+                attendee={selectedAttendee}
+                onValidate={handleValidate}
+            />
         </div>
     );
 };

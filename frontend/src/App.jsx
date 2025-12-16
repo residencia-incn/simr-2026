@@ -174,13 +174,13 @@ export default function SIMRApp() {
     window.scrollTo(0, 0);
   };
 
-  const eventName = config?.eventAcronym || 'SIMR 2026';
-  const eventYear = config?.year || '2026';
+  const eventYear = config?.eventYear || '2026';
+  const eventName = `SIMR ${eventYear}`;
 
   const ROLE_LABELS = {
     admin: 'Organización',
     secretary: 'Secretaría',
-    academic: 'Académica',
+    academic: 'Investigación',
     admission: 'Asistencia',
     jury: 'Jurado',
     treasurer: 'Contabilidad',

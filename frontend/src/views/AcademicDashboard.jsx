@@ -258,7 +258,7 @@ const AcademicDashboard = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <BookOpen className="text-blue-600" />
-                        Gestión Académica
+                        Gestión en Trabajos de Investigación
                     </h1>
                     <p className="text-gray-600">Revisión, aprobación y programación de trabajos científicos.</p>
                 </div>

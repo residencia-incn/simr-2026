@@ -61,9 +61,59 @@ const HeroCarousel = ({ navigate, user }) => {
             try {
                 // Load critical config first
                 const config = await api.content.getConfig();
+                let loadedSlides = INITIAL_SLIDES;
+
                 if (config) {
                     setEventConfig(config);
                     setShowCountdown(config.showHeroCountdown);
+
+                    // Dynamic Date Formatter
+                    const formatDateRange = (startDate, duration) => {
+                        if (!startDate) return 'Fecha por confirmar';
+                        const start = new Date(startDate + 'T00:00:00');
+                        const dates = [];
+                        for (let i = 0; i < (duration || 3); i++) {
+                            const d = new Date(start);
+                            d.setDate(start.getDate() + i);
+                            dates.push(d);
+                        }
+
+                        const first = dates[0];
+                        const last = dates[dates.length - 1];
+                        const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+                        if (dates.length === 1) return `${first.getDate()} ${monthNames[first.getMonth()]} ${config.eventYear || ''}`;
+
+                        const allSameMonth = dates.every(d => d.getMonth() === first.getMonth());
+                        if (allSameMonth) {
+                            const dayNums = dates.map(d => d.getDate());
+                            const lastDay = dayNums.pop();
+                            return `${dayNums.join(', ')} y ${lastDay} de ${monthNames[first.getMonth()]} ${config.eventYear || ''}`;
+                        } else {
+                            return `${first.getDate()} ${monthNames[first.getMonth()]} - ${last.getDate()} ${monthNames[last.getMonth()]} ${config.eventYear || ''}`;
+                        }
+                    };
+
+                    const dateString = formatDateRange(config.startDate, config.duration);
+
+                    // Update INITIAL_SLIDES with config data
+                    loadedSlides = INITIAL_SLIDES.map(slide => {
+                        if (slide.id === 'main') {
+                            return {
+                                ...slide,
+                                tag: dateString,
+                                title: (
+                                    <>
+                                        SIMR <span className="text-blue-300">{config.eventYear || '2026'}</span>
+                                    </>
+                                )
+                            };
+                        }
+                        if (slide.id === 'contest') {
+                            return { ...slide, tag: `Concurso ${config.eventYear || '2026'}` };
+                        }
+                        return slide;
+                    });
                 }
 
                 // Load optional data separately to prevent config load failure
@@ -72,9 +122,16 @@ const HeroCarousel = ({ navigate, user }) => {
                     api.content.getSpecialties().catch(() => [])
                 ]);
 
+                // If saved slides exist, we might want to use them, OR merge them.
+                // For now, if no saved slides, use our dynamic loadedSlides.
+                // If saved slides exist, they might be outdated text-wise if hardcoded. 
+                // A better approach for real apps is saving "tokens" but here we just override if it looks like the default.
                 if (savedSlides && savedSlides.length > 0) {
                     setSlides(savedSlides);
+                } else {
+                    setSlides(loadedSlides);
                 }
+
                 if (specialtiesList) {
                     setSpecialties(specialtiesList);
                 }

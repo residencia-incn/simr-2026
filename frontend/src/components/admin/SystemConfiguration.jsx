@@ -256,12 +256,15 @@ const SystemConfiguration = () => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Año del Evento</label>
-                                        <input
-                                            type="number"
+                                        <select
                                             value={config.eventYear}
                                             onChange={(e) => setConfig({ ...config, eventYear: e.target.value })}
                                             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                                        />
+                                        >
+                                            {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(year => (
+                                                <option key={year} value={year}>{year}</option>
+                                            ))}
+                                        </select>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
@@ -271,6 +274,42 @@ const SystemConfiguration = () => {
                                             onChange={(e) => setConfig({ ...config, startDate: e.target.value })}
                                             className="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
                                         />
+                                    </div>
+                                    <div className="col-span-2 mt-2">
+                                        <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 flex items-center gap-2 text-sm text-blue-800">
+                                            <Calendar size={16} />
+                                            <span className="font-semibold">Fechas del Evento:</span>
+                                            <span>
+                                                {config.startDate ? (() => {
+                                                    const start = new Date(config.startDate + 'T00:00:00');
+                                                    const days = config.duration || 1;
+                                                    const dates = [];
+                                                    for (let i = 0; i < days; i++) {
+                                                        const d = new Date(start);
+                                                        d.setDate(start.getDate() + i);
+                                                        dates.push(d);
+                                                    }
+
+                                                    const first = dates[0];
+                                                    const last = dates[dates.length - 1];
+                                                    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+                                                    if (dates.length === 1) {
+                                                        return `${first.getDate()} de ${monthNames[first.getMonth()]}`;
+                                                    }
+
+                                                    const allSameMonth = dates.every(d => d.getMonth() === first.getMonth());
+
+                                                    if (allSameMonth) {
+                                                        const dayNums = dates.map(d => d.getDate());
+                                                        const lastDay = dayNums.pop();
+                                                        return `${dayNums.join(', ')} y ${lastDay} de ${monthNames[first.getMonth()]}`;
+                                                    } else {
+                                                        return `${first.getDate()} de ${monthNames[first.getMonth()]} al ${last.getDate()} de ${monthNames[last.getMonth()]}`;
+                                                    }
+                                                })() : "Configure la fecha de inicio"}
+                                            </span>
+                                        </div>
                                     </div>
                                 </div>
 
