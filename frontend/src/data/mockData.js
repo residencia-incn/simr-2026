@@ -679,3 +679,92 @@ export const INITIAL_BUDGETS = [
     { category: 'Transporte', amount: 1000 },
     { category: 'Otro', amount: 5000 }
 ];
+
+// ============================================
+// NEW TREASURY SYSTEM DATA
+// ============================================
+
+/**
+ * Cuentas bancarias y de efectivo
+ */
+export const INITIAL_ACCOUNTS = [
+    {
+        id: 'acc-1',
+        nombre: 'BCP Principal',
+        tipo: 'banco',
+        saldo_actual: 0,
+        numero_cuenta: '191-XXXXXXXX-X-XX',
+        descripcion: 'Cuenta principal para ingresos de inscripciones',
+        createdAt: new Date().toISOString()
+    },
+    {
+        id: 'acc-2',
+        nombre: 'Caja Chica',
+        tipo: 'efectivo',
+        saldo_actual: 0,
+        descripcion: 'Efectivo para gastos menores',
+        createdAt: new Date().toISOString()
+    },
+    {
+        id: 'acc-3',
+        nombre: 'Interbank Eventos',
+        tipo: 'banco',
+        saldo_actual: 0,
+        numero_cuenta: '898-XXXXXXXX-X-XX',
+        descripcion: 'Cuenta secundaria para patrocinios',
+        createdAt: new Date().toISOString()
+    }
+];
+
+/**
+ * Configuración del plan de aportes
+ * Monto mensual: S/ 50.00
+ * Período: Enero - Junio 2026
+ */
+export const TREASURY_CONFIG = {
+    contribution: {
+        monthlyAmount: 50,
+        startMonth: '2026-01',
+        endMonth: '2026-06',
+        months: [
+            { id: '2026-01', label: 'Enero', deadline: '2026-01-31' },
+            { id: '2026-02', label: 'Febrero', deadline: '2026-02-28' },
+            { id: '2026-03', label: 'Marzo', deadline: '2026-03-31' },
+            { id: '2026-04', label: 'Abril', deadline: '2026-04-30' },
+            { id: '2026-05', label: 'Mayo', deadline: '2026-05-31' },
+            { id: '2026-06', label: 'Junio', deadline: '2026-06-30' }
+        ]
+    }
+};
+
+/**
+ * Plan de Aportes - Se inicializa vacío y se genera dinámicamente
+ * basado en los miembros del comité y la configuración
+ */
+export const INITIAL_CONTRIBUTION_PLAN = [];
+
+/**
+ * Plan Presupuestal - Categorías con montos presupuestados
+ * Alineado con las categorías existentes del sistema
+ */
+export const INITIAL_BUDGET_PLAN = [
+    { categoria: 'Logística', presupuestado: 10000, ejecutado: 0 },
+    { categoria: 'Alimentación', presupuestado: 8000, ejecutado: 0 },
+    { categoria: 'Honorarios', presupuestado: 15000, ejecutado: 0 },
+    { categoria: 'Publicidad', presupuestado: 3000, ejecutado: 0 },
+    { categoria: 'Materiales', presupuestado: 2500, ejecutado: 0 },
+    { categoria: 'Transporte', presupuestado: 1000, ejecutado: 0 },
+    { categoria: 'Inscripciones', presupuestado: 15000, ejecutado: 0 },
+    { categoria: 'Patrocinios', presupuestado: 5000, ejecutado: 0 },
+    { categoria: 'Aportes', presupuestado: 0, ejecutado: 0 }, // Se calcula dinámicamente
+    { categoria: 'Merchandising', presupuestado: 2000, ejecutado: 0 },
+    { categoria: 'Marketing', presupuestado: 1500, ejecutado: 0 },
+    { categoria: 'Otro', presupuestado: 5000, ejecutado: 0 }
+];
+
+/**
+ * Transacciones V2 - Estructura relacional con cuentas
+ * Se inicializa vacío, las transacciones existentes se migrarán
+ */
+export const INITIAL_TRANSACTIONS_V2 = [];
+

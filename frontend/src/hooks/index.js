@@ -7,4 +7,5 @@ export { useFileUpload } from './useFileUpload';
 export { useSearch } from './useSearch';
 export { useLocalStorage } from './useLocalStorage';
 export { usePagination } from './usePagination';
+export { useTreasury } from './useTreasury';
 
