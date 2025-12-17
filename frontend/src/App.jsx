@@ -278,7 +278,7 @@ export default function SIMRApp() {
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
                         {user.roles.filter(role => role !== 'superadmin' && role !== 'accounting').map(role => {
                           const Icon = ROLE_ICONS[role] || Users;
-                          const isDashboardActive = currentView === getDashboardView(role);
+                          const isDashboardActive = activeRole === role;
                           return (
                             <button
                               key={role}

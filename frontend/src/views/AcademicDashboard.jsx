@@ -258,36 +258,95 @@ const AcademicDashboard = ({ role }) => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <BookOpen className="text-blue-600" />
-                        Gestión en Trabajos de Investigación
+                        {role === 'committee' ? 'Gestión Académica' : 'Gestión en Trabajos de Investigación'}
                     </h1>
-                    <p className="text-gray-600">Revisión, aprobación y programación de trabajos científicos.</p>
+                    <p className="text-gray-600">
+                        {role === 'committee'
+                            ? 'Asignación, Revisión y Gestión programa del evento.'
+                            : 'Revisión, aprobación y programación de trabajos científicos.'}
+                    </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button
-                        variant={activeTab === 'results' ? 'primary' : 'outline'}
-                        onClick={() => setActiveTab('results')}
-                        className={`h-auto flex-col items-center justify-center p-2 rounded-xl border-2 transition-all gap-1 ${activeTab === 'results'
-                            ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-105'
-                            : 'border-dashed hover:border-blue-500 hover:bg-blue-50 text-gray-600'
-                            }`}
-                    >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={activeTab === 'results' ? 'text-yellow-300' : 'text-yellow-500'}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
-                        <span className={`text-xs font-bold ${activeTab === 'results' ? 'text-white' : 'text-gray-600'}`}>Ver Resultados</span>
-                    </Button>
-                    <Card className="px-4 py-2 flex items-center gap-3 bg-white border-blue-100">
-                        <Clock size={20} className="text-orange-500" />
-                        <div>
-                            <div className="text-xs text-gray-500 uppercase font-bold">Pendientes</div>
-                            <div className="text-lg font-bold text-gray-900">{stats.pending}</div>
-                        </div>
-                    </Card>
-                    <Card className="px-4 py-2 flex items-center gap-3 bg-white border-green-100">
-                        <CheckCircle size={20} className="text-green-500" />
-                        <div>
-                            <div className="text-xs text-gray-500 uppercase font-bold">Aceptados</div>
-                            <div className="text-lg font-bold text-gray-900">{stats.approved}</div>
-                        </div>
-                    </Card>
+                <div className="flex gap-2 flex-wrap justify-end">
+                    {role === 'committee' ? (
+                        <>
+                            {/* Committee Specific Stats */}
+                            <Card className="px-3 py-2 flex items-center gap-2 bg-white border-red-100 min-w-[120px]">
+                                <AlertCircle size={18} className="text-red-500" />
+                                <div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Sin Jurado</div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        {works?.filter(w => w.status === 'Aceptado' && (!w.jury || w.jury.length === 0)).length || 0}
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="px-3 py-2 flex items-center gap-2 bg-white border-orange-100 min-w-[120px]">
+                                <User size={18} className="text-orange-500" />
+                                <div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-bold">1 Jurado</div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        {works?.filter(w => w.status === 'Aceptado' && w.jury?.length === 1).length || 0}
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="px-3 py-2 flex items-center gap-2 bg-white border-yellow-100 min-w-[120px]">
+                                <Users size={18} className="text-yellow-500" />
+                                <div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-bold">2 Jurados</div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        {works?.filter(w => w.status === 'Aceptado' && w.jury?.length === 2).length || 0}
+                                    </div>
+                                </div>
+                            </Card>
+                            <Card className="px-3 py-2 flex items-center gap-2 bg-white border-blue-100 min-w-[140px]">
+                                <CheckCircle size={18} className="text-blue-500" />
+                                <div>
+                                    <div className="text-[10px] text-gray-500 uppercase font-bold">Jurado Completo</div>
+                                    <div className="text-lg font-bold text-gray-900">
+                                        {works?.filter(w => w.status === 'Aceptado' && w.jury?.length >= 3).length || 0}
+                                    </div>
+                                </div>
+                            </Card>
+                            <div className="w-px bg-gray-200 mx-1"></div>
+                            <Card className="px-3 py-2 flex items-center gap-2 bg-emerald-50 border-emerald-100 min-w-[140px]">
+                                <BookOpen size={18} className="text-emerald-600" />
+                                <div>
+                                    <div className="text-[10px] text-emerald-800 uppercase font-bold">Total Aceptados</div>
+                                    <div className="text-lg font-bold text-emerald-900">
+                                        {works?.filter(w => w.status === 'Aceptado').length || 0}
+                                    </div>
+                                </div>
+                            </Card>
+                        </>
+                    ) : (
+                        <>
+                            {/* Standard Research Stats */}
+                            <Button
+                                variant={activeTab === 'results' ? 'primary' : 'outline'}
+                                onClick={() => setActiveTab('results')}
+                                className={`h-auto flex-col items-center justify-center p-2 rounded-xl border-2 transition-all gap-1 ${activeTab === 'results'
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-105'
+                                    : 'border-dashed hover:border-blue-500 hover:bg-blue-50 text-gray-600'
+                                    }`}
+                            >
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={activeTab === 'results' ? 'text-yellow-300' : 'text-yellow-500'}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
+                                <span className={`text-xs font-bold ${activeTab === 'results' ? 'text-white' : 'text-gray-600'}`}>Ver Resultados</span>
+                            </Button>
+                            <Card className="px-4 py-2 flex items-center gap-3 bg-white border-blue-100">
+                                <Clock size={20} className="text-orange-500" />
+                                <div>
+                                    <div className="text-xs text-gray-500 uppercase font-bold">Pendientes</div>
+                                    <div className="text-lg font-bold text-gray-900">{stats.pending}</div>
+                                </div>
+                            </Card>
+                            <Card className="px-4 py-2 flex items-center gap-3 bg-white border-green-100">
+                                <CheckCircle size={20} className="text-green-500" />
+                                <div>
+                                    <div className="text-xs text-gray-500 uppercase font-bold">Aceptados</div>
+                                    <div className="text-lg font-bold text-gray-900">{stats.approved}</div>
+                                </div>
+                            </Card>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -320,18 +379,22 @@ const AcademicDashboard = ({ role }) => {
                                 </button>
                             )}
 
-                            <button
-                                onClick={() => setActiveTab('rubrics')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'rubrics' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Rúbricas
-                            </button>
-                            <button
-                                onClick={() => setActiveTab('juries')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'juries' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Jurados
-                            </button>
+                            {role === 'committee' && (
+                                <>
+                                    <button
+                                        onClick={() => setActiveTab('rubrics')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'rubrics' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Rúbricas
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('juries')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'juries' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Jurados
+                                    </button>
+                                </>
+                            )}
                             {role !== 'committee' && (
                                 <button
                                     onClick={() => setActiveTab('config')}
