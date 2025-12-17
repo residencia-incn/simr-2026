@@ -32,7 +32,17 @@ export default function SIMRApp() {
   const [user, setUser] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedUser = window.localStorage.getItem('simr_user');
-      return savedUser ? JSON.parse(savedUser) : null;
+      if (savedUser) {
+        const userData = JSON.parse(savedUser);
+        // Migrate legacy 'accounting' role to 'treasurer'
+        if (userData.roles) {
+          userData.roles = userData.roles.map(role => role === 'accounting' ? 'treasurer' : role);
+        }
+        if (userData.role === 'accounting') {
+          userData.role = 'treasurer';
+        }
+        return userData;
+      }
     }
     return null;
   });
@@ -47,7 +57,9 @@ export default function SIMRApp() {
   // Persistent Active Role
   const [activeRole, setActiveRole] = useState(() => {
     if (typeof window !== 'undefined') {
-      return window.localStorage.getItem('simr_active_role') || null;
+      const savedRole = window.localStorage.getItem('simr_active_role');
+      // Migrate legacy 'accounting' role to 'treasurer'
+      return savedRole === 'accounting' ? 'treasurer' : savedRole || null;
     }
     return null;
   });
@@ -149,7 +161,7 @@ export default function SIMRApp() {
         role === 'academic' ? 'academic-dashboard' :
           role === 'admission' ? 'admission-dashboard' :
             role === 'jury' ? 'jury-dashboard' :
-              role === 'treasurer' ? 'treasurer-dashboard' :
+              role === 'treasurer' || role === 'accounting' ? 'treasurer-dashboard' :
                 role === 'committee' ? 'academic-dashboard' : // Reuse academic dashboard
                   role === 'participant' ? 'participant-dashboard' :
                     role === 'resident' ? 'resident-dashboard' :
@@ -185,6 +197,7 @@ export default function SIMRApp() {
     admission: 'Asistencia',
     jury: 'Jurado',
     treasurer: 'Contabilidad',
+    accounting: 'Contabilidad', // Legacy alias for treasurer
     participant: 'Aula Virtual',
     resident: 'Trabajos',
     committee: 'Académico'
@@ -198,6 +211,7 @@ export default function SIMRApp() {
     admission: Users, // Or another icon if preferred
     jury: Award,
     treasurer: DollarSign,
+    accounting: DollarSign, // Legacy alias for treasurer
     participant: Users,
     resident: User,
     committee: BookOpen
@@ -276,7 +290,7 @@ export default function SIMRApp() {
                     {user.roles && user.roles.length > 0 && (
                       <>
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                        {user.roles.filter(role => role !== 'superadmin' && role !== 'accounting').map(role => {
+                        {user.roles.filter(role => role !== 'superadmin').map(role => {
                           const Icon = ROLE_ICONS[role] || Users;
                           const isDashboardActive = activeRole === role;
                           return (
@@ -376,9 +390,7 @@ export default function SIMRApp() {
         {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}
         {currentView === 'secretary-dashboard' && <SecretaryDashboard user={user} navigate={navigate} />}
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
-        {currentView === 'admission-dashboard' && <AdmissionDashboard />}
         {currentView === 'academic-dashboard' && <AcademicDashboard role={activeRole} />}
-        {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
 
         {/* {currentView === 'student-dashboard' && <StudentDashboard />} */}

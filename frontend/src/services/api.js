@@ -757,7 +757,7 @@ export const api = {
                     name: 'Super Usuario',
                     email: 'admin@simr.pe',
                     role: 'superadmin', // Primary role
-                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'accounting', 'admission', 'committee'], // Added 'committee'
+                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission', 'committee'], // Added 'committee'
                     image: null
                 };
             }

@@ -58,33 +58,42 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
             {pendingRegistrations.map((reg) => (
                 <Card
                     key={reg.id}
-                    className="overflow-hidden hover:shadow-md transition-shadow cursor-pointer relative group"
-                    onClick={() => setSelectedRegistration(reg)}
+                    className="overflow-hidden hover:shadow-md transition-shadow relative group"
                 >
-                    <div className="p-4 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                        {/* User Info */}
-                        <div className="flex items-start gap-4 flex-1">
-                            <div className="bg-blue-50 p-3 rounded-full hidden sm:block">
+                    <div className="p-5 space-y-4">
+                        {/* User Info Section */}
+                        <div className="flex items-start gap-3">
+                            <div className="bg-blue-50 p-3 rounded-full shrink-0">
                                 <User className="text-blue-600" size={24} />
                             </div>
-                            <div>
-                                <h4 className="font-bold text-gray-900 group-hover:text-blue-600 transition-colors">{reg.name}</h4>
-                                <div className="text-sm text-gray-600 space-y-1 mt-1">
-                                    <p className="flex items-center gap-2"><CreditCard size={14} /> DNI: {reg.dni} {reg.cmp && `| CMP: ${reg.cmp}`}</p>
-                                    <p className="flex items-center gap-2"><Calendar size={14} /> {reg.occupation}</p>
+                            <div className="flex-1 min-w-0">
+                                <h4 className="font-bold text-gray-900 text-lg mb-1">{reg.name}</h4>
+                                <div className="text-sm text-gray-600 space-y-1">
+                                    <p className="flex items-center gap-2">
+                                        <CreditCard size={14} className="shrink-0" />
+                                        <span className="truncate">DNI: {reg.dni} {reg.cmp && `| CMP: ${reg.cmp}`}</span>
+                                    </p>
+                                    <p className="flex items-center gap-2">
+                                        <Calendar size={14} className="shrink-0" />
+                                        <span className="truncate">{reg.occupation}</span>
+                                    </p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Payment Info */}
-                        <div className="bg-gray-50 p-3 rounded-lg min-w-[150px]">
-                            <p className="text-xs text-gray-500 uppercase font-bold mb-1">Monto a pagar</p>
-                            <p className="font-bold text-gray-900 text-lg">S/ {parseFloat(reg.amount || 0).toFixed(2)}</p>
-                            <p className="text-xs text-blue-600 capitalize">{reg.ticketType ? getTicketInfo(reg.ticketType).title : reg.modalidad}</p>
+                        {/* Payment Info Section */}
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <p className="text-xs text-gray-500 uppercase font-bold mb-2">Monto a pagar</p>
+                            <div className="flex items-baseline gap-2 mb-1">
+                                <p className="font-bold text-gray-900 text-2xl">S/ {parseFloat(reg.amount || 0).toFixed(2)}</p>
+                            </div>
+                            <p className="text-sm text-blue-600 capitalize font-medium">
+                                {reg.ticketType ? getTicketInfo(reg.ticketType).title : reg.modalidad}
+                            </p>
                         </div>
 
-                        {/* Actions (Stop Propagation to prevent opening modal when clicking buttons) */}
-                        <div className="flex items-center gap-2 w-full md:w-auto mt-4 md:mt-0" onClick={(e) => e.stopPropagation()}>
+                        {/* Actions Section */}
+                        <div className="flex items-center gap-2 pt-2">
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -92,7 +101,7 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                                     e.stopPropagation();
                                     setSelectedRegistration(reg);
                                 }}
-                                className="flex-1 md:flex-none justify-center"
+                                className="flex-1 justify-center"
                             >
                                 <Eye size={16} className="mr-2" /> Voucher
                             </Button>
@@ -100,11 +109,9 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    console.log("Reject click", reg.id);
-                                    // alert("Rejecting " + reg.id);
                                     onReject(reg.id);
                                 }}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                                 title="Rechazar"
                             >
                                 <X size={20} />
@@ -114,11 +121,9 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                                 size="sm"
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    console.log("Approve click", reg.name);
-                                    // alert("Approving " + reg.name);
                                     onApprove(reg);
                                 }}
-                                className="bg-green-600 hover:bg-green-700 text-white flex-1 md:flex-none justify-center"
+                                className="bg-green-600 hover:bg-green-700 text-white flex-1 justify-center"
                             >
                                 <Check size={16} className="mr-2" /> Aprobar
                             </Button>
@@ -126,6 +131,7 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                     </div>
                 </Card>
             ))}
+
 
             {/* Detailed Registration Modal */}
             {selectedRegistration && (

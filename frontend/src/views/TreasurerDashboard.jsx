@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User } from 'lucide-react';
 import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../components/ui';
 import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
@@ -411,42 +411,44 @@ const TreasurerDashboard = ({ user }) => {
                 </div>
             </div>
 
-            {/* Financial Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <Card className="p-5 border-l-4 border-blue-500">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
-                            <DollarSign size={24} />
+            {/* Financial Summary Cards - Only show in Summary tab */}
+            {activeTab === 'summary' && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <Card className="p-5 border-l-4 border-blue-500">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-blue-50 rounded-lg text-blue-600">
+                                <DollarSign size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 font-medium">Balance Total</p>
+                                <h3 className="text-2xl font-bold text-gray-900">S/ {balance.toFixed(2)}</h3>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm text-gray-600 font-medium">Balance Total</p>
-                            <h3 className="text-2xl font-bold text-gray-900">S/ {balance.toFixed(2)}</h3>
+                    </Card>
+                    <Card className="p-5 border-l-4 border-green-500">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-green-50 rounded-lg text-green-600">
+                                <TrendingUp size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 font-medium">Total Ingresos</p>
+                                <h3 className="text-2xl font-bold text-gray-900">S/ {totalIncome.toFixed(2)}</h3>
+                            </div>
                         </div>
-                    </div>
-                </Card>
-                <Card className="p-5 border-l-4 border-green-500">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-green-50 rounded-lg text-green-600">
-                            <TrendingUp size={24} />
+                    </Card>
+                    <Card className="p-5 border-l-4 border-red-500">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-red-50 rounded-lg text-red-600">
+                                <TrendingDown size={24} />
+                            </div>
+                            <div>
+                                <p className="text-sm text-gray-600 font-medium">Total Egresos</p>
+                                <h3 className="text-2xl font-bold text-gray-900">S/ {totalExpenses.toFixed(2)}</h3>
+                            </div>
                         </div>
-                        <div>
-                            <p className="text-sm text-gray-600 font-medium">Total Ingresos</p>
-                            <h3 className="text-2xl font-bold text-gray-900">S/ {totalIncome.toFixed(2)}</h3>
-                        </div>
-                    </div>
-                </Card>
-                <Card className="p-5 border-l-4 border-red-500">
-                    <div className="flex items-center gap-4">
-                        <div className="p-3 bg-red-50 rounded-lg text-red-600">
-                            <TrendingDown size={24} />
-                        </div>
-                        <div>
-                            <p className="text-sm text-gray-600 font-medium">Total Egresos</p>
-                            <h3 className="text-2xl font-bold text-gray-900">S/ {totalExpenses.toFixed(2)}</h3>
-                        </div>
-                    </div>
-                </Card>
-            </div>
+                    </Card>
+                </div>
+            )}
 
             {activeTab === 'summary' && (
                 <div className="space-y-6">
@@ -465,20 +467,153 @@ const TreasurerDashboard = ({ user }) => {
             )}
 
             {activeTab === 'validation' && (
-                <div className="space-y-4">
-                    <div className="flex justify-between items-center">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Left Column: Pending Validations */}
+                    <div className="space-y-4">
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <CheckSquare className="text-orange-600" /> Validación de Pagos
+                            </h3>
+                            <div className="text-sm text-gray-500">
+                                Pendientes: <span className="font-bold text-gray-900">{pendingRegistrations.length}</span>
+                            </div>
+                        </div>
+                        <VerificationList
+                            pendingRegistrations={pendingRegistrations}
+                            onApprove={handleApproveRegistration}
+                            onReject={handleRejectRegistration}
+                        />
+                    </div>
+
+                    {/* Right Column: Recent Registrations */}
+                    <div className="space-y-4">
                         <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <CheckSquare className="text-orange-600" /> Validación de Pagos
+                            <Users className="text-blue-600" /> Últimos Registrados
                         </h3>
-                        <div className="text-sm text-gray-500">
-                            Pendientes: <span className="font-bold text-gray-900">{pendingRegistrations.length}</span>
+                        <div className="space-y-3">
+                            {confirmedAttendees.slice(0, 4).map((attendee) => (
+                                <Card
+                                    key={attendee.id}
+                                    className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                                    onClick={() => {
+                                        // Find the original registration to show voucher
+                                        const regData = {
+                                            ...attendee,
+                                            name: attendee.name,
+                                            dni: attendee.dni,
+                                            email: attendee.email,
+                                            institution: attendee.institution,
+                                            occupation: attendee.role,
+                                            amount: attendee.amount,
+                                            ticketType: attendee.modality,
+                                            voucherData: attendee.voucherData || null,
+                                            timestamp: attendee.date
+                                        };
+                                        setConfirmConfig({
+                                            isOpen: true,
+                                            title: 'Detalle de Registro',
+                                            message: (
+                                                <div className="space-y-4 text-left">
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Nombre</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.name}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">DNI</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.dni}</p>
+                                                        </div>
+                                                        <div className="col-span-2">
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Email</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.email}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.institution}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Rol</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.role}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Monto Pagado</p>
+                                                            <p className="font-bold text-blue-600 text-lg">S/ {parseFloat(attendee.amount || 0).toFixed(2)}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Fecha de Registro</p>
+                                                            <p className="font-semibold text-gray-900">{attendee.date}</p>
+                                                        </div>
+                                                    </div>
+
+                                                    {attendee.voucherData && (
+                                                        <div className="pt-4 border-t">
+                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Voucher de Pago</p>
+                                                            <div className="bg-gray-100 rounded-lg p-4 flex items-center justify-center">
+                                                                <img
+                                                                    src={attendee.voucherData}
+                                                                    alt="Voucher"
+                                                                    className="max-w-full max-h-64 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const win = window.open("");
+                                                                        if (win) {
+                                                                            win.document.write(`
+                                                                                <html>
+                                                                                    <head>
+                                                                                        <title>Voucher - ${attendee.name}</title>
+                                                                                        <style>
+                                                                                            body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; }
+                                                                                            img { max-width: 95%; max-height: 95vh; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); border-radius: 8px; }
+                                                                                        </style>
+                                                                                    </head>
+                                                                                    <body>
+                                                                                        <img src="${attendee.voucherData}" alt="Comprobante de Pago" />
+                                                                                    </body>
+                                                                                </html>
+                                                                            `);
+                                                                            win.document.close();
+                                                                        }
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ),
+                                            type: 'info',
+                                            onConfirm: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
+                                        });
+                                    }}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className="bg-blue-50 p-2 rounded-full">
+                                            <User className="text-blue-600" size={20} />
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-bold text-gray-900 truncate">{attendee.name}</h4>
+                                            <p className="text-sm text-gray-600 truncate">{attendee.email}</p>
+                                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                                <span className="flex items-center gap-1">
+                                                    <Calendar size={12} />
+                                                    {attendee.date}
+                                                </span>
+                                                <span className="font-bold text-blue-600">
+                                                    S/ {parseFloat(attendee.amount || 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            ))}
+                            {confirmedAttendees.length === 0 && (
+                                <EmptyState
+                                    icon={Users}
+                                    title="Sin registros"
+                                    description="No hay usuarios registrados aún."
+                                />
+                            )}
                         </div>
                     </div>
-                    <VerificationList
-                        pendingRegistrations={pendingRegistrations}
-                        onApprove={handleApproveRegistration}
-                        onReject={handleRejectRegistration}
-                    />
                 </div>
             )}
 

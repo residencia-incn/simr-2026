@@ -15,15 +15,14 @@ const RoleAssignmentModal = ({ user, isOpen, onClose, onSave }) => {
     }, [user]);
 
     const availableRoles = [
-        { id: 'admin', label: 'Organización', icon: Shield, color: 'text-purple-600', bg: 'bg-purple-100' },
-        { id: 'secretary', label: 'Secretaría', icon: User, color: 'text-pink-600', bg: 'bg-pink-100' },
-        { id: 'academic', label: 'Académica', icon: BookOpen, color: 'text-blue-700', bg: 'bg-blue-200' },
-        { id: 'admission', label: 'Asistencia', icon: Users, color: 'text-teal-700', bg: 'bg-teal-200' },
-        { id: 'jury', label: 'Jurado', icon: Award, color: 'text-amber-600', bg: 'bg-amber-100' },
+        { id: 'superadmin', label: 'Superusuario', icon: Shield, color: 'text-red-600', bg: 'bg-red-100' },
+        { id: 'admin', label: 'Secretaria', icon: User, color: 'text-purple-600', bg: 'bg-purple-100' },
+        { id: 'research', label: 'Investigación', icon: BookOpen, color: 'text-blue-700', bg: 'bg-blue-200' }, // Formerly 'academic'
+        { id: 'committee', label: 'Académico', icon: Award, color: 'text-orange-600', bg: 'bg-orange-100' },
         { id: 'treasurer', label: 'Contabilidad', icon: DollarSign, color: 'text-emerald-700', bg: 'bg-emerald-200' },
         { id: 'participant', label: 'Aula Virtual', icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-100' },
-        { id: 'resident', label: 'Trabajos', icon: User, color: 'text-cyan-600', bg: 'bg-cyan-100' },
-        { id: 'superadmin', label: 'Super Admin', icon: Shield, color: 'text-red-600', bg: 'bg-red-100' },
+        { id: 'juror', label: 'Jurado', icon: Award, color: 'text-amber-600', bg: 'bg-amber-100' },
+        { id: 'attendee', label: 'Asistente', icon: Users, color: 'text-teal-700', bg: 'bg-teal-200' },
     ];
 
     const toggleRole = (roleId) => {
