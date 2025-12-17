@@ -123,6 +123,7 @@ const TreasurerDashboard = ({ user }) => {
     const { values: formData, handleChange, setValues: setFormData, reset: resetForm } = useForm({
         description: '',
         amount: '',
+        accountId: '',
         category: '',
         date: new Date().toISOString().split('T')[0]
     });
@@ -228,19 +229,30 @@ const TreasurerDashboard = ({ user }) => {
 
     const handleAddTransaction = async (e) => {
         e.preventDefault();
-        const newTransaction = {
-            id: Date.now(),
-            ...formData,
-            type: activeTab, // Ensure type matches current tab
-            amount: parseFloat(formData.amount)
+
+        if (!formData.accountId) {
+            alert('Por favor selecciona una cuenta');
+            return;
+        }
+
+        const transactionData = {
+            fecha: formData.date,
+            descripcion: formData.description,
+            monto: activeTab === 'income'
+                ? parseFloat(formData.amount)
+                : -parseFloat(formData.amount),
+            categoria: formData.category,
+            cuenta_id: formData.accountId
         };
+
         try {
-            await api.treasury.addTransaction(newTransaction);
-            await loadData();
+            await createTransaction(transactionData);
+            await loadData(); // Reload legacy data for compatibility
             resetForm();
-            alert('Movimiento registrado correctamente');
+            alert(`${activeTab === 'income' ? 'Ingreso' : 'Egreso'} registrado correctamente`);
         } catch (err) {
             console.error(err);
+            alert('Error al registrar la transacción: ' + err.message);
         }
     };
 
@@ -715,6 +727,21 @@ const TreasurerDashboard = ({ user }) => {
                                     placeholder="0.00"
                                     min="0"
                                     step="0.01"
+                                    required
+                                />
+                                <FormField
+                                    label="Cuenta"
+                                    name="accountId"
+                                    type="select"
+                                    value={formData.accountId}
+                                    onChange={handleChange}
+                                    options={[
+                                        { value: "", label: "Seleccionar cuenta..." },
+                                        ...accounts.map(acc => ({
+                                            value: acc.id,
+                                            label: `${acc.nombre} (S/ ${acc.saldo_actual.toFixed(2)})`
+                                        }))
+                                    ]}
                                     required
                                 />
                                 <FormField
