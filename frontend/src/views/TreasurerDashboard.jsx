@@ -416,64 +416,68 @@ const TreasurerDashboard = ({ user }) => {
                     <p className="text-gray-600">Gestión de caja y contabilidad del evento</p>
                 </div>
 
-                {/* Export Button */}
-                <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
-                    <FileDown size={18} /> Exportar
-                </Button>
-
                 <div className="flex p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full">
                     <button
                         onClick={() => setActiveTab('summary')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <PieChart size={18} />
                         Resumen
                     </button>
                     <button
                         onClick={() => setActiveTab('validation')}
                         className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <CheckSquare size={18} />
                         Validación {pendingRegistrations.length > 0 && <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRegistrations.length}</span>}
                     </button>
                     <button
                         onClick={() => setActiveTab('income')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <TrendingUp size={18} />
                         Ingresos
                     </button>
                     <button
                         onClick={() => setActiveTab('expense')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <TrendingDown size={18} />
                         Egresos
                     </button>
                     <button
                         onClick={() => setActiveTab('categories')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <Settings size={18} />
                         Categorías
                     </button>
                     <button
                         onClick={() => setActiveTab('budget')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <DollarSign size={18} />
                         Presupuesto
                     </button>
                     <button
                         onClick={() => setActiveTab('accounts')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <Wallet size={18} />
                         Cuentas
                     </button>
                     <button
                         onClick={() => setActiveTab('contributions')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <Users size={18} />
                         Aportes
                     </button>
                     <button
                         onClick={() => setActiveTab('reports')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
+                        <FileText size={18} />
                         Reportes
                     </button>
                 </div>
