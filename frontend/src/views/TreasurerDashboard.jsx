@@ -419,67 +419,94 @@ const TreasurerDashboard = ({ user }) => {
                 <div className="flex p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full">
                     <button
                         onClick={() => setActiveTab('summary')}
-                        title="Resumen"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <PieChart size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Resumen
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('validation')}
-                        title="Validación"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all relative ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <CheckSquare size={20} />
                         {pendingRegistrations.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRegistrations.length}</span>}
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Validación
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('income')}
-                        title="Ingresos"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <TrendingUp size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Ingresos
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('expense')}
-                        title="Egresos"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <TrendingDown size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Egresos
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('categories')}
-                        title="Categorías"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Settings size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Categorías
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('budget')}
-                        title="Presupuesto"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <DollarSign size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Presupuesto
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('accounts')}
-                        title="Cuentas"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Wallet size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Cuentas
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('contributions')}
-                        title="Aportes"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Users size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Aportes
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                     <button
                         onClick={() => setActiveTab('reports')}
-                        title="Reportes"
-                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <FileText size={20} />
+                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                            Reportes
+                            <span className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></span>
+                        </span>
                     </button>
                 </div>
             </div>
