@@ -278,10 +278,17 @@ const TreasurerDashboard = ({ user }) => {
         setConfirmConfig({
             isOpen: true,
             title: 'Confirmar Inscripción',
-            message: `¿Confirmar inscripción de ${reg.name}?`,
+            message: `¿Confirmar inscripción de ${reg.name} por S/ ${reg.amount}?`,
             type: 'warning',
             onConfirm: async () => {
                 try {
+                    // Validate that we have at least one account
+                    if (accounts.length === 0) {
+                        alert('Error: No hay cuentas disponibles. Por favor crea una cuenta primero.');
+                        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                        return;
+                    }
+
                     // 1. Add to Attendees List
                     const newAttendee = {
                         id: Date.now(),
@@ -297,18 +304,21 @@ const TreasurerDashboard = ({ user }) => {
                         certificationApproved: false,
                         dni: reg.dni,
                         cmp: reg.cmp,
-                        email: reg.email
+                        email: reg.email,
+                        voucherData: reg.voucherData
                     };
                     await api.attendees.add(newAttendee);
 
-                    // 2. Add to Treasury Income
-                    await api.treasury.addTransaction({
-                        id: Date.now() + 1,
-                        type: 'income',
-                        category: 'Inscripciones',
-                        amount: reg.amount,
-                        date: new Date().toISOString().split('T')[0],
-                        description: `Inscripción: ${reg.name}`
+                    // 2. Add to Treasury Income (New System)
+                    // Use first account as default (could be made configurable)
+                    const defaultAccount = accounts[0];
+                    await createTransaction({
+                        fecha: new Date().toISOString().split('T')[0],
+                        descripcion: `Inscripción: ${reg.name}`,
+                        monto: parseFloat(reg.amount),
+                        categoria: 'Inscripciones',
+                        cuenta_id: defaultAccount.id,
+                        url_comprobante: reg.voucherData || null
                     });
 
                     // 3. Remove from Pending
@@ -938,33 +948,35 @@ const TreasurerDashboard = ({ user }) => {
                             <PieChart className="text-teal-600" /> Control Presupuestal (Previsto vs Ejecutado)
                         </h3>
                         <div className="space-y-8">
-                            {categories.expense.map(cat => {
-                                const budgetAmount = budgets.find(b => b.category === cat)?.amount || 0;
-                                const spentAmount = transactions
-                                    .filter(t => t.type === 'expense' && t.category === cat)
-                                    .reduce((sum, t) => sum + t.amount, 0);
-                                const progress = budgetAmount > 0 ? (spentAmount / budgetAmount) * 100 : 0;
-                                const isOver = spentAmount > budgetAmount;
+                            {budgetExecution.map(item => {
+                                const progress = item.porcentaje;
+                                const isOver = item.estado === 'excedido';
+                                const isAlert = item.estado === 'alerta';
 
                                 return (
-                                    <div key={cat} className="space-y-2">
+                                    <div key={item.categoria} className="space-y-2">
                                         <div className="flex justify-between items-end">
                                             <div>
-                                                <p className="font-bold text-gray-900">{cat}</p>
+                                                <p className="font-bold text-gray-900">{item.categoria}</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-xs text-gray-500">Presupuesto: S/</span>
                                                     <input
                                                         type="number"
                                                         className="border rounded px-2 py-0.5 w-24 text-sm font-medium bg-gray-50 focus:bg-white focus:ring-1 ring-teal-500 outline-none transition-all"
-                                                        value={budgetAmount}
-                                                        onChange={(e) => handleBudgetUpdate(cat, e.target.value)}
+                                                        value={item.presupuestado}
+                                                        onChange={(e) => {
+                                                            const newAmount = parseFloat(e.target.value) || 0;
+                                                            updateBudgetCategory(item.categoria, newAmount);
+                                                        }}
                                                         placeholder="0.00"
+                                                        min="0"
+                                                        step="0.01"
                                                     />
                                                 </div>
                                             </div>
                                             <div className="text-right">
-                                                <p className={`font-bold ${isOver ? 'text-red-600' : 'text-gray-900'}`}>
-                                                    S/ {spentAmount.toFixed(2)}
+                                                <p className={`font-bold ${isOver ? 'text-red-600' : isAlert ? 'text-yellow-600' : 'text-gray-900'}`}>
+                                                    S/ {item.ejecutado.toFixed(2)}
                                                 </p>
                                                 <p className="text-xs text-gray-500">Ejecutado</p>
                                             </div>
@@ -972,23 +984,23 @@ const TreasurerDashboard = ({ user }) => {
 
                                         <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
                                             <div
-                                                className={`absolute left-0 top-0 h-full transition-all duration-500 ${isOver ? 'bg-red-500' : 'bg-teal-500'}`}
+                                                className={`absolute left-0 top-0 h-full transition-all duration-500 ${isOver ? 'bg-red-500' : isAlert ? 'bg-yellow-500' : 'bg-teal-500'
+                                                    }`}
                                                 style={{ width: `${Math.min(progress, 100)}%` }}
                                             ></div>
-                                            {/* Stripe pattern for overflow if needed, but simple red bar is enough */}
                                         </div>
 
                                         <div className="flex justify-between text-xs">
                                             <span className="text-gray-400">0%</span>
-                                            <span className={`font-medium ${isOver ? 'text-red-600' : 'text-teal-600'}`}>
-                                                {progress.toFixed(1)}% {isOver && '(Excedido)'}
+                                            <span className={`font-medium ${isOver ? 'text-red-600' : isAlert ? 'text-yellow-600' : 'text-teal-600'}`}>
+                                                {progress.toFixed(1)}% {isOver && '(Excedido)'} {isAlert && '(Alerta)'}
                                             </span>
                                         </div>
                                     </div>
                                 );
                             })}
-                            {categories.expense.length === 0 && (
-                                <p className="text-gray-500 italic text-center">No hay categorías de egresos definidas.</p>
+                            {budgetExecution.length === 0 && (
+                                <p className="text-gray-500 italic text-center">No hay categorías presupuestales definidas.</p>
                             )}
                         </div>
                     </Card>
