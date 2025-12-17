@@ -1,21 +1,49 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet } from 'lucide-react';
 import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../components/ui';
 import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
-import { useApi, useForm } from '../hooks';
+import { useApi, useForm, useTreasury } from '../hooks';
 import VerificationList from '../components/common/VerificationList';
+import AccountsManager from '../components/treasury/AccountsManager';
+import ContributionsManager from '../components/treasury/ContributionsManager';
+import ReportsView from '../components/treasury/ReportsView';
 
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
-    // Category State
+    // New Treasury System Hook
+    const {
+        accounts,
+        transactions: transactionsV2,
+        contributionPlan,
+        budgetPlan,
+        config,
+        loading: treasuryLoading,
+        totalBalance,
+        accountBalances,
+        totalIncome: treasuryIncome,
+        totalExpenses: treasuryExpenses,
+        budgetExecution,
+        contributionStatus,
+        createAccount,
+        updateAccount,
+        deleteAccount,
+        createTransaction,
+        deleteTransaction,
+        recordContribution,
+        initializeContributionPlan,
+        updateBudgetCategory,
+        reload: reloadTreasury
+    } = useTreasury();
+
+    // Category State (Legacy)
     const [editingCategory, setEditingCategory] = useState(null);
     const [newCategory, setNewCategory] = useState('');
     const [categoryType, setCategoryType] = useState('income');
 
-    // Data Fetching
+    // Data Fetching (Legacy compatibility)
     const fetchDashboardData = React.useCallback(async () => {
         const [txs, cats, pending, attendees, budgetsList] = await Promise.all([
             api.treasury.getTransactions(),
@@ -408,6 +436,24 @@ const TreasurerDashboard = ({ user }) => {
                     >
                         Presupuesto
                     </button>
+                    <button
+                        onClick={() => setActiveTab('accounts')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        Cuentas
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('contributions')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        Aportes
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('reports')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        Reportes
+                    </button>
                 </div>
             </div>
 
@@ -447,6 +493,31 @@ const TreasurerDashboard = ({ user }) => {
                             </div>
                         </div>
                     </Card>
+                </div>
+            )}
+
+            {/* Account Balances - Only show in Summary tab */}
+            {activeTab === 'summary' && accountBalances.length > 0 && (
+                <div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-4">Saldos por Cuenta</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {accountBalances.map(account => {
+                            const Icon = account.tipo === 'banco' ? Building : Wallet;
+                            return (
+                                <Card key={account.id} className="p-4">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`p-2 rounded-lg ${account.tipo === 'banco' ? 'bg-blue-50 text-blue-600' : 'bg-green-50 text-green-600'}`}>
+                                            <Icon size={20} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <p className="text-xs text-gray-500 font-medium">{account.nombre}</p>
+                                            <p className="text-lg font-bold text-gray-900">S/ {account.saldo.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+                                </Card>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
 
@@ -895,6 +966,37 @@ const TreasurerDashboard = ({ user }) => {
                         </div>
                     </Card>
                 </div>
+            )}
+
+            {/* Accounts Tab */}
+            {activeTab === 'accounts' && (
+                <AccountsManager
+                    accounts={accounts}
+                    onCreateAccount={createAccount}
+                    onUpdateAccount={updateAccount}
+                    onDeleteAccount={deleteAccount}
+                />
+            )}
+
+            {/* Contributions Tab */}
+            {activeTab === 'contributions' && (
+                <ContributionsManager
+                    contributionPlan={contributionPlan}
+                    contributionStatus={contributionStatus}
+                    config={config}
+                    accounts={accounts}
+                    onRecordContribution={recordContribution}
+                    onInitializePlan={initializeContributionPlan}
+                />
+            )}
+
+            {/* Reports Tab */}
+            {activeTab === 'reports' && (
+                <ReportsView
+                    transactions={transactionsV2}
+                    accounts={accounts}
+                    budgetExecution={budgetExecution}
+                />
             )}
 
 
