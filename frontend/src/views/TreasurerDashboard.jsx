@@ -140,7 +140,7 @@ const TreasurerDashboard = ({ user }) => {
             tdClassName: 'text-right font-bold',
             render: (t) => (
                 <span className={t.type === 'income' ? 'text-green-600' : 'text-red-600'}>
-                    {t.type === 'income' ? '+' : '-'} S/ {t.amount.toFixed(2)}
+                    {t.type === 'income' ? '+' : '-'} S/ {(t.amount || 0).toFixed(2)}
                 </span>
             )
         },
