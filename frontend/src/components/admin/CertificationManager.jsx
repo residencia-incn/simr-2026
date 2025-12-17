@@ -3,39 +3,69 @@ import { Search, CheckCircle, XCircle, Award, Download, Eye } from 'lucide-react
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CertificateDetailsModal from './CertificateDetailsModal';
-// import { toast } from 'react-hot-toast'; // Removed due to missing dependency
+import { api } from '../../services/api';
 
 const CertificationManager = ({ attendees }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [localAttendees, setLocalAttendees] = useState(attendees);
     const [selectedAttendee, setSelectedAttendee] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDownloadsActive, setIsDownloadsActive] = useState(false);
+
+    // Initial load
+    React.useEffect(() => {
+        const loadConfig = async () => {
+            const config = await api.content.getConfig();
+            setIsDownloadsActive(config.certificatesActivated || false);
+        };
+        loadConfig();
+    }, []);
 
     const handleRowClick = (attendee) => {
         setSelectedAttendee(attendee);
         setIsModalOpen(true);
     };
 
+    const handleActivateDownloads = async () => {
+        if (window.confirm('¿Estás seguro? Al activar las descargas se bloqueará el envío de nuevas justificaciones para todos los usuarios.')) {
+            const config = await api.content.getConfig();
+            config.certificatesActivated = true;
+            await api.content.saveConfig(config);
+            setIsDownloadsActive(true);
+            window.alert('Descarga de certificados ACTIVADA. Se han bloqueado las justificaciones.');
+        }
+    };
+
     const handleValidate = (id, type) => {
         setLocalAttendees(prev => prev.map(att => {
             if (att.id === id) {
                 if (type === 'approval') {
-                    // Logic for full approval
                     return { ...att, certificationApproved: true };
                 } else if (type === 'attendance') {
-                    // Logic for attendance only (could add a specific flag if needed)
                     return { ...att, attendanceCertificateGenerated: true };
+                } else if (type === 'approve_justification') {
+                    return { ...att, justificationStatus: 'approved' };
+                } else if (type === 'reject_justification') {
+                    return { ...att, justificationStatus: 'rejected' };
                 }
             }
             return att;
         }));
 
+        if (type === 'approve_justification' || type === 'reject_justification') {
+            setSelectedAttendee(prev => {
+                if (type === 'approve_justification') return { ...prev, justificationStatus: 'approved' };
+                if (type === 'reject_justification') return { ...prev, justificationStatus: 'rejected' };
+                return prev;
+            });
+            return;
+        }
+
         setIsModalOpen(false);
-        // Simulate generation feedback
         const message = type === 'approval'
             ? 'Certificado de Aprobación generado validado con éxito.'
             : 'Constancia de Asistencia generada con éxito.';
-        window.alert(message); // Or use a toast if available
+        window.alert(message);
     };
 
     const filteredAttendees = localAttendees.filter(attendee =>
@@ -67,6 +97,25 @@ const CertificationManager = ({ attendees }) => {
                             }
                         </div>
                     </div>
+                </div>
+                {/* Global Actions */}
+                <div className="flex flex-col gap-3 justify-center">
+                    <Button
+                        onClick={handleActivateDownloads}
+                        className={`w-full justify-center text-white ${isDownloadsActive ? 'bg-gray-500 hover:bg-gray-600' : 'bg-blue-600 hover:bg-blue-700'}`}
+                        disabled={isDownloadsActive}
+                    >
+                        <Award size={18} className="mr-2" />
+                        {isDownloadsActive ? 'Descargas Activadas' : 'Activar Descargas'}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={() => window.print()}
+                        className="w-full justify-center"
+                    >
+                        <Download size={18} className="mr-2" />
+                        Imprimir / Exportar Lista
+                    </Button>
                 </div>
             </div>
 

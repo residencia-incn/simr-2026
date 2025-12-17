@@ -22,6 +22,7 @@ import PlanningManager from '../components/admin/PlanningManager';
 import VerificationList from '../components/common/VerificationList';
 import DocumentationView from './DocumentationView';
 import AttendanceManager from './AttendanceManager';
+import AcademicDashboard from './AcademicDashboard'; // Import AcademicDashboard
 // import VirtualClassroomManager from '../components/admin/VirtualClassroomManager';
 import { api } from '../services/api';
 
@@ -196,6 +197,7 @@ const AdminDashboard = ({ user }) => {
         ...(isSuperAdmin ? [{ id: 'analytics', label: 'Analítica', icon: TrendingUp }] : []),
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
         ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : []),
+        { id: 'academic-module', label: 'Académico', icon: BookOpen }, // Add Academic Module Icon
         { id: 'attendance', label: 'Asistencia', icon: QrCode },
         // { id: 'virtual-classroom', label: 'Aula Virtual', icon: MonitorPlay }
     ];
@@ -429,6 +431,12 @@ const AdminDashboard = ({ user }) => {
                 {activeTab === 'analytics' && isSuperAdmin && (
                     <div className="animate-fadeIn">
                         <SuperAdminAnalytics />
+                    </div>
+                )}
+
+                {activeTab === 'academic-module' && (
+                    <div className="animate-fadeIn">
+                        <AcademicDashboard role="admin" />
                     </div>
                 )}
 

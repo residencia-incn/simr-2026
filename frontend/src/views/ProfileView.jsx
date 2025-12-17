@@ -15,6 +15,7 @@ const ProfileView = ({ user, onSave }) => {
     const [showScanner, setShowScanner] = useState(false);
     const [attendanceHistory, setAttendanceHistory] = useState([]);
     const [currentPage, setCurrentPage] = useState(1); // Added for pagination
+    const [isDownloadsActive, setIsDownloadsActive] = useState(false);
 
     // Fetch attendance history
     const { execute: loadHistory } = useApi(async () => {
@@ -27,6 +28,11 @@ const ProfileView = ({ user, onSave }) => {
     useEffect(() => {
         if (activeTab === 'attendance') {
             loadHistory();
+            const checkConfig = async () => {
+                const config = await api.content.getConfig();
+                setIsDownloadsActive(config?.certificatesActivated || false);
+            };
+            checkConfig();
         }
     }, [activeTab, user]);
 
@@ -341,6 +347,83 @@ const ProfileView = ({ user, onSave }) => {
                                                     )}
                                                 </p>
                                             </div>
+
+                                            {/* Justification Request Section */}
+                                            {!meetsRequirement && (
+                                                <div className="mt-4 p-4 rounded-lg bg-orange-50 border border-orange-200">
+                                                    <h4 className="font-bold text-orange-900 mb-2 flex items-center gap-2">
+                                                        <FileText size={16} />
+                                                        Justificación de Inasistencia
+                                                    </h4>
+
+                                                    {user?.justificationStatus === 'pending' ? (
+                                                        <div className="text-sm text-orange-800 bg-orange-100 p-3 rounded-lg border border-orange-200">
+                                                            <p className="font-semibold">Solicitud Enviada</p>
+                                                            <p className="opacity-90 mt-1">Tu justificación está siendo revisada por el comité académico.</p>
+                                                        </div>
+                                                    ) : user?.justificationStatus === 'approved' ? (
+                                                        <div className="text-sm text-green-800 bg-green-100 p-3 rounded-lg border border-green-200 flex items-center gap-2">
+                                                            <CheckCircle size={16} />
+                                                            <span>Tu justificación ha sido aceptada. Se considera cumplido el requisito de asistencia.</span>
+                                                        </div>
+                                                    ) : isDownloadsActive ? (
+                                                        <div className="text-sm text-red-800 bg-red-50 p-3 rounded-lg border border-red-200 flex items-center gap-2">
+                                                            <Lock size={16} />
+                                                            <span>El plazo para enviar justificaciones ha finalizado.</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="space-y-3">
+                                                            <p className="text-sm text-orange-800">
+                                                                Si tienes una razón válida para tu baja asistencia, puedes enviar una justificación para su evaluación.
+                                                            </p>
+                                                            {!isEditing ? (
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="bg-white border-orange-300 text-orange-800 hover:bg-orange-100"
+                                                                    onClick={() => setIsEditing(true)}
+                                                                >
+                                                                    Redactar Justificación
+                                                                </Button>
+                                                            ) : (
+                                                                <div className="space-y-3">
+                                                                    <textarea
+                                                                        className="w-full p-3 border border-orange-300 rounded-lg text-sm focus:ring-2 focus:ring-orange-500 outline-none"
+                                                                        rows="3"
+                                                                        placeholder="Describe brevemente el motivo de tu inasistencia..."
+                                                                        value={form.justification || ''}
+                                                                        onChange={(e) => setValues(prev => ({ ...prev, justification: e.target.value }))}
+                                                                    ></textarea>
+                                                                    <div className="flex gap-2 justify-end">
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="ghost"
+                                                                            onClick={() => setIsEditing(false)}
+                                                                            className="text-gray-600"
+                                                                        >
+                                                                            Cancelar
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            className="bg-orange-600 hover:bg-orange-700 text-white"
+                                                                            onClick={() => {
+                                                                                // Simulate submission
+                                                                                console.log("Submitting justification:", form.justification);
+                                                                                window.alert("Justificación enviada correctamente.");
+                                                                                setIsEditing(false);
+                                                                                // Ideally update local user state to show 'pending' status immediately
+                                                                                if (onSave) onSave({ ...user, justificationStatus: 'pending', justification: form.justification });
+                                                                            }}
+                                                                        >
+                                                                            Enviar Solicitud
+                                                                        </Button>
+                                                                    </div>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* Certificate Download Button */}
                                             <div className="mt-6 pt-6 border-t border-gray-200">

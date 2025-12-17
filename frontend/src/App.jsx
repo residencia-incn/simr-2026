@@ -150,9 +150,10 @@ export default function SIMRApp() {
           role === 'admission' ? 'admission-dashboard' :
             role === 'jury' ? 'jury-dashboard' :
               role === 'treasurer' ? 'treasurer-dashboard' :
-                role === 'participant' ? 'participant-dashboard' :
-                  role === 'resident' ? 'resident-dashboard' :
-                    'profile';
+                role === 'committee' ? 'academic-dashboard' : // Reuse academic dashboard
+                  role === 'participant' ? 'participant-dashboard' :
+                    role === 'resident' ? 'resident-dashboard' :
+                      'profile';
   };
 
   const updateViewForRole = (role) => {
@@ -185,7 +186,8 @@ export default function SIMRApp() {
     jury: 'Jurado',
     treasurer: 'Contabilidad',
     participant: 'Aula Virtual',
-    resident: 'Trabajos'
+    resident: 'Trabajos',
+    committee: 'Académico'
   };
 
   const ROLE_ICONS = {
@@ -197,7 +199,8 @@ export default function SIMRApp() {
     jury: Award,
     treasurer: DollarSign,
     participant: Users,
-    resident: User
+    resident: User,
+    committee: BookOpen
   };
 
   return (
@@ -273,7 +276,7 @@ export default function SIMRApp() {
                     {user.roles && user.roles.length > 0 && (
                       <>
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                        {user.roles.filter(role => role !== 'superadmin').map(role => {
+                        {user.roles.filter(role => role !== 'superadmin' && role !== 'accounting').map(role => {
                           const Icon = ROLE_ICONS[role] || Users;
                           const isDashboardActive = currentView === getDashboardView(role);
                           return (
@@ -373,7 +376,9 @@ export default function SIMRApp() {
         {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}
         {currentView === 'secretary-dashboard' && <SecretaryDashboard user={user} navigate={navigate} />}
         {currentView === 'admission-dashboard' && <AdmissionDashboard />}
-        {currentView === 'academic-dashboard' && <AcademicDashboard />}
+        {currentView === 'admission-dashboard' && <AdmissionDashboard />}
+        {currentView === 'academic-dashboard' && <AcademicDashboard role={activeRole} />}
+        {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
         {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
 
         {/* {currentView === 'student-dashboard' && <StudentDashboard />} */}

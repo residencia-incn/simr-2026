@@ -23,7 +23,10 @@ const CertificateDetailsModal = ({ isOpen, onClose, attendee, onValidate }) => {
     let status = 'pending'; // pending, approved, failed
 
     if (attendee.grade !== undefined && attendee.grade !== null && attendee.attendancePercentage !== undefined) {
-        if (attendee.grade >= MIN_GRADE && attendee.attendancePercentage >= MIN_ATTENDANCE) {
+        // Check if attendance is met OR if justification is approved
+        const attendanceMet = attendee.attendancePercentage >= MIN_ATTENDANCE || attendee.justificationStatus === 'approved';
+
+        if (attendee.grade >= MIN_GRADE && attendanceMet) {
             status = 'approved';
         } else {
             status = 'failed';
@@ -97,6 +100,46 @@ const CertificateDetailsModal = ({ isOpen, onClose, attendee, onValidate }) => {
                         <div className={`text-2xl font-bold ${attendee.attendancePercentage >= MIN_ATTENDANCE ? 'text-green-600' : (status === 'pending' ? 'text-gray-400' : 'text-red-600')}`}>
                             {attendee.attendancePercentage !== undefined ? `${attendee.attendancePercentage}%` : '-'}
                         </div>
+
+                        {/* Justification Section */}
+                        {attendee.justification && (
+                            <div className="bg-orange-50 p-4 rounded-xl border border-orange-100">
+                                <h5 className="font-bold text-orange-800 text-sm mb-2 flex items-center gap-2">
+                                    <FileText size={16} /> Justificación de Inasistencia
+                                </h5>
+                                <p className="text-sm text-gray-700 italic mb-3">"{attendee.justification}"</p>
+
+                                {attendee.justificationStatus === 'pending' && (
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                            onClick={() => onValidate(attendee.id, 'approve_justification')}
+                                        >
+                                            <CheckCircle size={14} className="mr-1" /> Aceptar
+                                        </Button>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-red-600 border-red-200 hover:bg-red-50"
+                                            onClick={() => onValidate(attendee.id, 'reject_justification')}
+                                        >
+                                            <X size={14} className="mr-1" /> Rechazar
+                                        </Button>
+                                    </div>
+                                )}
+                                {attendee.justificationStatus === 'approved' && (
+                                    <span className="text-xs font-bold text-green-700 bg-green-100 px-2 py-1 rounded-full">
+                                        Justificación Aceptada
+                                    </span>
+                                )}
+                                {attendee.justificationStatus === 'rejected' && (
+                                    <span className="text-xs font-bold text-red-700 bg-red-100 px-2 py-1 rounded-full">
+                                        Justificación Rechazada
+                                    </span>
+                                )}
+                            </div>
+                        )}
                         <div className="text-xs text-gray-400 mt-1">Mínimo: {MIN_ATTENDANCE}%</div>
                     </div>
                 </div>

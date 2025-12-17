@@ -748,26 +748,39 @@ export const api = {
     // --- 13. Authentication ---
     auth: {
         login: async (email, password) => {
-            await delay(600); // Simulate network latency
+            await delay();
 
-            // Allow "admin" generic login
+            // Mock users
             if (email === 'admin' && password === 'admin') {
                 return {
-                    id: 'admin_master',
+                    id: '1',
                     name: 'Super Usuario',
                     email: 'admin@simr.pe',
-                    role: 'superadmin',
-                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission']
+                    role: 'superadmin', // Primary role
+                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'accounting', 'admission', 'committee'], // Added 'committee'
+                    image: null
                 };
             }
 
-            const allUsers = await api.users.getAll();
-            const user = allUsers.find(u => u.email?.toLowerCase() === email.toLowerCase());
-
-            if (user) {
+            if (email === 'committee' && password === 'committee') {
                 return {
-                    ...user,
-                    roles: user.roles || [user.role]
+                    id: 'committee-1',
+                    name: 'Miembro del Comité',
+                    email: 'comite@simr.pe',
+                    role: 'committee',
+                    roles: ['committee'],
+                    image: null
+                };
+            }
+
+            if (email === 'jury' && password === 'jury') {
+                return {
+                    id: '2',
+                    name: 'Dr. Roberto Paz',
+                    email: 'roberto.paz@example.com',
+                    role: 'jury',
+                    roles: ['jury'],
+                    image: null
                 };
             }
             throw new Error('Credenciales inválidas');

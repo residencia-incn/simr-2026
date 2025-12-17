@@ -23,9 +23,9 @@ import AcademicResults from '../components/academic/AcademicResults';
 import AcademicRubricConfig from '../components/academic/AcademicRubricConfig';
 import AcademicJurers from '../components/academic/AcademicJurers';
 
-const AcademicDashboard = () => {
+const AcademicDashboard = ({ role }) => {
     // State
-    const [activeTab, setActiveTab] = useState('pending'); // pending, approved, observation
+    const [activeTab, setActiveTab] = useState(role === 'committee' ? 'approved' : 'pending'); // pending, approved, observation
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSpecialty, setSelectedSpecialty] = useState('all');
     const [juryCountFilter, setJuryCountFilter] = useState('all');
@@ -297,24 +297,28 @@ const AcademicDashboard = () => {
                     {/* Top Row: Tabs */}
                     <div className="flex justify-between items-center w-full overflow-x-auto">
                         <div className="flex bg-gray-100 p-1 rounded-lg w-auto">
-                            <button
-                                onClick={() => setActiveTab('pending')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Por Revisar
-                            </button>
+                            {role !== 'committee' && (
+                                <button
+                                    onClick={() => setActiveTab('pending')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Por Revisar
+                                </button>
+                            )}
                             <button
                                 onClick={() => setActiveTab('approved')}
                                 className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'approved' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                             >
                                 Aceptados
                             </button>
-                            <button
-                                onClick={() => setActiveTab('observation')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'observation' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Observados
-                            </button>
+                            {role !== 'committee' && (
+                                <button
+                                    onClick={() => setActiveTab('observation')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'observation' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Observados
+                                </button>
+                            )}
 
                             <button
                                 onClick={() => setActiveTab('rubrics')}
@@ -328,12 +332,14 @@ const AcademicDashboard = () => {
                             >
                                 Jurados
                             </button>
-                            <button
-                                onClick={() => setActiveTab('config')}
-                                className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'config' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                            >
-                                Configuración
-                            </button>
+                            {role !== 'committee' && (
+                                <button
+                                    onClick={() => setActiveTab('config')}
+                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'config' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                >
+                                    Configuración
+                                </button>
+                            )}
                         </div>
                     </div>
 
