@@ -11,7 +11,7 @@ import {
 import { Modal, Button, FormField } from '../ui';
 import { api } from '../../services/api';
 
-const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
+const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, previousFeedback = '' }) => {
     const [checklist, setChecklist] = useState({
         format: false,
         wordCount: false,
@@ -131,62 +131,79 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
                 </div>
 
                 {/* Validation Checklist */}
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
-                        <CheckSquare size={18} /> Validación de Requisitos
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={checklist.format}
-                                onChange={() => handleCheck('format')}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm">Formato Correcto (Título, Estructura)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={checklist.wordCount}
-                                onChange={() => handleCheck('wordCount')}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm">Límite de Palabras (300-500)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={checklist.anonymity}
-                                onChange={() => handleCheck('anonymity')}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm">Anonimato (Sin nombres en cuerpo)</span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-white rounded transition-colors">
-                            <input
-                                type="checkbox"
-                                checked={checklist.bibliography}
-                                onChange={() => handleCheck('bibliography')}
-                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-                            />
-                            <span className="text-sm">Bibliografía / Referencias</span>
-                        </label>
+                {!checklist ? null : (
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                        <h4 className="font-bold text-blue-900 mb-3 flex items-center gap-2">
+                            <CheckSquare size={18} /> Validación de Requisitos
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <label className={`flex items-center gap-2 ${readOnly ? '' : 'cursor-pointer hover:bg-white'} p-2 rounded transition-colors`}>
+                                <input
+                                    type="checkbox"
+                                    checked={checklist.format}
+                                    onChange={() => !readOnly && handleCheck('format')}
+                                    disabled={readOnly}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className="text-sm">Formato Correcto (Título, Estructura)</span>
+                            </label>
+                            <label className={`flex items-center gap-2 ${readOnly ? '' : 'cursor-pointer hover:bg-white'} p-2 rounded transition-colors`}>
+                                <input
+                                    type="checkbox"
+                                    checked={checklist.wordCount}
+                                    onChange={() => !readOnly && handleCheck('wordCount')}
+                                    disabled={readOnly}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className="text-sm">Límite de Palabras (300-500)</span>
+                            </label>
+                            <label className={`flex items-center gap-2 ${readOnly ? '' : 'cursor-pointer hover:bg-white'} p-2 rounded transition-colors`}>
+                                <input
+                                    type="checkbox"
+                                    checked={checklist.anonymity}
+                                    onChange={() => !readOnly && handleCheck('anonymity')}
+                                    disabled={readOnly}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className="text-sm">Anonimato (Sin nombres en cuerpo)</span>
+                            </label>
+                            <label className={`flex items-center gap-2 ${readOnly ? '' : 'cursor-pointer hover:bg-white'} p-2 rounded transition-colors`}>
+                                <input
+                                    type="checkbox"
+                                    checked={checklist.bibliography}
+                                    onChange={() => !readOnly && handleCheck('bibliography')}
+                                    disabled={readOnly}
+                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 disabled:opacity-50"
+                                />
+                                <span className="text-sm">Bibliografía / Referencias</span>
+                            </label>
+                        </div>
                     </div>
-                </div>
+                )}
 
                 {/* Feedback Section */}
-                <div>
-                    <FormField
-                        label="Observaciones Generales (Solo si se rechaza)"
-                        type="textarea"
-                        rows={3}
-                        placeholder="Indique las correcciones necesarias..."
-                        value={feedback}
-                        onChange={(e) => setFeedback(e.target.value)}
-                        icon={MessageSquare}
-                    />
-                </div>
+                {readOnly ? (
+                    previousFeedback && (
+                        <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                            <h4 className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
+                                <MessageSquare size={16} /> Observaciones Anteriores
+                            </h4>
+                            <p className="text-sm text-yellow-800">{previousFeedback}</p>
+                        </div>
+                    )
+                ) : (
+                    <div>
+                        <FormField
+                            label="Observaciones Generales (Solo si se rechaza)"
+                            type="textarea"
+                            rows={3}
+                            placeholder="Indique las correcciones necesarias..."
+                            value={feedback}
+                            onChange={(e) => setFeedback(e.target.value)}
+                            icon={MessageSquare}
+                        />
+                    </div>
+                )}
 
                 {/* Actions */}
                 <div className="flex gap-3 pt-4 border-t">
@@ -196,25 +213,29 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate }) => {
                         disabled={isSubmitting}
                         className="flex-1"
                     >
-                        Cancelar
+                        {readOnly ? 'Cerrar' : 'Cancelar'}
                     </Button>
-                    <Button
-                        variant="secondary"
-                        className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200"
-                        onClick={() => handleSubmit('Observado')}
-                        disabled={isSubmitting || !feedback} // Require feedback to reject
-                    >
-                        <AlertTriangle size={18} className="mr-2" />
-                        Solicitar Correcciones
-                    </Button>
-                    <Button
-                        className="flex-1"
-                        onClick={() => handleSubmit('Aceptado')}
-                        disabled={isSubmitting || !allChecked} // Require all checks to approve
-                    >
-                        <CheckCircle size={18} className="mr-2" />
-                        Dar Visto Bueno
-                    </Button>
+                    {!readOnly && (
+                        <>
+                            <Button
+                                variant="secondary"
+                                className="flex-1 bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700 border-red-200"
+                                onClick={() => handleSubmit('Observado')}
+                                disabled={isSubmitting || !feedback}
+                            >
+                                <AlertTriangle size={18} className="mr-2" />
+                                Solicitar Correcciones
+                            </Button>
+                            <Button
+                                className="flex-1"
+                                onClick={() => handleSubmit('Aceptado')}
+                                disabled={isSubmitting || !allChecked}
+                            >
+                                <CheckCircle size={18} className="mr-2" />
+                                Dar Visto Bueno
+                            </Button>
+                        </>
+                    )}
                 </div>
             </div>
         </Modal>

@@ -22,6 +22,7 @@ import AcademicConfig from '../components/academic/AcademicConfig';
 import AcademicResults from '../components/academic/AcademicResults';
 import AcademicRubricConfig from '../components/academic/AcademicRubricConfig';
 import AcademicJurers from '../components/academic/AcademicJurers';
+import AcademicSpeakers from '../components/academic/AcademicSpeakers';
 
 const AcademicDashboard = ({ role }) => {
     // State
@@ -29,6 +30,21 @@ const AcademicDashboard = ({ role }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSpecialty, setSelectedSpecialty] = useState('all');
     const [juryCountFilter, setJuryCountFilter] = useState('all');
+
+    // Reset tab when role changes to ensure permission compliance
+    useEffect(() => {
+        if (role === 'committee') {
+            const committeeTabs = ['approved', 'rubrics', 'juries', 'speakers', 'results'];
+            if (!committeeTabs.includes(activeTab)) {
+                setActiveTab('approved');
+            }
+        } else {
+            const researchTabs = ['pending', 'approved', 'observation', 'config'];
+            if (!researchTabs.includes(activeTab)) {
+                setActiveTab('pending');
+            }
+        }
+    }, [role, activeTab]);
 
     // Fetch Data
     const { data: works, loading, refetch } = useApi(api.works.getAll);
@@ -58,8 +74,11 @@ const AcademicDashboard = ({ role }) => {
 
     const [selectedWork, setSelectedWork] = useState(null);
 
-    const handleOpenReview = (work) => {
+    const [isReadOnlyReview, setIsReadOnlyReview] = useState(false);
+
+    const handleOpenReview = (work, readOnly = false) => {
         setSelectedWork(work);
+        setIsReadOnlyReview(readOnly);
         openReview();
     };
 
@@ -126,20 +145,26 @@ const AcademicDashboard = ({ role }) => {
                 <div className="max-w-xs">
                     <div className="font-bold text-gray-900 line-clamp-2">{item.title}</div>
                     <div className="text-xs text-gray-500 mt-1">{item.specialty} • {item.type}</div>
-                    {item.jury && (Array.isArray(item.jury) ? item.jury.length > 0 : item.jury) && (
-                        <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
-                            <Users size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
-                        </span>
-                    )}
-                    {item.slidesUrl && (
-                        <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[10px] font-medium border border-green-100">
-                            <FileText size={10} /> PPT Enviado
-                        </span>
-                    )}
-                    {item.day && (
-                        <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-100">
-                            <Calendar size={10} /> {item.day} {item.time}
-                        </span>
+
+                    {/* Show extra info only for Committee or when not in Approved tab for Research */}
+                    {(role === 'committee' || activeTab !== 'approved') && (
+                        <>
+                            {item.jury && (Array.isArray(item.jury) ? item.jury.length > 0 : item.jury) && (
+                                <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
+                                    <Users size={10} /> {Array.isArray(item.jury) && item.jury.length > 1 ? `${item.jury.length} Jurados` : 'Jurado Asignado'}
+                                </span>
+                            )}
+                            {item.slidesUrl && (
+                                <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-green-50 text-green-700 text-[10px] font-medium border border-green-100">
+                                    <FileText size={10} /> PPT Enviado
+                                </span>
+                            )}
+                            {item.day && (
+                                <span className="inline-flex items-center gap-1 mt-1 ml-2 px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px] font-medium border border-blue-100">
+                                    <Calendar size={10} /> {item.day} {item.time}
+                                </span>
+                            )}
+                        </>
                     )}
                 </div>
             )
@@ -207,30 +232,48 @@ const AcademicDashboard = ({ role }) => {
 
             {item.status === 'Aceptado' && (
                 <>
-                    <Button
-                        size="xs"
-                        variant="outline"
-                        className="w-full justify-center"
-                        onClick={() => handleOpenJury(item)}
-                    >
-                        <User size={12} className="mr-1" />
-                        {item.jury ? 'Cambiar Jurado' : 'Asignar Jurado'}
-                    </Button>
-                    <Button
-                        size="xs"
-                        variant="outline"
-                        className="w-full justify-center"
-                        onClick={() => handleOpenSchedule(item)}
-                    >
-                        <Calendar size={12} className="mr-1" />
-                        {item.day ? 'Reprogramar' : 'Programar'}
-                    </Button>
+                    {/* View Work (For Research Profile) */}
+                    {role !== 'committee' && (
+                        <Button
+                            size="sm"
+                            variant="secondary"
+                            className="bg-purple-50 text-purple-700 hover:bg-purple-100 border-purple-200"
+                            onClick={() => handleOpenReview(item, true)} // Pass true for read-only
+                        >
+                            <FileText size={14} className="mr-1" /> Ver Trabajo
+                        </Button>
+                    )}
 
-                    {item.slidesUrl && (
+                    {/* Committee Actions */}
+                    {role === 'committee' && (
+                        <>
+                            <Button
+                                size="xs"
+                                variant="outline"
+                                className="w-full justify-center"
+                                onClick={() => handleOpenJury(item)}
+                            >
+                                <User size={12} className="mr-1" />
+                                {item.jury ? 'Cambiar Jurado' : 'Asignar Jurado'}
+                            </Button>
+                            <Button
+                                size="xs"
+                                variant="outline"
+                                className="w-full justify-center"
+                                onClick={() => handleOpenSchedule(item)}
+                            >
+                                <Calendar size={12} className="mr-1" />
+                                {item.day ? 'Reprogramar' : 'Programar'}
+                            </Button>
+                        </>
+                    )}
+
+                    {/* Show Download PPT only for Committee */}
+                    {item.slidesUrl && role === 'committee' && (
                         <Button
                             size="xs"
                             variant="primary" // Highlight this action
-                            className="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white border-blue-600"
+                            className="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white border-blue-600 mt-1"
                             onClick={() => window.open(item.slidesUrl, '_blank')}
                         >
                             <FileText size={12} className="mr-1" />
@@ -320,17 +363,8 @@ const AcademicDashboard = ({ role }) => {
                     ) : (
                         <>
                             {/* Standard Research Stats */}
-                            <Button
-                                variant={activeTab === 'results' ? 'primary' : 'outline'}
-                                onClick={() => setActiveTab('results')}
-                                className={`h-auto flex-col items-center justify-center p-2 rounded-xl border-2 transition-all gap-1 ${activeTab === 'results'
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-md scale-105'
-                                    : 'border-dashed hover:border-blue-500 hover:bg-blue-50 text-gray-600'
-                                    }`}
-                            >
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={activeTab === 'results' ? 'text-yellow-300' : 'text-yellow-500'}><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6" /><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18" /><path d="M4 22h16" /><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22" /><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22" /><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z" /></svg>
-                                <span className={`text-xs font-bold ${activeTab === 'results' ? 'text-white' : 'text-gray-600'}`}>Ver Resultados</span>
-                            </Button>
+                            {/* Standard Research Stats */}
+                            {/* Ver Resultados button removed - moved to Committee profile */}
                             <Card className="px-4 py-2 flex items-center gap-3 bg-white border-blue-100">
                                 <Clock size={20} className="text-orange-500" />
                                 <div>
@@ -382,10 +416,22 @@ const AcademicDashboard = ({ role }) => {
                             {role === 'committee' && (
                                 <>
                                     <button
+                                        onClick={() => setActiveTab('speakers')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'speakers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Ponentes
+                                    </button>
+                                    <button
                                         onClick={() => setActiveTab('rubrics')}
                                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'rubrics' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
                                         Rúbricas
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('results')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'results' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Resultados
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('juries')}
@@ -465,6 +511,8 @@ const AcademicDashboard = ({ role }) => {
                     <AcademicRubricConfig />
                 ) : activeTab === 'juries' ? (
                     <AcademicJurers works={works} onUpdate={refetch} />
+                ) : activeTab === 'speakers' ? (
+                    <AcademicSpeakers />
                 ) : activeTab === 'results' ? (
                     <AcademicResults works={works} />
                 ) : (
@@ -475,8 +523,16 @@ const AcademicDashboard = ({ role }) => {
                         sortConfig={sortConfig}
                         actions={renderActions}
                         onRowClick={(item) => {
-                            if (activeTab === 'pending' || activeTab === 'observation') handleOpenReview(item);
-                            else if (activeTab === 'approved') handleOpenDetails(item);
+                            if (activeTab === 'pending' || activeTab === 'observation') {
+                                handleOpenReview(item);
+                            } else if (activeTab === 'approved') {
+                                if (role === 'committee') {
+                                    handleOpenDetails(item);
+                                } else {
+                                    // For Research profile, clicking approved row opens read-only review
+                                    handleOpenReview(item, true);
+                                }
+                            }
                         }}
                         emptyMessage={
                             <EmptyState
@@ -496,6 +552,8 @@ const AcademicDashboard = ({ role }) => {
                 onClose={closeReview}
                 work={selectedWork}
                 onUpdate={refetch}
+                readOnly={isReadOnlyReview}
+                previousFeedback={selectedWork?.feedback}
             />
             <AssignJuryModal
                 isOpen={isJuryOpen}
