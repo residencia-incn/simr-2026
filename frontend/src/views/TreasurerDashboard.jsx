@@ -419,66 +419,67 @@ const TreasurerDashboard = ({ user }) => {
                 <div className="flex p-1 bg-gray-100 rounded-lg overflow-x-auto max-w-full">
                     <button
                         onClick={() => setActiveTab('summary')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Resumen"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <PieChart size={18} />
-                        Resumen
+                        <PieChart size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('validation')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 whitespace-nowrap ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Validación"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all relative ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <CheckSquare size={18} />
-                        Validación {pendingRegistrations.length > 0 && <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRegistrations.length}</span>}
+                        <CheckSquare size={20} />
+                        {pendingRegistrations.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRegistrations.length}</span>}
                     </button>
                     <button
                         onClick={() => setActiveTab('income')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Ingresos"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <TrendingUp size={18} />
-                        Ingresos
+                        <TrendingUp size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('expense')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Egresos"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <TrendingDown size={18} />
-                        Egresos
+                        <TrendingDown size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('categories')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Categorías"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <Settings size={18} />
-                        Categorías
+                        <Settings size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('budget')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Presupuesto"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <DollarSign size={18} />
-                        Presupuesto
+                        <DollarSign size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('accounts')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Cuentas"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <Wallet size={18} />
-                        Cuentas
+                        <Wallet size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('contributions')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Aportes"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <Users size={18} />
-                        Aportes
+                        <Users size={20} />
                     </button>
                     <button
                         onClick={() => setActiveTab('reports')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all whitespace-nowrap flex items-center gap-2 ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        title="Reportes"
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <FileText size={18} />
-                        Reportes
+                        <FileText size={20} />
                     </button>
                 </div>
             </div>
