@@ -1,0 +1,231 @@
+import React, { useState, useEffect } from 'react';
+import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers } from 'lucide-react';
+import { Button, Card, FormField, LoadingSpinner } from '../ui';
+
+const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories, onAddCategory, onDeleteCategory }) => {
+    const [activeSection, setActiveSection] = useState('contributions');
+    const [monthlyAmount, setMonthlyAmount] = useState(config?.contribution?.monthlyAmount || 50);
+    const [startMonth, setStartMonth] = useState(config?.contribution?.startMonth || '2026-01');
+    const [endMonth, setEndMonth] = useState(config?.contribution?.endMonth || '2026-06');
+    const [saving, setSaving] = useState(false);
+
+    useEffect(() => {
+        if (config) {
+            setMonthlyAmount(config.contribution.monthlyAmount);
+            setStartMonth(config.contribution.startMonth);
+            setEndMonth(config.contribution.endMonth);
+        }
+    }, [config]);
+
+    const generateMonthsArray = (start, end) => {
+        const months = [];
+        const startDate = new Date(start + '-02'); // Use 02 to avoid timezone issues
+        const endDate = new Date(end + '-02');
+
+        let current = new Date(startDate);
+        const monthNames = [
+            'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+            'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+        ];
+
+        while (current <= endDate) {
+            const year = current.getFullYear();
+            const month = current.getMonth();
+            const id = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+            // Last day of month
+            const lastDay = new Date(year, month + 1, 0).getDate();
+            const deadline = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+
+            months.push({
+                id,
+                label: monthNames[month],
+                deadline
+            });
+
+            current.setMonth(current.getMonth() + 1);
+        }
+        return months;
+    };
+
+    const handleSaveConfig = async (e) => {
+        e.preventDefault();
+        setSaving(true);
+        try {
+            const months = generateMonthsArray(startMonth, endMonth);
+            await onUpdateConfig({
+                contribution: {
+                    monthlyAmount: parseFloat(monthlyAmount),
+                    startMonth,
+                    endMonth,
+                    months
+                }
+            });
+            alert('Configuración guardada correctamente. Recuerda reinicializar el plan si cambiaste el rango de meses o el monto.');
+        } catch (error) {
+            alert('Error al guardar configuración: ' + error.message);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    return (
+        <div className="space-y-6">
+            <div className="flex gap-4 border-b border-gray-200">
+                <button
+                    onClick={() => setActiveSection('contributions')}
+                    className={`pb-2 px-4 transition-all ${activeSection === 'contributions' ? 'border-b-2 border-blue-600 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Aportes
+                </button>
+                <button
+                    onClick={() => setActiveSection('categories')}
+                    className={`pb-2 px-4 transition-all ${activeSection === 'categories' ? 'border-b-2 border-blue-600 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Categorías
+                </button>
+            </div>
+
+            {activeSection === 'contributions' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                            <Settings className="text-blue-600" size={20} />
+                            Variables de Aportes
+                        </h3>
+                        <form onSubmit={handleSaveConfig} className="space-y-4">
+                            <FormField
+                                label="Cuota Mensual (S/)"
+                                type="number"
+                                value={monthlyAmount}
+                                onChange={(e) => setMonthlyAmount(e.target.value)}
+                                placeholder="0.00"
+                                step="0.01"
+                                required
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                    label="Mes Inicio"
+                                    type="month"
+                                    value={startMonth}
+                                    onChange={(e) => setStartMonth(e.target.value)}
+                                    required
+                                />
+                                <FormField
+                                    label="Mes Fin"
+                                    type="month"
+                                    value={endMonth}
+                                    onChange={(e) => setEndMonth(e.target.value)}
+                                    required
+                                />
+                            </div>
+                            <div className="pt-4">
+                                <Button
+                                    type="submit"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    disabled={saving}
+                                >
+                                    {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Cambios</>}
+                                </Button>
+                            </div>
+                        </form>
+                    </Card>
+
+                    <Card className="p-6 bg-amber-50 border-amber-200">
+                        <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
+                            <RefreshCw className="text-amber-600" size={20} />
+                            Acciones Críticas
+                        </h3>
+                        <p className="text-sm text-amber-800 mb-6">
+                            Al cambiar el rango de meses o el monto de aportes, debes reinicializar el plan para que los cambios se apliquen a todos los miembros.
+                            <strong> ¡Cuidado!</strong> Al reinicializar, se perderán los registros de pagos marcados en el plan actual (aunque las transacciones en el historial se mantienen).
+                        </p>
+                        <Button
+                            variant="danger"
+                            className="w-full"
+                            onClick={() => {
+                                if (window.confirm('¿Estás seguro de reinicializar el plan de aportes? Esto reseteará el estado de pagos en la matriz.')) {
+                                    onInitializePlan();
+                                }
+                            }}
+                        >
+                            <RefreshCw size={18} className="mr-2" />
+                            Reinicializar Plan de Aportes
+                        </Button>
+                    </Card>
+                </div>
+            )}
+
+            {activeSection === 'categories' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* Categorías de Ingresos */}
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold text-green-700 mb-4 flex items-center gap-2">
+                            <Layers size={20} /> Ingresos
+                        </h3>
+                        <CategoryList
+                            type="income"
+                            items={categories.income}
+                            onDelete={(cat) => onDeleteCategory('income', cat)}
+                            onAdd={(cat) => onAddCategory('income', cat)}
+                        />
+                    </Card>
+
+                    {/* Categorías de Egresos */}
+                    <Card className="p-6">
+                        <h3 className="text-lg font-bold text-red-700 mb-4 flex items-center gap-2">
+                            <Layers size={20} /> Egresos
+                        </h3>
+                        <CategoryList
+                            type="expense"
+                            items={categories.expense}
+                            onDelete={(cat) => onDeleteCategory('expense', cat)}
+                            onAdd={(cat) => onAddCategory('expense', cat)}
+                        />
+                    </Card>
+                </div>
+            )}
+        </div>
+    );
+};
+
+const CategoryList = ({ type, items, onDelete, onAdd }) => {
+    const [newCat, setNewCat] = useState('');
+
+    const handleSubmit = (e) => {
+        e.preventDefault();
+        if (!newCat.trim()) return;
+        onAdd(newCat.trim());
+        setNewCat('');
+    };
+
+    return (
+        <div className="space-y-4">
+            <form onSubmit={handleSubmit} className="flex gap-2">
+                <input
+                    type="text"
+                    value={newCat}
+                    onChange={(e) => setNewCat(e.target.value)}
+                    placeholder="Nueva categoría..."
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                />
+                <Button type="submit" size="sm" className="bg-gray-800 text-white">Añadir</Button>
+            </form>
+            <div className="grid grid-cols-1 gap-2">
+                {items.map((cat) => (
+                    <div key={cat} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg group">
+                        <span className="text-sm font-medium text-gray-700">{cat}</span>
+                        <button
+                            onClick={() => onDelete(cat)}
+                            className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                            ×
+                        </button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export default TreasurySettings;

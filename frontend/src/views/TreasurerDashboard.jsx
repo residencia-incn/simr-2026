@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet, ShieldCheck, Clock } from 'lucide-react';
 import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../components/ui';
 import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
@@ -8,6 +8,7 @@ import VerificationList from '../components/common/VerificationList';
 import AccountsManager from '../components/treasury/AccountsManager';
 import ContributionsManager from '../components/treasury/ContributionsManager';
 import ReportsView from '../components/treasury/ReportsView';
+import TreasurySettings from '../components/treasury/TreasurySettings';
 
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
@@ -16,10 +17,11 @@ const TreasurerDashboard = ({ user }) => {
     // New Treasury System Hook
     const {
         accounts,
-        transactions: transactionsV2,
+        transactions,
         contributionPlan,
         budgetPlan,
         config,
+        categories,
         loading: treasuryLoading,
         totalBalance,
         accountBalances,
@@ -35,6 +37,7 @@ const TreasurerDashboard = ({ user }) => {
         recordContribution,
         initializeContributionPlan,
         updateBudgetCategory,
+        updateConfig,
         reload: reloadTreasury
     } = useTreasury();
 
@@ -64,8 +67,8 @@ const TreasurerDashboard = ({ user }) => {
     const { data, loading, execute: loadData } = useApi(fetchDashboardData);
 
     const {
-        transactions = [],
-        categories = { income: [], expense: [] },
+        transactions: dashboardTransactions = [],
+        categories: dashboardCategories = { income: [], expense: [] },
         pendingRegistrations = [],
         confirmedAttendees = [],
         budgets = []
@@ -459,16 +462,6 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('categories')}
-                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'categories' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                        <Settings size={20} />
-                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
-                            Categorías
-                        </span>
-                    </button>
-                    <button
                         onClick={() => setActiveTab('budget')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
@@ -506,6 +499,16 @@ const TreasurerDashboard = ({ user }) => {
                         <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
                             Reportes
+                        </span>
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('settings')}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'settings' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        <Settings size={20} />
+                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
+                            Configuración
                         </span>
                     </button>
                 </div>
@@ -853,124 +856,15 @@ const TreasurerDashboard = ({ user }) => {
                 </div>
             )}
 
-            {activeTab === 'categories' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                    {/* Category Form */}
-                    <Card>
-                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                            <Settings size={20} className="text-purple-600" />
-                            Gestión de Categorías
-                        </h3>
-                        <form onSubmit={handleAddCategory} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-                                <div className="flex gap-4">
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="type"
-                                            checked={categoryType === 'income'}
-                                            onChange={() => setCategoryType('income')}
-                                            className="text-purple-600 focus:ring-purple-500"
-                                        />
-                                        <span>Ingresos</span>
-                                    </label>
-                                    <label className="flex items-center gap-2 cursor-pointer">
-                                        <input
-                                            type="radio"
-                                            name="type"
-                                            checked={categoryType === 'expense'}
-                                            onChange={() => setCategoryType('expense')}
-                                            className="text-purple-600 focus:ring-purple-500"
-                                        />
-                                        <span>Egresos</span>
-                                    </label>
-                                </div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    {editingCategory ? 'Editar Categoría' : 'Nueva Categoría'}
-                                </label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        required
-                                        value={newCategory}
-                                        onChange={e => setNewCategory(e.target.value)}
-                                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
-                                        placeholder="Nombre de la categoría"
-                                    />
-                                    {editingCategory && (
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                setEditingCategory(null);
-                                                setNewCategory('');
-                                            }}
-                                            className="p-2 text-gray-500 hover:bg-gray-100 rounded-lg"
-                                        >
-                                            <X size={20} />
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-                            <Button type="submit" className="w-full bg-purple-600 hover:bg-purple-700 text-white">
-                                {editingCategory ? 'Actualizar Categoría' : 'Agregar Categoría'}
-                            </Button>
-                        </form>
-                    </Card>
-
-                    {/* Categories List */}
-                    <div className="space-y-6">
-                        <div>
-                            <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                                <TrendingUp size={16} className="text-green-600" />
-                                Categorías de Ingresos
-                            </h4>
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                <ul className="divide-y divide-gray-100">
-                                    {categories.income.map((cat) => (
-                                        <li key={cat} className="p-3 flex justify-between items-center hover:bg-gray-50">
-                                            <span className="text-gray-700">{cat}</span>
-                                            <div className="flex gap-1">
-                                                <button
-                                                    onClick={() => handleDeleteCategory('income', cat)}
-                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
-                                <TrendingDown size={16} className="text-red-600" />
-                                Categorías de Egresos
-                            </h4>
-                            <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                                <ul className="divide-y divide-gray-100">
-                                    {categories.expense.map((cat) => (
-                                        <li key={cat} className="p-3 flex justify-between items-center hover:bg-gray-50">
-                                            <span className="text-gray-700">{cat}</span>
-                                            <div className="flex gap-1">
-                                                <button
-                                                    onClick={() => handleDeleteCategory('expense', cat)}
-                                                    className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                >
-                                                    <Trash2 size={16} />
-                                                </button>
-                                            </div>
-                                        </li>
-                                    ))}
-                                </ul>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {activeTab === 'settings' && (
+                <TreasurySettings
+                    config={config}
+                    onUpdateConfig={updateConfig}
+                    onInitializePlan={initializeContributionPlan}
+                    categories={categories}
+                    onAddCategory={api.treasury.addCategory}
+                    onDeleteCategory={api.treasury.deleteCategory}
+                />
             )}
 
             {activeTab === 'budget' && (
@@ -1040,35 +934,41 @@ const TreasurerDashboard = ({ user }) => {
             )}
 
             {/* Accounts Tab */}
-            {activeTab === 'accounts' && (
-                <AccountsManager
-                    accounts={accounts}
-                    onCreateAccount={createAccount}
-                    onUpdateAccount={updateAccount}
-                    onDeleteAccount={deleteAccount}
-                />
-            )}
+            {
+                activeTab === 'accounts' && (
+                    <AccountsManager
+                        accounts={accounts}
+                        onCreateAccount={createAccount}
+                        onUpdateAccount={updateAccount}
+                        onDeleteAccount={deleteAccount}
+                    />
+                )
+            }
 
             {/* Contributions Tab */}
-            {activeTab === 'contributions' && (
-                <ContributionsManager
-                    contributionPlan={contributionPlan}
-                    contributionStatus={contributionStatus}
-                    config={config}
-                    accounts={accounts}
-                    onRecordContribution={recordContribution}
-                    onInitializePlan={initializeContributionPlan}
-                />
-            )}
+            {
+                activeTab === 'contributions' && (
+                    <ContributionsManager
+                        contributionPlan={contributionPlan}
+                        contributionStatus={contributionStatus}
+                        config={config}
+                        accounts={accounts}
+                        onRecordContribution={recordContribution}
+                        onInitializePlan={initializeContributionPlan}
+                    />
+                )
+            }
 
             {/* Reports Tab */}
-            {activeTab === 'reports' && (
-                <ReportsView
-                    transactions={transactionsV2}
-                    accounts={accounts}
-                    budgetExecution={budgetExecution}
-                />
-            )}
+            {
+                activeTab === 'reports' && (
+                    <ReportsView
+                        transactions={transactionsV2}
+                        accounts={accounts}
+                        budgetExecution={budgetExecution}
+                    />
+                )
+            }
 
 
             <ConfirmDialog
@@ -1079,7 +979,7 @@ const TreasurerDashboard = ({ user }) => {
                 onConfirm={confirmConfig.onConfirm}
                 type={confirmConfig.type}
             />
-        </div>
+        </div >
     );
 };
 

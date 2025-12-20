@@ -11,6 +11,7 @@ export const useTreasury = () => {
     const [contributionPlan, setContributionPlan] = useState([]);
     const [budgetPlan, setBudgetPlan] = useState([]);
     const [config, setConfig] = useState(null);
+    const [categories, setCategories] = useState({ income: [], expense: [] });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -21,12 +22,13 @@ export const useTreasury = () => {
         setLoading(true);
         setError(null);
         try {
-            const [accs, txs, contrib, budget, cfg] = await Promise.all([
+            const [accs, txs, contrib, budget, cfg, cats] = await Promise.all([
                 api.treasury.getAccounts(),
                 api.treasury.getTransactionsV2(),
                 api.treasury.getContributionPlan(),
                 api.treasury.getBudgetPlan(),
-                api.treasury.getConfig()
+                api.treasury.getConfig(),
+                api.treasury.getCategories()
             ]);
 
             setAccounts(accs);
@@ -34,6 +36,7 @@ export const useTreasury = () => {
             setContributionPlan(contrib);
             setBudgetPlan(budget);
             setConfig(cfg);
+            setCategories(cats);
         } catch (err) {
             console.error('Error loading treasury data:', err);
             setError(err.message);
@@ -319,6 +322,21 @@ export const useTreasury = () => {
         }
     }, []);
 
+    /**
+     * Actualizar configuración de tesorería
+     */
+    const updateConfig = useCallback(async (newConfig) => {
+        try {
+            await api.treasury.saveConfig(newConfig);
+            const updated = await api.treasury.getConfig();
+            setConfig(updated);
+            return updated;
+        } catch (err) {
+            console.error('Error updating treasury config:', err);
+            throw err;
+        }
+    }, []);
+
     return {
         // Data
         accounts,
@@ -326,6 +344,7 @@ export const useTreasury = () => {
         contributionPlan,
         budgetPlan,
         config,
+        categories,
         loading,
         error,
 
@@ -352,6 +371,7 @@ export const useTreasury = () => {
 
         // Budget Operations
         updateBudgetCategory,
+        updateConfig,
 
         // Reload
         reload: loadTreasuryData

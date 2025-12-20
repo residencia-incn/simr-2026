@@ -759,6 +759,12 @@ export const api = {
             return storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
         },
 
+        saveConfig: async (config) => {
+            await delay();
+            storage.set(STORAGE_KEYS.TREASURY_CONFIG, config);
+            return config;
+        },
+
         // Accounts Management
         getAccounts: async () => {
             await delay();
@@ -901,7 +907,7 @@ export const api = {
 
             storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, plan);
 
-            const totalExpected = allMembers.length * config.contribution.months.length * config.contribution.monthlyAmount;
+            const totalExpected = allMembers.length * (config.contribution.months?.length || 0) * config.contribution.monthlyAmount;
             const budgetPlan = storage.get(STORAGE_KEYS.TREASURY_BUDGET_PLAN, INITIAL_BUDGET_PLAN);
             const updatedBudget = budgetPlan.map(item =>
                 item.categoria === 'Aportes' ? { ...item, presupuestado: totalExpected } : item
