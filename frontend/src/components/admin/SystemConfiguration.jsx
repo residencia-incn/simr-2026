@@ -61,6 +61,14 @@ const SystemConfiguration = () => {
                     { day: 1, open: "08:00", close: "18:00" },
                     { day: 2, open: "09:00", close: "18:00" },
                     { day: 3, open: "09:00", close: "13:00" }
+                ],
+                publicSections: data.publicSections || [
+                    { id: 'bases', label: 'Bases', isVisible: true, isDevelopment: false },
+                    { id: 'roadmap', label: 'Roadmap', isVisible: true, isDevelopment: false },
+                    { id: 'program', label: 'Programa', isVisible: true, isDevelopment: false },
+                    { id: 'committee', label: 'Comité', isVisible: true, isDevelopment: false },
+                    { id: 'gallery', label: 'Galería', isVisible: true, isDevelopment: false },
+                    { id: 'posters', label: 'E-Posters', isVisible: true, isDevelopment: false }
                 ]
             });
             setLoading(false);
@@ -381,6 +389,65 @@ const SystemConfiguration = () => {
                                         <div className={`w-10 h-10 rounded-full ${theme.color} shadow-sm shrink-0`}></div>
                                         <span className={`font-medium ${config.theme === theme.id ? 'text-blue-900' : 'text-gray-600'}`}>{theme.name}</span>
                                         {config.theme === theme.id && <div className="ml-auto text-blue-600"><Save size={16} /></div>}
+                                    </div>
+                                ))}
+                            </div>
+                        </Card>
+
+                        {/* Public Sections Management */}
+                        <Card className="p-6 md:col-span-2">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
+                                <Layout size={20} className="text-gray-500" />
+                                Gestión de Secciones Públicas
+                            </h4>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {config.publicSections?.map((section, idx) => (
+                                    <div key={section.id} className="p-4 bg-gray-50 rounded-xl border border-gray-100 hover:border-blue-200 transition-all group">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <span className="font-bold text-gray-800">{section.label}</span>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`visible-${section.id}`}
+                                                    checked={section.isVisible}
+                                                    onChange={(e) => {
+                                                        const newSections = [...config.publicSections];
+                                                        newSections[idx] = { ...newSections[idx], isVisible: e.target.checked };
+                                                        setConfig({ ...config, publicSections: newSections });
+                                                    }}
+                                                    className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                                                />
+                                                <label htmlFor={`visible-${section.id}`} className="text-xs font-bold text-gray-500 uppercase cursor-pointer">Menú</label>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 pt-3 border-t border-gray-200/60">
+                                            <input
+                                                type="checkbox"
+                                                id={`dev-${section.id}`}
+                                                checked={section.isDevelopment}
+                                                onChange={(e) => {
+                                                    const newSections = [...config.publicSections];
+                                                    newSections[idx] = { ...newSections[idx], isDevelopment: e.target.checked };
+                                                    setConfig({ ...config, publicSections: newSections });
+                                                }}
+                                                className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                            />
+                                            <label htmlFor={`dev-${section.id}`} className="text-xs font-medium text-gray-600 cursor-pointer">
+                                                Marcar "En Desarrollo"
+                                            </label>
+                                        </div>
+
+                                        {!section.isVisible && (
+                                            <div className="mt-2 text-[10px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full inline-block font-bold">
+                                                OCULTO DEL PÚBLICO
+                                            </div>
+                                        )}
+                                        {section.isVisible && section.isDevelopment && (
+                                            <div className="mt-2 text-[10px] bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full inline-block font-bold">
+                                                MODO DESARROLLO
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>

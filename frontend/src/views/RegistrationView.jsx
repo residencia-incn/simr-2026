@@ -331,7 +331,7 @@ const RegistrationView = () => {
 
 
     return (
-        <div className="animate-fadeIn max-w-6xl mx-auto px-4 py-8 flex items-center justify-center min-h-[600px]">
+        <div className="animate-fadeIn max-w-6xl mx-auto px-4 pt-2 pb-8 flex justify-center min-h-[600px]">
 
             <div className="relative w-full max-w-5xl">
 
@@ -518,16 +518,17 @@ const RegistrationView = () => {
 
                         {/* Step 2 Content */}
                         {currentStep === 2 && (
-                            <div className="animate-fadeIn space-y-8">
-                                <div>
-                                    <div className="flex items-center gap-3 mb-6 pb-2 border-b border-gray-100">
-                                        <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                            <div className="animate-fadeIn grid md:grid-cols-2 gap-12">
+                                {/* Left Column: Tickets / Modalidad */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
+                                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
                                             <Award size={24} />
                                         </div>
-                                        <h3 className="text-xl font-bold text-gray-800">Selecciona tu Ticket</h3>
+                                        <h3 className="text-xl font-bold text-gray-800">Selecciona tu Modalidad</h3>
                                     </div>
 
-                                    <div className="grid md:grid-cols-3 gap-6">
+                                    <div className="grid grid-cols-1 gap-4">
                                         {ticketOptions.map((ticket) => {
                                             const Icon = ticket.icon;
                                             const isSelected = selectedTicket === ticket.id;
@@ -536,36 +537,44 @@ const RegistrationView = () => {
                                                     key={ticket.id}
                                                     onClick={() => setSelectedTicket(ticket.id)}
                                                     className={`
-                                                        relative cursor-pointer rounded-2xl border-2 p-6 transition-all duration-300
+                                                        relative cursor-pointer rounded-2xl border-2 p-5 flex items-center gap-4 transition-all duration-300
                                                         ${isSelected
-                                                            ? `border-${ticket.color}-600 bg-${ticket.color}-50 shadow-lg transform -translate-y-1`
-                                                            : 'border-gray-100 hover:border-blue-300 hover:shadow-md bg-white'
+                                                            ? `border-${ticket.color}-600 bg-${ticket.color}-50 shadow-md transform -translate-y-0.5`
+                                                            : 'border-gray-100 hover:border-blue-300 hover:shadow-sm bg-white'
                                                         }
                                                     `}
                                                 >
-                                                    {isSelected && <div className={`absolute top-3 right-3 bg-${ticket.color}-600 text-white rounded-full p-1`}><CheckCircle size={18} /></div>}
-                                                    <div className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${isSelected ? `bg-${ticket.color}-600` : 'bg-gray-100'}`}>
-                                                        <Icon size={28} className={isSelected ? 'text-white' : 'text-gray-500'} />
+                                                    <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center ${isSelected ? `bg-${ticket.color}-600` : 'bg-gray-100'}`}>
+                                                        <Icon size={24} className={isSelected ? 'text-white' : 'text-gray-500'} />
                                                     </div>
-                                                    <h4 className="text-center font-bold text-gray-900 mb-1">{ticket.title}</h4>
-                                                    <p className={`text-center font-bold ${isSelected ? `text-${ticket.color}-600` : 'text-gray-500'}`}>{ticket.subtitle}</p>
+                                                    <div className="flex-1">
+                                                        <h4 className="font-bold text-gray-900">{ticket.title}</h4>
+                                                        <p className={`text-sm font-semibold ${isSelected ? `text-${ticket.color}-600` : 'text-gray-500'}`}>{ticket.subtitle}</p>
+                                                    </div>
+                                                    {isSelected && <CheckCircle size={20} className={`text-${ticket.color}-600`} />}
                                                 </div>
                                             );
                                         })}
                                     </div>
                                 </div>
 
-                                <div>
-                                    <h3 className="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
-                                        <span className="p-1 bg-orange-100 rounded text-orange-600"><Tag size={18} /></span>
-                                        Talleres Adicionales (Opcional)
-                                    </h3>
+                                {/* Right Column: Workshops */}
+                                <div className="space-y-6">
+                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
+                                        <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
+                                            <Tag size={24} />
+                                        </div>
+                                        <h3 className="text-xl font-bold text-gray-800">Talleres (Opcional)</h3>
+                                    </div>
+
                                     <div className="space-y-3">
                                         {availableWorkshops.map((workshop) => (
-                                            <label key={workshop.id} className="flex items-center gap-4 p-5 border border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all bg-white shadow-sm">
+                                            <label key={workshop.id} className="flex items-center gap-4 p-4 border border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all bg-white shadow-sm">
                                                 <input type="checkbox" checked={selectedWorkshops.includes(workshop.id)} onChange={() => handleWorkshopToggle(workshop.id)} className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500" />
-                                                <span className="flex-1 font-medium text-gray-700">{workshop.name}</span>
-                                                <span className="font-bold text-orange-600 text-sm whitespace-nowrap">+ S/ {workshop.price}</span>
+                                                <div className="flex-1">
+                                                    <p className="font-medium text-gray-700 leading-tight">{workshop.name}</p>
+                                                    <p className="text-xs text-orange-600 font-bold mt-1">+ S/ {workshop.price}</p>
+                                                </div>
                                             </label>
                                         ))}
                                     </div>

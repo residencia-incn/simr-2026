@@ -25,6 +25,7 @@ import TasksQuickAccess from './components/common/TasksQuickAccess';
 import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
 import SmartRegistrationForm from './views/RegistrationView';
+import DevelopmentView from './components/common/DevelopmentView';
 // import StudentDashboard from './views/StudentDashboard';
 
 export default function SIMRApp() {
@@ -96,7 +97,33 @@ export default function SIMRApp() {
       }
     };
     loadConfig();
+
+    const handleConfigUpdate = () => loadConfig();
+    window.addEventListener('config-updated', handleConfigUpdate);
+    return () => window.removeEventListener('config-updated', handleConfigUpdate);
   }, []);
+
+  const isSectionVisible = (id) => {
+    const section = config?.publicSections?.find(s => s.id === id);
+    return section ? section.isVisible : true;
+  };
+
+  const isSectionDevelopment = (id) => {
+    const section = config?.publicSections?.find(s => s.id === id);
+    return section ? section.isDevelopment : false;
+  };
+
+  const navItemsList = [
+    { id: 'home', label: 'Inicio', icon: Home, show: true },
+    { id: 'bases', label: 'Bases', icon: FileText, show: isSectionVisible('bases') },
+    { id: 'roadmap', label: 'Roadmap', icon: TrendingUp, show: isSectionVisible('roadmap') },
+    { id: 'program', label: 'Programa', icon: Calendar, show: isSectionVisible('program') },
+    { id: 'committee', label: 'Comité', icon: Users, show: isSectionVisible('committee') },
+    { id: 'gallery', label: 'Galería', icon: ImageIcon, show: isSectionVisible('gallery') },
+    { id: 'posters', label: 'E-Posters', icon: Grid, show: isSectionVisible('posters'), isBadge: true }
+  ];
+
+  const visibleNavItems = navItemsList.filter(item => item.show !== false);
 
   // Redirect logged-in users away from registration view
   useEffect(() => {
@@ -230,15 +257,17 @@ export default function SIMRApp() {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
-            <button onClick={() => navigate('home')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Home size={16} /> Inicio</button>
-
-            <button onClick={() => navigate('bases')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><FileText size={16} /> Bases</button>
-            <button onClick={() => navigate('roadmap')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><TrendingUp size={16} /> Roadmap</button>
-
-            <button onClick={() => navigate('program')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Calendar size={16} /> Programa</button>
-            <button onClick={() => navigate('committee')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><Users size={16} /> Comité</button>
-            <button onClick={() => navigate('gallery')} className="hover:text-blue-700 flex items-center gap-1 transition-colors"><ImageIcon size={16} /> Galería</button>
-            <button onClick={() => navigate('posters')} className="hover:text-blue-700 flex items-center gap-1 bg-blue-50 text-blue-800 px-3 py-1 rounded-full transition-all hover:shadow-sm hover:-translate-y-0.5"><Grid size={16} /> E-Posters</button>
+            {visibleNavItems.map(item => (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={`hover:text-blue-700 flex items-center gap-1 transition-all
+                  ${item.isBadge ? 'bg-blue-50 text-blue-800 px-3 py-1 rounded-full hover:shadow-sm hover:-translate-y-0.5' : 'transition-colors'}
+                `}
+              >
+                <item.icon size={16} /> {item.label}
+              </button>
+            ))}
             {!user && (
               <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
             )}
@@ -374,14 +403,14 @@ export default function SIMRApp() {
       </nav>
 
       {/* Main Content Area */}
-      <main className={`max-w-7xl mx-auto px-4 md:px-8 ${['home', 'login'].includes(currentView) ? 'py-0' : 'py-8'}`}>
+      <main className={`max-w-7xl mx-auto px-4 md:px-8 ${['home', 'login', 'registration'].includes(currentView) ? 'py-0' : 'py-8'}`}>
         {currentView === 'home' && <HomeView navigate={navigate} user={user} />}
-        {currentView === 'roadmap' && <RoadmapView />}
-        {currentView === 'bases' && <BasesView activeTab={basesTab} />}
-        {currentView === 'program' && <ProgramView />}
-        {currentView === 'committee' && <CommitteeView />}
-        {currentView === 'gallery' && <GalleryView />}
-        {currentView === 'posters' && <PostersView />}
+        {currentView === 'roadmap' && (isSectionDevelopment('roadmap') ? <DevelopmentView title="Roadmap en Desarrollo" /> : <RoadmapView />)}
+        {currentView === 'bases' && (isSectionDevelopment('bases') ? <DevelopmentView title="Bases en Desarrollo" /> : <BasesView activeTab={basesTab} />)}
+        {currentView === 'program' && (isSectionDevelopment('program') ? <DevelopmentView title="Programa en Desarrollo" /> : <ProgramView />)}
+        {currentView === 'committee' && (isSectionDevelopment('committee') ? <DevelopmentView title="Comité en Desarrollo" /> : <CommitteeView />)}
+        {currentView === 'gallery' && (isSectionDevelopment('gallery') ? <DevelopmentView title="Galería en Desarrollo" /> : <GalleryView />)}
+        {currentView === 'posters' && (isSectionDevelopment('posters') ? <DevelopmentView title="E-Posters en Desarrollo" /> : <PostersView />)}
         {currentView === 'registration' && <SmartRegistrationForm />}
         {currentView === 'resident-dashboard' && <ResidentDashboard user={user} navigate={navigate} />}
         {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} navigate={navigate} />}

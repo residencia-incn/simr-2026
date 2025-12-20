@@ -69,7 +69,15 @@ export const EVENT_CONFIG = {
     contact: {
         phone: "999 888 777",
         email: "inscripciones@simr.pe"
-    }
+    },
+    publicSections: [
+        { id: 'bases', label: 'Bases', isVisible: true, isDevelopment: false },
+        { id: 'roadmap', label: 'Roadmap', isVisible: true, isDevelopment: false },
+        { id: 'program', label: 'Programa', isVisible: true, isDevelopment: false },
+        { id: 'committee', label: 'Comité', isVisible: true, isDevelopment: false },
+        { id: 'gallery', label: 'Galería', isVisible: true, isDevelopment: false },
+        { id: 'posters', label: 'E-Posters', isVisible: true, isDevelopment: false }
+    ]
 };
 
 export const MOCK_INCN_RESIDENTS = [
