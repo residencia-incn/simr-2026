@@ -6,6 +6,7 @@ import FormField from '../components/ui/FormField';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { useForm } from '../hooks/useForm';
 import { api } from '../services/api';
+import { showSuccess } from '../utils/alerts';
 
 const SubmitWorkForm = ({ navigate }) => {
     const [loading, setLoading] = useState(true);
@@ -185,7 +186,7 @@ const SubmitWorkForm = ({ navigate }) => {
 
         console.log("Submitting:", submission);
         await api.works.create(submission);
-        alert('Trabajo enviado con éxito');
+        showSuccess('Tu trabajo ha sido enviado correctamente y será revisado por el comité académico.', 'Trabajo enviado con éxito');
         navigate('resident-dashboard');
     };
 

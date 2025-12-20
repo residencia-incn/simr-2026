@@ -3,6 +3,7 @@ import { Plus, Trash2, Edit2, Save, Calendar, Clock, MapPin, User, Layout, Colum
 import { Button, Card, Modal, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
+import { showWarning } from '../../utils/alerts';
 
 // Helper: Convertir "HH:MM" a minutos desde medianoche
 const timeToMinutes = (time) => {
@@ -284,7 +285,7 @@ const ProgramManager = () => {
 
     const handleRemoveDay = (dayId) => {
         if (days.length <= 1) {
-            alert("Debe haber al menos un día en el evento.");
+            showWarning('Agregue al menos un día al evento.', 'Día requerido');
             return;
         }
 
@@ -396,7 +397,7 @@ const ProgramManager = () => {
 
     const handleSaveBlock = () => {
         if (!currentBlock.startTime || !currentBlock.endTime) {
-            alert("Por favor ingrese la hora de inicio y fin");
+            showWarning('Complete la hora de inicio y fin.', 'Campos incompletos');
             return;
         }
 

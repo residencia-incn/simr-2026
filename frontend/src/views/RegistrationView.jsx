@@ -3,6 +3,7 @@ import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, Chev
 import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useFileUpload, useApi } from '../hooks';
+import { showSuccess, showError, showWarning } from '../utils/alerts';
 
 const RegistrationView = () => {
     const [config, setConfig] = useState(null);
@@ -71,7 +72,7 @@ const RegistrationView = () => {
                 description: 'Beca 100% (Local)',
                 maxUses: 999
             });
-            window.alert('Cupón BECA100 aplicado (Modo Debug Local)');
+            showSuccess('Beca Integral aplicada correctamente.', 'Cupón BECA100 aplicado');
             return;
         }
 
@@ -162,7 +163,7 @@ const RegistrationView = () => {
 
             if (Object.keys(errors).length > 0) {
                 setValidationErrors(errors);
-                alert('Por favor completa todos los campos obligatorios marcados en rojo.');
+                showWarning('Complete todos los campos obligatorios marcados en rojo.', 'Campos incompletos');
                 return;
             }
 
@@ -179,7 +180,7 @@ const RegistrationView = () => {
             } catch (err) {
                 console.error("Validation check failed", err);
                 // Optional: decide if we block or proceed on API failure. Blocking is safer.
-                window.alert("Error validando datos. Intente nuevamente.");
+                showError('Intente nuevamente.', 'Error validando datos');
                 return;
             }
             // -----------------------------
@@ -187,7 +188,7 @@ const RegistrationView = () => {
 
         if (currentStep === 2) {
             if (!selectedTicket) {
-                alert('Por favor selecciona un tipo de ticket.');
+                showWarning('Por favor selecciona un tipo de ticket.', 'Ticket requerido');
                 return;
             }
         }
@@ -223,7 +224,7 @@ const RegistrationView = () => {
                 base64Voucher = await convertToBase64(voucherFile);
             } catch (err) {
                 console.error('Error converting voucher:', err);
-                window.alert('Error al procesar el archivo del voucher: ' + err.message);
+                showError(err.message, 'Error al procesar el archivo del voucher');
                 return;
             }
         }
@@ -253,7 +254,7 @@ const RegistrationView = () => {
                 }
                 setShowSuccessModal(true);
             } else {
-                window.alert('Error: No se pudo guardar el registro. Por favor intenta nuevamente.');
+                showError('Por favor intenta nuevamente.', 'No se pudo guardar el registro');
             }
         } catch (error) {
             console.error('Submission error:', error);

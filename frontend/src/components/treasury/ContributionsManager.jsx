@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw } from 'lucide-react';
 import { Button, Card, FormField, Modal } from '../ui';
+import { showError } from '../../utils/alerts';
 
 const ContributionsManager = ({
     contributionPlan,
@@ -50,7 +51,7 @@ const ContributionsManager = ({
             setIsModalOpen(false);
             setSelectedContribution(null);
         } catch (error) {
-            alert(error.message);
+            showError(error.message, 'Error al registrar pago');
         }
     };
 

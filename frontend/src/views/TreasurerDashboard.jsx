@@ -9,6 +9,7 @@ import AccountsManager from '../components/treasury/AccountsManager';
 import ContributionsManager from '../components/treasury/ContributionsManager';
 import ReportsView from '../components/treasury/ReportsView';
 import TreasurySettings from '../components/treasury/TreasurySettings';
+import { showSuccess, showError, showWarning } from '../utils/alerts';
 
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
@@ -189,11 +190,11 @@ const TreasurerDashboard = ({ user }) => {
         if (!newCategory.trim()) return;
 
         if (editingCategory) {
-            alert("Edición de categoría no implementada en API simplificada. Elimine y cree una nueva.");
+            showWarning('Elimine y cree una nueva categoría.', 'Edición no disponible');
             setEditingCategory(null);
         } else {
             if (categories[categoryType].includes(newCategory.trim())) {
-                alert('Esta categoría ya existe');
+                showWarning('Por favor use un nombre diferente.', 'Esta categoría ya existe');
                 return;
             }
             try {
@@ -234,7 +235,7 @@ const TreasurerDashboard = ({ user }) => {
         e.preventDefault();
 
         if (!formData.accountId) {
-            alert('Por favor selecciona una cuenta');
+            showWarning('Seleccione una cuenta para continuar.', 'Cuenta requerida');
             return;
         }
 
@@ -252,10 +253,10 @@ const TreasurerDashboard = ({ user }) => {
             await createTransaction(transactionData);
             await loadData(); // Reload legacy data for compatibility
             resetForm();
-            alert(`${activeTab === 'income' ? 'Ingreso' : 'Egreso'} registrado correctamente`);
+            showSuccess(`La transacción ha sido registrada exitosamente.`, `${activeTab === 'income' ? 'Ingreso' : 'Egreso'} registrado`);
         } catch (err) {
             console.error(err);
-            alert('Error al registrar la transacción: ' + err.message);
+            showError(err.message, 'Error al registrar');
         }
     };
 
@@ -287,7 +288,7 @@ const TreasurerDashboard = ({ user }) => {
                 try {
                     // Validate that we have at least one account
                     if (accounts.length === 0) {
-                        alert('Error: No hay cuentas disponibles. Por favor crea una cuenta primero.');
+                        showError('Por favor crea una cuenta primero.', 'No hay cuentas disponibles');
                         setConfirmConfig(prev => ({ ...prev, isOpen: false }));
                         return;
                     }
@@ -328,12 +329,12 @@ const TreasurerDashboard = ({ user }) => {
                     await api.registrations.remove(reg.id);
 
                     await loadData();
-                    alert('Inscripción aprobada y registrada en ingresos.');
+                    showSuccess('La inscripción ha sido procesada correctamente.', 'Inscripción aprobada');
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
                 } catch (err) {
                     console.error("Error approving registration", err);
-                    alert("Error al aprobar la inscripción.");
+                    showError('No se pudo procesar la inscripción.', 'Error al aprobar');
                 }
             }
         });

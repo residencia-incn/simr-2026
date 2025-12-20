@@ -3,6 +3,7 @@ import { CheckCircle, Clock, AlertCircle, MessageSquare, TrendingUp, Calendar, U
 import { Button, Card, Modal, LoadingSpinner, EmptyState } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
+import { showWarning } from '../../utils/alerts';
 
 const MyTasks = ({ currentUser }) => {
     const [tasks, setTasks] = useState([]);
@@ -36,7 +37,7 @@ const MyTasks = ({ currentUser }) => {
 
     const handleUpdateTask = async () => {
         if (newProgress !== selectedTask.progress && !newComment.trim()) {
-            alert('Por favor agregue un comentario explicando el cambio de progreso');
+            showWarning('Agregue un comentario explicando el cambio.', 'Comentario requerido');
             return;
         }
 
@@ -162,8 +163,8 @@ const MyTasks = ({ currentUser }) => {
                     <button
                         onClick={() => setFilterStatus('all')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterStatus === 'all'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                     >
                         Todas ({tasks.length})
@@ -171,8 +172,8 @@ const MyTasks = ({ currentUser }) => {
                     <button
                         onClick={() => setFilterStatus('pending')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterStatus === 'pending'
-                                ? 'bg-gray-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-gray-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                     >
                         Pendientes ({taskStats.pending})
@@ -180,8 +181,8 @@ const MyTasks = ({ currentUser }) => {
                     <button
                         onClick={() => setFilterStatus('in_progress')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterStatus === 'in_progress'
-                                ? 'bg-blue-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                     >
                         En Progreso ({taskStats.inProgress})
@@ -189,8 +190,8 @@ const MyTasks = ({ currentUser }) => {
                     <button
                         onClick={() => setFilterStatus('completed')}
                         className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filterStatus === 'completed'
-                                ? 'bg-green-600 text-white'
-                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                             }`}
                     >
                         Completadas ({taskStats.completed})
@@ -214,12 +215,12 @@ const MyTasks = ({ currentUser }) => {
                             <Card
                                 key={task.id}
                                 className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
-                                        ? 'border-l-green-500'
-                                        : task.status === 'in_progress'
-                                            ? 'border-l-blue-500'
-                                            : isOverdue
-                                                ? 'border-l-red-500'
-                                                : 'border-l-gray-300'
+                                    ? 'border-l-green-500'
+                                    : task.status === 'in_progress'
+                                        ? 'border-l-blue-500'
+                                        : isOverdue
+                                            ? 'border-l-red-500'
+                                            : 'border-l-gray-300'
                                     }`}
                                 onClick={() => handleOpenTask(task)}
                             >
@@ -265,10 +266,10 @@ const MyTasks = ({ currentUser }) => {
                                             <div className="flex-1 bg-gray-200 rounded-full h-2.5">
                                                 <div
                                                     className={`h-2.5 rounded-full transition-all ${task.progress === 100
-                                                            ? 'bg-green-600'
-                                                            : task.progress > 0
-                                                                ? 'bg-blue-600'
-                                                                : 'bg-gray-400'
+                                                        ? 'bg-green-600'
+                                                        : task.progress > 0
+                                                            ? 'bg-blue-600'
+                                                            : 'bg-gray-400'
                                                         }`}
                                                     style={{ width: `${task.progress}%` }}
                                                 />

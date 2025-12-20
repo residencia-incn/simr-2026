@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button, FormField, Table, Modal, Badge } from '../ui';
+import { showSuccess, showError } from '../../utils/alerts';
 
 import { useModal, useSearch, useSortableData } from '../../hooks';
 import AttendeeDetailsModal from './AttendeeDetailsModal';
@@ -120,14 +121,14 @@ const UserManagement = () => {
 
                 // NOTE: Treasury records are intentionally PRESERVED per requirements.
 
-                alert(`Usuario ${selectedUser.name} y sus datos de asistencia eliminados. Los registros de tesorería ("Contabilidad") se mantienen intactos.`);
+                showSuccess(`Los registros de tesorería ("Contabilidad") se mantienen intactos.`, `Usuario ${selectedUser.name} eliminado`);
                 loadUsers();
             } else if (actionType === 'reset') {
                 await api.users.resetPassword(selectedUser.id);
-                alert(`Contraseña de ${selectedUser.name} reseteada a '123456'.`);
+                showSuccess(`Nueva contraseña: 123456`, `Contraseña de ${selectedUser.name} reseteada`);
             }
         } catch (error) {
-            alert('Error al realizar la acción');
+            showError('No se pudo completar la acción', 'Error');
         } finally {
             if (actionType !== 'roles') { // Don't close for roles, let modal handle it
                 setSelectedUser(null);
@@ -139,7 +140,7 @@ const UserManagement = () => {
     const handleUpdateRoles = async (updatedUser) => {
         try {
             await api.users.update(updatedUser);
-            alert(`Roles de ${updatedUser.name} actualizados.`);
+            showSuccess(`Los cambios han sido guardados correctamente.`, `Roles de ${updatedUser.name} actualizados`);
             loadUsers();
         } catch (error) {
             console.error("Failed to update roles", error);

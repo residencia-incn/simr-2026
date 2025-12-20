@@ -3,6 +3,7 @@ import { Card, Button, SectionHeader, LoadingSpinner } from '../components/ui';
 import { QrCode, Scan, Users, Calendar, Clock, RotateCcw, Download, Search, RefreshCw } from 'lucide-react';
 import { useApi } from '../hooks';
 import { api } from '../services/api';
+import { showConfirm } from '../utils/alerts';
 import QRCode from 'react-qr-code';
 import AttendanceScanner from '../components/common/AttendanceScanner';
 
@@ -54,7 +55,12 @@ const AttendanceManager = () => {
     }, [activeDay]);
 
     const handleGenerateNewToken = async () => {
-        if (window.confirm('¿Generar nuevo código para hoy? El código anterior dejará de funcionar.')) {
+        const result = await showConfirm(
+            'El código anterior dejará de funcionar.',
+            '¿Generar nuevo código para hoy?'
+        );
+
+        if (result.isConfirmed) {
             const token = await api.attendance.generateDayToken(activeDay);
             setDayToken(token);
         }

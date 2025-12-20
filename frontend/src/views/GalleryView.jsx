@@ -4,6 +4,7 @@ import { Camera, Filter, Upload, Maximize2, ImageIcon, X, ChevronLeft, ChevronRi
 import Button from '../components/ui/Button';
 import SectionHeader from '../components/ui/SectionHeader';
 import { api } from '../services/api';
+import { showSuccess } from '../utils/alerts';
 
 const GalleryView = () => {
     const [selectedYear, setSelectedYear] = useState(2026);
@@ -84,7 +85,7 @@ const GalleryView = () => {
             }
         } else {
             navigator.clipboard.writeText(window.location.href);
-            alert('¡Enlace copiado al portapapeles!');
+            showSuccess('El enlace ha sido copiado al portapapeles.', '¡Enlace copiado!');
         }
     };
 

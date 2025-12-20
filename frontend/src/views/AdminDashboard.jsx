@@ -25,6 +25,7 @@ import AttendanceManager from './AttendanceManager';
 import AcademicDashboard from './AcademicDashboard'; // Import AcademicDashboard
 // import VirtualClassroomManager from '../components/admin/VirtualClassroomManager';
 import { api } from '../services/api';
+import { showSuccess, showError } from '../utils/alerts';
 
 const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
@@ -145,12 +146,12 @@ const AdminDashboard = ({ user }) => {
 
                     await api.users.update(userPayload);
 
-                    alert('Inscripción aprobada exitosamente y cuenta de usuario actualizada.');
+                    showSuccess('La inscripción ha sido aprobada y la cuenta actualizada.', 'Inscripción aprobada');
                     loadData(); // Refresh all data
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
                 } catch (error) {
                     console.error("Error approving registration", error);
-                    alert("Hubo un error al procesar la inscripción.");
+                    showError('No se pudo procesar la inscripción.', 'Error al procesar');
                 }
             }
         });

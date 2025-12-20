@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Button from '../components/ui/Button';
 import { useApi } from '../hooks/useApi';
 import { api } from '../services/api';
+import { showSuccess, showError } from '../utils/alerts';
 
 const AdmissionDashboard = () => {
     const [activeTab, setActiveTab] = useState('list'); // 'list' | 'verification'
@@ -45,11 +46,11 @@ const AdmissionDashboard = () => {
                 await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
                 await api.registrations.remove(reg.id);
 
-                alert('Inscripción aprobada exitosamente.');
+                showSuccess('La inscripción ha sido aprobada correctamente.', 'Inscripción aprobada');
                 reloadAll();
             } catch (error) {
                 console.error("Error approving registration", error);
-                alert("Hubo un error al procesar la inscripción.");
+                showError('No se pudo procesar la inscripción.', 'Error al procesar');
             }
         }
     };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers } from 'lucide-react';
 import { Button, Card, FormField, LoadingSpinner } from '../ui';
+import { showSuccess, showError, showConfirm } from '../../utils/alerts';
 
 const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories, onAddCategory, onDeleteCategory }) => {
     const [activeSection, setActiveSection] = useState('contributions');
@@ -61,9 +62,9 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                     months
                 }
             });
-            alert('Configuración guardada correctamente. Recuerda reinicializar el plan si cambiaste el rango de meses o el monto.');
+            showSuccess('Recuerda reinicializar el plan si cambiaste el rango de meses o el monto.', 'Configuración guardada');
         } catch (error) {
-            alert('Error al guardar configuración: ' + error.message);
+            showError(error.message, 'Error al guardar');
         } finally {
             setSaving(false);
         }
@@ -143,8 +144,13 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                         <Button
                             variant="danger"
                             className="w-full"
-                            onClick={() => {
-                                if (window.confirm('¿Estás seguro de reinicializar el plan de aportes? Esto reseteará el estado de pagos en la matriz.')) {
+                            onClick={async () => {
+                                const confirmed = await showConfirm(
+                                    'Esto reseteará el estado de pagos en la matriz.',
+                                    '¿Reinicializar plan de aportes?',
+                                    { confirmText: 'Sí, reinicializar', confirmColor: '#dc2626' }
+                                );
+                                if (confirmed) {
                                     onInitializePlan();
                                 }
                             }}

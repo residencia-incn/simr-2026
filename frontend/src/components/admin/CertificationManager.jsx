@@ -4,6 +4,7 @@ import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import CertificateDetailsModal from './CertificateDetailsModal';
 import { api } from '../../services/api';
+import { showConfirm, showSuccess } from '../../utils/alerts';
 
 const CertificationManager = ({ attendees }) => {
     const [searchTerm, setSearchTerm] = useState('');
@@ -27,12 +28,17 @@ const CertificationManager = ({ attendees }) => {
     };
 
     const handleActivateDownloads = async () => {
-        if (window.confirm('¿Estás seguro? Al activar las descargas se bloqueará el envío de nuevas justificaciones para todos los usuarios.')) {
+        const result = await showConfirm(
+            'Al activar las descargas se bloqueará el envío de nuevas justificaciones para todos los usuarios.',
+            '¿Estás seguro?'
+        );
+
+        if (result.isConfirmed) {
             const config = await api.content.getConfig();
             config.certificatesActivated = true;
             await api.content.saveConfig(config);
             setIsDownloadsActive(true);
-            window.alert('Descarga de certificados ACTIVADA. Se han bloqueado las justificaciones.');
+            showSuccess('Se han bloqueado las justificaciones.', 'Descarga de certificados ACTIVADA');
         }
     };
 
@@ -65,7 +71,7 @@ const CertificationManager = ({ attendees }) => {
         const message = type === 'approval'
             ? 'Certificado de Aprobación generado validado con éxito.'
             : 'Constancia de Asistencia generada con éxito.';
-        window.alert(message);
+        showSuccess(message, 'Validación exitosa');
     };
 
     const filteredAttendees = localAttendees.filter(attendee =>

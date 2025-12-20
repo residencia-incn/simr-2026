@@ -3,6 +3,7 @@ import { Calendar, Plus, Trash2, Edit2, Users, CheckCircle, Clock, AlertCircle, 
 import { Button, Card, Modal, FormField, LoadingSpinner, EmptyState, ConfirmDialog } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
+import { showWarning, showError } from '../../utils/alerts';
 
 const PlanningManager = ({ currentUser }) => {
     const [meetings, setMeetings] = useState([]);
@@ -108,7 +109,7 @@ const PlanningManager = ({ currentUser }) => {
 
     const handleEditMeeting = (meeting) => {
         if (meeting.status === 'closed') {
-            alert('Esta reunión ya ha sido finalizada y no puede ser editada.');
+            showWarning('Esta reunión ya ha sido finalizada.', 'No se puede editar');
             return;
         }
         setCurrentMeeting({ ...meeting });
@@ -117,7 +118,7 @@ const PlanningManager = ({ currentUser }) => {
 
     const handleSaveMeeting = async () => {
         if (!currentMeeting.title || !currentMeeting.date) {
-            alert('Por favor complete los campos requeridos');
+            showWarning('Complete todos los campos requeridos.', 'Campos incompletos');
             return;
         }
 
@@ -240,7 +241,7 @@ const PlanningManager = ({ currentUser }) => {
 
     const handleSaveTask = async () => {
         if (!currentTask.title || !currentTask.assignedTo) {
-            alert('Por favor complete los campos requeridos');
+            showWarning('Complete todos los campos requeridos.', 'Campos incompletos');
             return;
         }
 

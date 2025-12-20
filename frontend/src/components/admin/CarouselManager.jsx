@@ -4,6 +4,7 @@ import { api } from '../../services/api';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import Modal from '../ui/Modal';
+import { showConfirm } from '../../utils/alerts';
 
 const AVAILABLE_ROUTES = [
     { label: 'Inicio', value: 'home' },
@@ -102,8 +103,13 @@ const CarouselManager = () => {
         setIsEditing(true);
     };
 
-    const handleDelete = (id) => {
-        if (window.confirm('¿Estás seguro de eliminar esta diapositiva?')) {
+    const handleDelete = async (id) => {
+        const result = await showConfirm(
+            'Esta acción no se puede deshacer.',
+            '¿Estás seguro de eliminar esta diapositiva?'
+        );
+
+        if (result.isConfirmed) {
             const newSlides = slides.filter(s => s.id !== id);
             saveSlides(newSlides);
         }

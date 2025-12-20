@@ -5,6 +5,7 @@ import Photocheck from './Photocheck';
 import { useApi } from '../../hooks';
 import { api } from '../../services/api';
 import { printContent } from '../../utils/printHandler';
+import { showSuccess } from '../../utils/alerts';
 
 const PrintSettingsManager = () => {
     // Attendees Data
@@ -30,7 +31,7 @@ const PrintSettingsManager = () => {
 
     const handleSaveConfig = async () => {
         await api.content.savePrintConfig(config);
-        alert("Configuración de dimensiones guardada.");
+        showSuccess('Las dimensiones han sido guardadas correctamente.', 'Configuración guardada');
     };
 
     // Selection State

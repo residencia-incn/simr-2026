@@ -3,6 +3,7 @@ import { api } from '../../services/api';
 import { Plus, Edit2, Trash2, Tag, Percent, DollarSign, Calendar, AlertCircle, FileDown } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
+import { showWarning, showError } from '../../utils/alerts';
 
 const CouponManager = () => {
     const [coupons, setCoupons] = useState([]);
@@ -60,7 +61,10 @@ const CouponManager = () => {
     };
 
     const handleExport = () => {
-        if (redemptions.length === 0) return alert("No hay datos para exportar");
+        if (redemptions.length === 0) {
+            showWarning('No hay datos para exportar.', 'Sin datos');
+            return;
+        }
 
         const headers = ["ID Registro", "Usuario", "DNI", "Email", "Cupón", "Monto Pagado", "Fecha"];
         const csvContent = "data:text/csv;charset=utf-8,"
@@ -125,7 +129,7 @@ const CouponManager = () => {
             loadData();
         } catch (error) {
             console.error(error);
-            alert("Error al guardar el cupón");
+            showError('No se pudo guardar el cupón.', 'Error al guardar');
         }
     };
 

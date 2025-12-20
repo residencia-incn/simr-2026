@@ -3,6 +3,7 @@ import { Plus, Edit2, Trash2, Image as ImageIcon, Save } from 'lucide-react';
 import { Button, Modal, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../ui';
 import { api } from '../../services/api';
 import { useApi, useModal, useForm, useFileUpload } from '../../hooks';
+import { showError } from '../../utils/alerts';
 
 const GalleryManager = () => {
     // Hooks
@@ -79,7 +80,7 @@ const GalleryManager = () => {
             resetForm();
         } catch (err) {
             console.error("Failed to save gallery", err);
-            alert("Error al guardar la galería.");
+            showError('No se pudo guardar la galería.', 'Error al guardar');
         }
     };
 

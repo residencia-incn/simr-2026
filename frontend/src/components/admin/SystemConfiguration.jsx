@@ -6,6 +6,7 @@ import CarouselManager from './CarouselManager';
 import PrintSettingsManager from './PrintSettingsManager';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { api } from '../../services/api';
+import { showSuccess } from '../../utils/alerts';
 
 const SystemConfiguration = () => {
     const [config, setConfig] = useState(null);
@@ -82,12 +83,12 @@ const SystemConfiguration = () => {
             ...config
         });
         setIsSaving(false);
-        alert("Configuración guardada correctamente");
+        showSuccess('Los cambios han sido aplicados correctamente.', 'Configuración guardada');
     };
 
     const handleArchive = async () => {
         // Mock archive logic
-        alert(`Evento ${config.eventYear} archivado exitosamente.`);
+        showSuccess('Todos los datos han sido respaldados.', `Evento ${config.eventYear} archivado`);
         setShowArchiveConfirm(false);
     };
 
@@ -95,7 +96,7 @@ const SystemConfiguration = () => {
         // Mock new year logic
         const nextYear = parseInt(config.eventYear) + 1;
         setConfig(prev => ({ ...prev, eventYear: nextYear.toString() }));
-        alert(`Sistema reiniciado para el año ${nextYear}.`);
+        showSuccess('El sistema está listo para el nuevo evento.', `Sistema reiniciado para ${nextYear}`);
         setShowNewYearConfirm(false);
     };
 

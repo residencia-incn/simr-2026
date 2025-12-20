@@ -5,6 +5,7 @@ import { useForm, useFileUpload, useApi } from '../hooks';
 import QRCode from 'react-qr-code';
 import AttendanceScanner from '../components/common/AttendanceScanner';
 import { api } from '../services/api';
+import { showConfirm, showSuccess } from '../utils/alerts';
 
 const ProfileView = ({ user, onSave }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -82,8 +83,13 @@ const ProfileView = ({ user, onSave }) => {
         }
     }, [user, setValues]);
 
-    const handleRemoveImage = () => {
-        if (window.confirm('¿Estás seguro de que quieres eliminar tu foto de perfil?')) {
+    const handleRemoveImage = async () => {
+        const result = await showConfirm(
+            'Esta acción no se puede deshacer.',
+            '¿Estás seguro de que quieres eliminar tu foto de perfil?'
+        );
+
+        if (result.isConfirmed) {
             setCurrentImage(null);
             clearImage();
         }
@@ -409,7 +415,7 @@ const ProfileView = ({ user, onSave }) => {
                                                                             onClick={() => {
                                                                                 // Simulate submission
                                                                                 console.log("Submitting justification:", form.justification);
-                                                                                window.alert("Justificación enviada correctamente.");
+                                                                                showSuccess('Tu solicitud será revisada por el comité académico.', 'Justificación enviada');
                                                                                 setIsEditing(false);
                                                                                 // Ideally update local user state to show 'pending' status immediately
                                                                                 if (onSave) onSave({ ...user, justificationStatus: 'pending', justification: form.justification });
@@ -431,7 +437,7 @@ const ProfileView = ({ user, onSave }) => {
                                                 {meetsRequirement && user?.paymentVerified ? (
                                                     <Button
                                                         className="w-full bg-green-600 hover:bg-green-700 justify-center gap-2"
-                                                        onClick={() => alert('Descargando certificado...')}
+                                                        onClick={() => showSuccess('Tu certificado se descargará en breve.', 'Descargando certificado')}
                                                     >
                                                         <FileText size={18} />
                                                         Descargar Certificado

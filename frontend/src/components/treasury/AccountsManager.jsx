@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, DollarSign, Building, Wallet } from 'lucide-react';
 import { Button, Card, FormField, Modal, ConfirmDialog } from '../ui';
+import { showError } from '../../utils/alerts';
 
 const AccountsManager = ({ accounts, onCreateAccount, onUpdateAccount, onDeleteAccount }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -23,7 +24,7 @@ const AccountsManager = ({ accounts, onCreateAccount, onUpdateAccount, onDeleteA
             }
             handleCloseModal();
         } catch (error) {
-            alert(error.message);
+            showError(error.message, 'Error al guardar cuenta');
         }
     };
 
@@ -43,7 +44,7 @@ const AccountsManager = ({ accounts, onCreateAccount, onUpdateAccount, onDeleteA
             await onDeleteAccount(confirmDelete.account.id);
             setConfirmDelete({ isOpen: false, account: null });
         } catch (error) {
-            alert(error.message);
+            showError(error.message, 'Error al eliminar cuenta');
         }
     };
 
