@@ -107,6 +107,10 @@ const PlanningManager = ({ currentUser }) => {
     };
 
     const handleEditMeeting = (meeting) => {
+        if (meeting.status === 'closed') {
+            alert('Esta reunión ya ha sido finalizada y no puede ser editada.');
+            return;
+        }
         setCurrentMeeting({ ...meeting });
         setIsEditingMeeting(true);
     };
@@ -318,7 +322,14 @@ const PlanningManager = ({ currentUser }) => {
                                 <Calendar size={20} />
                             </div>
                             <div>
-                                <h4 className="font-bold text-gray-800">{meeting.title}</h4>
+                                <div className="flex items-center gap-2">
+                                    <h4 className="font-bold text-gray-800">{meeting.title}</h4>
+                                    {meeting.status === 'closed' && (
+                                        <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                                            FINALIZADA
+                                        </span>
+                                    )}
+                                </div>
                                 <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                                     <span className="flex items-center gap-1">
                                         <Calendar size={12} />
@@ -351,14 +362,22 @@ const PlanningManager = ({ currentUser }) => {
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
-                            <Button variant="ghost" size="sm" onClick={() => handleEditMeeting(meeting)}>
-                                <Edit2 size={16} />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => handleDeleteMeeting(meeting.id)}>
-                                <Trash2 size={16} className="text-red-500" />
-                            </Button>
-                        </div>
+                        {meeting.status !== 'closed' ? (
+                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" onClick={() => handleEditMeeting(meeting)}>
+                                    <Edit2 size={16} />
+                                </Button>
+                                <Button variant="ghost" size="sm" onClick={() => handleDeleteMeeting(meeting.id)}>
+                                    <Trash2 size={16} className="text-red-500" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                                <Button variant="ghost" size="sm" className="opacity-0 cursor-default">
+                                    <Edit2 size={16} />
+                                </Button>
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
