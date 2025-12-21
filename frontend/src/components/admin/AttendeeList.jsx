@@ -14,7 +14,7 @@ const AttendeeList = ({ attendees }) => {
         setFilterValue: setFilterRole,
         filteredItems: filteredAttendees
     } = useSearch(attendees, {
-        searchFields: ['name', 'specialty'],
+        searchFields: ['name', 'specialty', 'dni', 'email'],
         filterField: 'eventRoles'
     });
 
@@ -156,7 +156,7 @@ const AttendeeList = ({ attendees }) => {
             <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm items-end">
                 <div className="relative flex-grow max-w-md w-full">
                     <FormField
-                        placeholder="Buscar por nombre o especialidad..."
+                        placeholder="Buscar por nombre, especialidad, DNI o correo..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="mb-0"

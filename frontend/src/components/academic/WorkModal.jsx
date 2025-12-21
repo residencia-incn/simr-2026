@@ -85,7 +85,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
                 ...work,
                 title: formData.title,
                 abstract: formData.abstract,
-                status: 'En Corrección'
+                status: 'En Evaluación'
             };
             await onSave(updatedWork);
             onClose();
@@ -167,7 +167,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
         </div>
     );
 
-    const hasObservations = !!work.observations && work.observations.length > 0;
+    const hasObservations = (!!work.feedback && work.feedback.length > 0) || (!!work.observations && work.observations.length > 0);
 
     // In View mode, show observations if they exist (especially for Observado status)
     // In Edit mode, ALWAYS show observations panel (if status warrants editing, presumably there are observations)
@@ -240,7 +240,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
                                 <AlertCircle size={18} /> Observaciones
                             </h4>
                             <div className={`text-sm leading-relaxed whitespace-pre-line ${isEditing ? 'text-orange-900' : 'text-gray-600'}`}>
-                                {work.observations || "No hay observaciones registradas."}
+                                {work.feedback || work.observations || "No hay observaciones registradas."}
                             </div>
 
                             {isEditing && (
@@ -261,7 +261,12 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
                 </Button>
                 {isEditing && (
                     <Button type="submit" onClick={handleSubmit} disabled={isSaving} className="bg-blue-600 text-white">
-                        {isSaving ? 'Guardando...' : <><Save size={16} className="mr-2" /> Guardar Cambios</>}
+                        {isSaving ? 'Enviando...' : (
+                            <>
+                                <Save size={16} className="mr-2" />
+                                {work.status === 'Observado' ? 'Enviar Correcciones' : 'Guardar Cambios'}
+                            </>
+                        )}
                     </Button>
                 )}
             </div>

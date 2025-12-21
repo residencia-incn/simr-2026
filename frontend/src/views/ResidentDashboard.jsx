@@ -128,7 +128,7 @@ const ResidentDashboard = ({ user, navigate }) => {
                         className="text-xs p-1 h-auto text-blue-600 hover:text-blue-800"
                         onClick={() => { setSelectedWork(item); setModalMode('edit'); setIsModalOpen(true); }}
                     >
-                        Editar
+                        {item.status === 'Observado' ? 'Corregir' : 'Editar'}
                     </Button>
                 )}
 

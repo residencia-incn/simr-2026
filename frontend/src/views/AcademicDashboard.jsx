@@ -224,9 +224,15 @@ const AcademicDashboard = ({ role }) => {
     // Actions
     const renderActions = (item) => (
         <div className="flex flex-col gap-1 items-end">
-            {(item.status === 'En Evaluación' || item.status === 'Observado' || item.status === 'Pending' || item.status === 'Pendiente') && (
+            {(item.status === 'En Evaluación' || item.status === 'Pending' || item.status === 'Pendiente') && (
                 <Button size="sm" onClick={() => handleOpenReview(item)}>
                     Revisar
+                </Button>
+            )}
+
+            {(item.status === 'Observado' || item.status === 'Rechazado') && (
+                <Button size="sm" variant="outline" onClick={() => handleOpenReview(item, true)}>
+                    Ver Observaciones
                 </Button>
             )}
 
@@ -524,7 +530,7 @@ const AcademicDashboard = ({ role }) => {
                         actions={renderActions}
                         onRowClick={(item) => {
                             if (activeTab === 'pending' || activeTab === 'observation') {
-                                handleOpenReview(item);
+                                handleOpenReview(item, activeTab === 'observation');
                             } else if (activeTab === 'approved') {
                                 if (role === 'committee') {
                                     handleOpenDetails(item);

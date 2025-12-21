@@ -158,19 +158,19 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                         <div className="space-y-1">
                             <span className="font-semibold block text-gray-700">Introducción:</span>
-                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.intro}</p>
+                            <p className="text-gray-600">{work.abstract.intro}</p>
                         </div>
                         <div className="space-y-1">
                             <span className="font-semibold block text-gray-700">Métodos:</span>
-                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.methods}</p>
+                            <p className="text-gray-600">{work.abstract.methods}</p>
                         </div>
                         <div className="space-y-1">
                             <span className="font-semibold block text-gray-700">Resultados:</span>
-                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.results}</p>
+                            <p className="text-gray-600">{work.abstract.results}</p>
                         </div>
                         <div className="space-y-1">
                             <span className="font-semibold block text-gray-700">Conclusiones:</span>
-                            <p className="text-gray-600 line-clamp-3 hover:line-clamp-none">{work.abstract.conclusions}</p>
+                            <p className="text-gray-600">{work.abstract.conclusions}</p>
                         </div>
                     </div>
                 </div>

@@ -31,7 +31,7 @@ const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
     const [admissionTab, setAdmissionTab] = useState('list'); // 'list' or 'verification'
-    const isSuperAdmin = user?.role === 'superadmin' || user?.roles?.includes('admin') || user?.role === 'admin';
+    const isSuperAdmin = user?.profiles?.includes('organizacion') || user?.profiles?.includes('admin') || user?.role === 'superadmin';
 
     // State - Data
     const [registrations, setRegistrations] = useState([]);
@@ -184,10 +184,9 @@ const AdminDashboard = ({ user }) => {
         return <div className="p-8 text-center text-gray-500">Cargando panel de control...</div>;
     }
 
-    const hasAdminRole = user?.roles?.includes('admin') || user?.role === 'admin';
-    const hasSecretaryRole = user?.roles?.includes('admin') || user?.role === 'admin'; // Secretario tiene rol admin
-    const hasCommitteeRole = user?.roles?.some(r => ['admin', 'academic', 'treasurer'].includes(r)) ||
-        ['admin', 'academic', 'treasurer'].includes(user?.role);
+    const hasAdminRole = user?.profiles?.includes('organizacion') || user?.profiles?.includes('admin');
+    const hasSecretaryRole = user?.profiles?.includes('secretaria') || user?.profiles?.includes('organizacion');
+    const hasCommitteeRole = user?.profiles?.some(r => ['organizacion', 'academico', 'contabilidad', 'secretaria'].includes(r));
 
     const navItems = [
         { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
