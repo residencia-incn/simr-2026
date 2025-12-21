@@ -7,6 +7,15 @@ import QRCode from 'react-qr-code';
 const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
     const printRef = useRef();
 
+    // Close on Escape key
+    React.useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
     if (!isOpen || !attendee) return null;
 
     const handlePrint = () => {
@@ -23,10 +32,10 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:relative print:inset-auto print:h-auto">
             {/* Screen Version Container (Hidden on Print) */}
             <div
-                className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto animate-fadeInUp print:hidden"
+                className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeInUp print:hidden"
             >
                 {/* Screen Header */}
-                <div className="sticky top-0 bg-white/90 backdrop-blur-md border-b border-gray-100 p-4 flex items-center justify-between z-10">
+                <div className="bg-white border-b border-gray-100 p-4 flex items-center justify-between z-10 flex-shrink-0">
                     <div>
                         <h2 className="text-lg font-bold text-gray-900">Detalles del Asistente</h2>
                         <p className="text-sm text-gray-500">ID: {attendee.id || 'N/A'}</p>
@@ -45,7 +54,7 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                 </div>
 
                 {/* Screen Content */}
-                <div className="p-8 space-y-8">
+                <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
                     {/* Header Section */}
                     <div className="flex flex-col md:flex-row gap-8 items-start">
                         <div className="flex flex-col gap-4 items-center w-full md:w-auto flex-shrink-0">

@@ -35,7 +35,7 @@ const PhotocheckModal = ({ isOpen, onClose, attendee }) => {
 
     return ReactDOM.createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative flex flex-col max-h-[90vh]">
+            <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl relative flex flex-col max-h-[90vh] overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-gray-100">
                     <h3 className="font-bold text-gray-900">Vista Previa de Fotocheck</h3>

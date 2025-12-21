@@ -25,15 +25,16 @@ import AcademicJurers from '../components/academic/AcademicJurers';
 import AcademicSpeakers from '../components/academic/AcademicSpeakers';
 
 const AcademicDashboard = ({ role }) => {
+    const isCommittee = role === 'committee' || role === 'academico';
     // State
-    const [activeTab, setActiveTab] = useState(role === 'committee' ? 'approved' : 'pending'); // pending, approved, observation
+    const [activeTab, setActiveTab] = useState(isCommittee ? 'approved' : 'pending'); // pending, approved, observation
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedSpecialty, setSelectedSpecialty] = useState('all');
     const [juryCountFilter, setJuryCountFilter] = useState('all');
 
     // Reset tab when role changes to ensure permission compliance
     useEffect(() => {
-        if (role === 'committee') {
+        if (isCommittee) {
             const committeeTabs = ['approved', 'rubrics', 'juries', 'speakers', 'results'];
             if (!committeeTabs.includes(activeTab)) {
                 setActiveTab('approved');
@@ -147,7 +148,7 @@ const AcademicDashboard = ({ role }) => {
                     <div className="text-xs text-gray-500 mt-1">{item.specialty} • {item.type}</div>
 
                     {/* Show extra info only for Committee or when not in Approved tab for Research */}
-                    {(role === 'committee' || activeTab !== 'approved') && (
+                    {(isCommittee || activeTab !== 'approved') && (
                         <>
                             {item.jury && (Array.isArray(item.jury) ? item.jury.length > 0 : item.jury) && (
                                 <span className="inline-flex items-center gap-1 mt-1 px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium border border-purple-100">
@@ -239,7 +240,7 @@ const AcademicDashboard = ({ role }) => {
             {item.status === 'Aceptado' && (
                 <>
                     {/* View Work (For Research Profile) */}
-                    {role !== 'committee' && (
+                    {!isCommittee && (
                         <Button
                             size="sm"
                             variant="secondary"
@@ -251,7 +252,7 @@ const AcademicDashboard = ({ role }) => {
                     )}
 
                     {/* Committee Actions */}
-                    {role === 'committee' && (
+                    {isCommittee && (
                         <>
                             <Button
                                 size="xs"
@@ -275,7 +276,7 @@ const AcademicDashboard = ({ role }) => {
                     )}
 
                     {/* Show Download PPT only for Committee */}
-                    {item.slidesUrl && role === 'committee' && (
+                    {item.slidesUrl && isCommittee && (
                         <Button
                             size="xs"
                             variant="primary" // Highlight this action
@@ -307,16 +308,16 @@ const AcademicDashboard = ({ role }) => {
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
                         <BookOpen className="text-blue-600" />
-                        {role === 'committee' ? 'Gestión Académica' : 'Gestión en Trabajos de Investigación'}
+                        {isCommittee ? 'Gestión Académica' : 'Gestión en Trabajos de Investigación'}
                     </h1>
                     <p className="text-gray-600">
-                        {role === 'committee'
+                        {isCommittee
                             ? 'Asignación, Revisión y Gestión programa del evento.'
                             : 'Revisión, aprobación y programación de trabajos científicos.'}
                     </p>
                 </div>
                 <div className="flex gap-2 flex-wrap justify-end">
-                    {role === 'committee' ? (
+                    {isCommittee ? (
                         <>
                             {/* Committee Specific Stats */}
                             <Card className="px-3 py-2 flex items-center gap-2 bg-white border-red-100 min-w-[120px]">
@@ -396,7 +397,7 @@ const AcademicDashboard = ({ role }) => {
                     {/* Top Row: Tabs */}
                     <div className="flex justify-between items-center w-full overflow-x-auto">
                         <div className="flex bg-gray-100 p-1 rounded-lg w-auto">
-                            {role !== 'committee' && (
+                            {!isCommittee && (
                                 <button
                                     onClick={() => setActiveTab('pending')}
                                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'pending' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
@@ -419,7 +420,7 @@ const AcademicDashboard = ({ role }) => {
                                 </button>
                             )}
 
-                            {role === 'committee' && (
+                            {isCommittee && (
                                 <>
                                     <button
                                         onClick={() => setActiveTab('speakers')}
@@ -447,7 +448,7 @@ const AcademicDashboard = ({ role }) => {
                                     </button>
                                 </>
                             )}
-                            {role !== 'committee' && (
+                            {!isCommittee && (
                                 <button
                                     onClick={() => setActiveTab('config')}
                                     className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'config' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
@@ -532,7 +533,7 @@ const AcademicDashboard = ({ role }) => {
                             if (activeTab === 'pending' || activeTab === 'observation') {
                                 handleOpenReview(item, activeTab === 'observation');
                             } else if (activeTab === 'approved') {
-                                if (role === 'committee') {
+                                if (isCommittee) {
                                     handleOpenDetails(item);
                                 } else {
                                     // For Research profile, clicking approved row opens read-only review

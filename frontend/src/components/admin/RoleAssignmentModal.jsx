@@ -14,6 +14,15 @@ const RoleAssignmentModal = ({ user, isOpen, onClose, onSave }) => {
         }
     }, [user]);
 
+    // Close on Escape key
+    useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
+
     const availableRoles = [
         { id: 'superadmin', label: 'Superusuario', icon: Shield, color: 'text-red-600', bg: 'bg-red-100' },
         { id: 'admin', label: 'Secretaria', icon: User, color: 'text-purple-600', bg: 'bg-purple-100' },
@@ -40,15 +49,17 @@ const RoleAssignmentModal = ({ user, isOpen, onClose, onSave }) => {
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl w-full max-w-lg p-6 shadow-2xl relative animate-fadeInUp">
-                <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
-                    <X size={24} />
-                </button>
+            <div className="bg-white rounded-2xl w-full max-w-lg p-0 shadow-2xl relative animate-fadeInUp flex flex-col max-h-[90vh] overflow-hidden">
+                <div className="p-6 pb-0 flex-shrink-0 relative">
+                    <button onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-600">
+                        <X size={24} />
+                    </button>
 
-                <h2 className="text-xl font-bold text-gray-900 mb-1">Gestión de Roles</h2>
-                <p className="text-sm text-gray-500 mb-6">Configura los perfiles de acceso para {user.name}</p>
+                    <h2 className="text-xl font-bold text-gray-900 mb-1">Gestión de Roles</h2>
+                    <p className="text-sm text-gray-500 mb-6">Configura los perfiles de acceso para {user.name}</p>
+                </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-8 max-h-[60vh] overflow-y-auto">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-0 p-6 pt-0 overflow-y-auto custom-scrollbar flex-1">
                     {availableRoles.map((role) => {
                         const Icon = role.icon;
                         const isSelected = selectedRoles.includes(role.id);
@@ -72,7 +83,7 @@ const RoleAssignmentModal = ({ user, isOpen, onClose, onSave }) => {
                     })}
                 </div>
 
-                <div className="flex gap-3 justify-end pt-4 border-t border-gray-100">
+                <div className="flex gap-3 justify-end p-4 border-t border-gray-100 flex-shrink-0">
                     <Button variant="outline" onClick={onClose}>Cancelar</Button>
                     <Button onClick={handleSave} className="bg-blue-600 hover:bg-blue-700 flex items-center gap-2">
                         <Save size={18} /> Guardar Cambios
