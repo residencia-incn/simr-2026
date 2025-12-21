@@ -28,9 +28,18 @@ export const useSearch = (items, config = {}) => {
             });
 
             // Category/role filter
-            const matchesFilter = !filterField ||
-                filterValue === 'All' ||
-                item[filterField] === filterValue;
+            const matchesFilter = (() => {
+                if (!filterField || filterValue === 'All') return true;
+
+                const itemValue = item[filterField];
+                const filterValStr = String(filterValue).toLowerCase();
+
+                if (Array.isArray(itemValue)) {
+                    return itemValue.some(val => String(val).toLowerCase() === filterValStr);
+                }
+
+                return String(itemValue).toLowerCase() === filterValStr;
+            })();
 
             return matchesSearch && matchesFilter;
         });

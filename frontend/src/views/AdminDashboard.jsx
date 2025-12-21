@@ -43,23 +43,28 @@ const AdminDashboard = ({ user }) => {
     // Initial Data Load
     const loadData = async () => {
         setLoading(true);
+        // Load each section independently so one failure doesn't break the whole dashboard
         try {
-            const [regData, attData, treasData, worksData] = await Promise.all([
-                api.registrations.getAll(),
-                api.attendees.getAll(),
-                api.treasury.getStats(),
-                api.works.getAll()
-            ]);
-
+            const regData = await api.registrations.getAll().catch(e => { console.error("Reg error", e); return []; });
             setRegistrations(regData);
+        } catch (e) { console.error("Reg fatal", e); }
+
+        try {
+            const attData = await api.attendees.getAll().catch(e => { console.error("Attendees error", e); return []; });
             setAttendees(attData);
+        } catch (e) { console.error("Attendees fatal", e); }
+
+        try {
+            const treasData = await api.treasury.getStats().catch(e => { console.error("Treasury error", e); return { income: 0, expense: 0, balance: 0 }; });
             setTreasuryStats(treasData);
+        } catch (e) { console.error("Treasury fatal", e); }
+
+        try {
+            const worksData = await api.works.getAll().catch(e => { console.error("Works error", e); return []; });
             setWorks(worksData);
-        } catch (error) {
-            console.error("Failed to load admin data", error);
-        } finally {
-            setLoading(false);
-        }
+        } catch (e) { console.error("Works fatal", e); }
+
+        setLoading(false);
     };
 
     useEffect(() => {

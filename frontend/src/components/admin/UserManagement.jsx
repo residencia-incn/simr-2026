@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
+import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor, UserCog, Settings } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button, FormField, Table, Modal, Badge } from '../ui';
 import { showSuccess, showError } from '../../utils/alerts';
@@ -7,13 +7,14 @@ import { showSuccess, showError } from '../../utils/alerts';
 import { useModal, useSearch, useSortableData } from '../../hooks';
 import AttendeeDetailsModal from './AttendeeDetailsModal';
 
-import RoleAssignmentModal from './RoleAssignmentModal';
+import RoleModal from './RoleModal';
+import ProfilesModal from './ProfilesModal';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null);
-    const [actionType, setActionType] = useState(null); // 'delete', 'reset', 'roles'
+    const [actionType, setActionType] = useState(null); // 'delete', 'reset', 'event_role', 'profiles'
 
     // Modal for Details
     const {
@@ -26,39 +27,13 @@ const UserManagement = () => {
     const loadUsers = async () => {
         setLoading(true);
         try {
-            const [usersData, attendeesData] = await Promise.all([
-                api.users.getAll(),
-                api.attendees.getAll()
-            ]);
-
-            // Merge strategies:
-            // We primarily want the "Attendees" list visual, but augmented with User data (roles).
-            // Or we want Users list, augmented with Attendees data (specialty, dni).
-            // User requirement: "The list ... must be the same as attendance".
-            // So we treat Attendees as the base list.
-
-            // Map attendees to include user data if email matches
-            const merged = attendeesData.map(att => {
-                const user = usersData.find(u => u.email === att.email);
-                return {
-                    ...att,
-                    ...(user || {}), // User properties overwrite attendee if overlap, but we want to keep attendee visuals
-                    // Ensure we have both IDs if needed. 
-                    attendeeId: att.id,
-                    userId: user?.id,
-                    // Prefer attendee name for the split logic if it's formatted well, or keep as is.
-                    // IMPORTANT: columns use lastName/firstName.
-                };
-            });
-
-            // Also include users who are NOT in attendees? 
-            // The prompt implies "all attendees have an account". 
-            // If we include non-attendee users, they might have missing fields (DNI, Specialty).
-            // For now, let's stick to the merged list based on attendees to ensure the "Look" is 1:1.
-
-            setUsers(merged);
+            // ÚNICA FUENTE DE VERDAD: api.users.getAll()
+            // Ya filtra superadmin automáticamente
+            const usersData = await api.users.getAll();
+            setUsers(usersData);
         } catch (error) {
-            console.error("Error loading users", error);
+            console.error("Error loading users:", error);
+            showError("Error al cargar usuarios");
         } finally {
             setLoading(false);
         }
@@ -77,7 +52,7 @@ const UserManagement = () => {
         filteredItems: filteredUsers
     } = useSearch(users, {
         searchFields: ['name', 'firstName', 'lastName', 'email', 'specialty', 'dni'],
-        filterField: 'role'
+        filterField: 'eventRoles'
     });
 
     // Use custom hook for sorting
@@ -137,13 +112,30 @@ const UserManagement = () => {
         }
     };
 
-    const handleUpdateRoles = async (updatedUser) => {
+    const handleUpdateEventRole = async (eventRoles) => {
         try {
+            const updatedUser = { ...selectedUser, eventRoles };
             await api.users.update(updatedUser);
-            showSuccess(`Los cambios han sido guardados correctamente.`, `Roles de ${updatedUser.name} actualizados`);
+            showSuccess(`Los roles del evento han sido actualizados correctamente.`, `Roles de ${selectedUser.name} actualizados`);
             loadUsers();
         } catch (error) {
-            console.error("Failed to update roles", error);
+            console.error("Failed to update event roles", error);
+            showError('No se pudo actualizar los roles', 'Error');
+        } finally {
+            setSelectedUser(null);
+            setActionType(null);
+        }
+    };
+
+    const handleUpdateProfiles = async (profiles) => {
+        try {
+            const updatedUser = { ...selectedUser, profiles };
+            await api.users.update(updatedUser);
+            showSuccess(`Los perfiles de acceso han sido actualizados correctamente.`, `Perfiles de ${selectedUser.name} actualizados`);
+            loadUsers();
+        } catch (error) {
+            console.error("Failed to update profiles", error);
+            showError('No se pudo actualizar los perfiles', 'Error');
         } finally {
             setSelectedUser(null);
             setActionType(null);
@@ -157,23 +149,46 @@ const UserManagement = () => {
         { header: 'Ocupación', key: 'occupation' },
         {
             header: 'Rol',
-            key: 'role',
+            key: 'eventRoles',
             sortable: true,
-            render: (user) => (
-                <div className="flex flex-wrap gap-1">
-                    {(user.roles || [user.role]).map((role, idx) => (
-                        <span key={idx} className={`px-2 py-1 rounded-full text-[10px] font-semibold
-                            ${role === 'superadmin' ? 'bg-red-100 text-red-700' :
-                                role === 'admin' ? 'bg-purple-100 text-purple-700' :
-                                    role === 'jury' ? 'bg-cyan-100 text-cyan-700' :
-                                        role === 'resident' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-gray-100 text-gray-700'
-                            }`}>
-                            {role}
-                        </span>
-                    ))}
-                </div>
-            )
+            render: (user) => {
+                // Soporte para array eventRoles o string legado eventRole
+                const roles = user.eventRoles || (user.eventRole ? [user.eventRole] : ['asistente']);
+
+                return (
+                    <div className="flex flex-wrap gap-1">
+                        {roles.map((role, idx) => {
+                            let colorClass = 'bg-gray-100 text-gray-700';
+                            let label = role;
+
+                            switch (role) {
+                                case 'organizador':
+                                    colorClass = 'bg-blue-100 text-blue-700 border border-blue-200';
+                                    label = 'Organizador';
+                                    break;
+                                case 'jurado':
+                                    colorClass = 'bg-purple-100 text-purple-700 border border-purple-200';
+                                    label = 'Jurado';
+                                    break;
+                                case 'ponente':
+                                    colorClass = 'bg-orange-100 text-orange-700 border border-orange-200';
+                                    label = 'Ponente';
+                                    break;
+                                case 'asistente':
+                                    colorClass = 'bg-green-100 text-green-700 border border-green-200';
+                                    label = 'Asistente';
+                                    break;
+                            }
+
+                            return (
+                                <span key={idx} className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${colorClass}`}>
+                                    {label}
+                                </span>
+                            );
+                        })}
+                    </div>
+                );
+            }
         },
         {
             header: 'Especialidad',
@@ -251,10 +266,10 @@ const UserManagement = () => {
                         onChange={(e) => setFilterRole(e.target.value)}
                         options={[
                             { value: "All", label: "Todos los Roles" },
-                            { value: "Asistente", label: "Asistentes" },
-                            { value: "Ponente", label: "Ponentes" },
-                            { value: "Jurado", label: "Jurados" },
-                            { value: "Comité Organizador", label: "Comité" },
+                            { value: "asistente", label: "Asistentes" },
+                            { value: "ponente", label: "Ponentes" },
+                            { value: "jurado", label: "Jurados" },
+                            { value: "organizador", label: "Comité" },
                             { value: "admin", label: "Administradores" }
                         ]}
                         className="mb-0 min-w-[180px]"
@@ -272,11 +287,18 @@ const UserManagement = () => {
                     actions={(user) => (
                         <div className="flex gap-2">
                             <button
-                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('roles'); }}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Gestionar Roles"
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('event_role'); }}
+                                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+                                title="Roles"
                             >
-                                <Shield size={18} />
+                                <UserCog size={18} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('profiles'); }}
+                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Perfiles"
+                            >
+                                <Settings size={18} />
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('reset'); }}
@@ -338,11 +360,18 @@ const UserManagement = () => {
                 )}
             </div>
 
-            <RoleAssignmentModal
-                isOpen={actionType === 'roles'}
+            <RoleModal
+                isOpen={actionType === 'event_role'}
                 onClose={() => { setSelectedUser(null); setActionType(null); }}
                 user={selectedUser}
-                onSave={handleUpdateRoles}
+                onSave={handleUpdateEventRole}
+            />
+
+            <ProfilesModal
+                isOpen={actionType === 'profiles'}
+                onClose={() => { setSelectedUser(null); setActionType(null); }}
+                user={selectedUser}
+                onSave={handleUpdateProfiles}
             />
 
             <AttendeeDetailsModal

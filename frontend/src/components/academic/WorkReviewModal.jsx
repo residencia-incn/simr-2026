@@ -71,12 +71,56 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
     const handleSubmit = async (status) => {
         setIsSubmitting(true);
         try {
+            // Fetch fresh work data to avoid overwriting concurrent changes
+            // This is critical for synchronization between different views (Research/Academic)
+            const freshWork = await api.works.getById(work.id);
+            const targetWork = freshWork || work;
+
             await api.works.update({
-                ...work,
+                ...targetWork,
                 status,
                 feedback: status === 'Observado' ? feedback : null,
                 checklist: status === 'Aceptado' ? checklist : null
             });
+
+            // LOGICA DE PROMOCION A PONENTE
+            if (status === 'Aceptado' && targetWork.authorId) {
+                try {
+                    // Buscar usuario autor
+                    const allUsers = await api.users.getAllIncludingSuperAdmin();
+                    const authorUser = allUsers.find(u => u.id === targetWork.authorId);
+
+                    if (authorUser) {
+                        // Actualizar roles y perfiles
+                        // Agregar 'ponente' a eventRoles
+                        const currentEventRoles = authorUser.eventRoles || [];
+                        const newEventRoles = [...new Set([...currentEventRoles, 'ponente'])];
+
+                        // Agregar perfiles de acceso: 'aula_virtual' y 'trabajos' (resident dashboard access logic usually relies on user type but profiles help too)
+                        // Note: 'trabajos' profile in mockData maps to WORKS section. 'resident' role usually maps to 'resident-dashboard'
+                        const currentProfiles = authorUser.profiles || [];
+                        const newProfiles = [...new Set([...currentProfiles, 'aula_virtual', 'trabajos', 'perfil_basico'])];
+
+                        // Agregar rol 'resident' y 'participant' a roles array para el switcher
+                        const currentRoles = authorUser.roles || [];
+                        const newRoles = [...new Set([...currentRoles, 'resident', 'participant'])];
+
+                        await api.users.update({
+                            ...authorUser,
+                            eventRoles: newEventRoles,
+                            profiles: newProfiles,
+                            roles: newRoles,
+                            // Ensure role is at least something valid if it was basic
+                            role: authorUser.role === 'participant' || authorUser.role === 'Especialista' ? 'Ponente' : authorUser.role
+                        });
+                        console.log(`Usuario ${authorUser.name} promovido a Ponente con accesos.`);
+                    }
+                } catch (userErr) {
+                    console.error("Error promoviendo usuario a ponente:", userErr);
+                    // No bloquear el flujo principal si falla la promoción, pero alertar
+                    alert("El trabajo se aprobó, pero hubo un error actualizando el rol del autor. Por favor verifique manualmente.");
+                }
+            }
 
 
             // Clear draft on success
@@ -90,6 +134,7 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
             onClose();
         } catch (error) {
             console.error("Error updating work:", error);
+            alert("Ocurrió un error al actualizar el trabajo. Por favor intente nuevamente.");
         } finally {
             setIsSubmitting(false);
         }
@@ -226,14 +271,27 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
                                 <AlertTriangle size={18} className="mr-2" />
                                 Solicitar Correcciones
                             </Button>
-                            <Button
-                                className="flex-1"
-                                onClick={() => handleSubmit('Aceptado')}
-                                disabled={isSubmitting || !allChecked}
-                            >
-                                <CheckCircle size={18} className="mr-2" />
-                                Dar Visto Bueno
-                            </Button>
+                            <div className="flex-1 flex flex-col gap-1">
+                                <Button
+                                    className="w-full opacity-100 disabled:opacity-50"
+                                    onClick={() => {
+                                        if (!allChecked) {
+                                            alert("Debe validar todos los puntos de la lista de verificación (checklist) antes de dar el Visto Bueno.");
+                                            return;
+                                        }
+                                        handleSubmit('Aceptado');
+                                    }}
+                                    disabled={isSubmitting}
+                                >
+                                    <CheckCircle size={18} className="mr-2" />
+                                    Dar Visto Bueno
+                                </Button>
+                                {!allChecked && (
+                                    <span className="text-[10px] text-red-500 text-center font-medium animate-pulse">
+                                        * Complete el checklist para aprobar
+                                    </span>
+                                )}
+                            </div>
                         </>
                     )}
                 </div>

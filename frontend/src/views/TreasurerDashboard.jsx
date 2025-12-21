@@ -9,6 +9,7 @@ import AccountsManager from '../components/treasury/AccountsManager';
 import ContributionsManager from '../components/treasury/ContributionsManager';
 import ReportsView from '../components/treasury/ReportsView';
 import TreasurySettings from '../components/treasury/TreasurySettings';
+import IncomeManager from '../components/treasury/IncomeManager';
 import { showSuccess, showError, showWarning } from '../utils/alerts';
 
 const TreasurerDashboard = ({ user }) => {
@@ -17,19 +18,19 @@ const TreasurerDashboard = ({ user }) => {
 
     // New Treasury System Hook
     const {
-        accounts,
-        transactions,
-        contributionPlan,
-        budgetPlan,
-        config,
-        categories,
-        loading: treasuryLoading,
-        totalBalance,
-        accountBalances,
-        totalIncome: treasuryIncome,
-        totalExpenses: treasuryExpenses,
-        budgetExecution,
-        contributionStatus,
+        accounts = [],
+        transactions = [],
+        contributionPlan = {},
+        budgetPlan = [],
+        config = {},
+        categories = { income: [], expense: [] },
+        loading: treasuryLoading = false,
+        totalBalance = 0,
+        accountBalances = [],
+        totalIncome: treasuryIncome = 0,
+        totalExpenses: treasuryExpenses = 0,
+        budgetExecution = [],
+        contributionStatus = {},
         createAccount,
         updateAccount,
         deleteAccount,
@@ -145,7 +146,7 @@ const TreasurerDashboard = ({ user }) => {
             tdClassName: 'text-right font-bold',
             render: (t) => (
                 <span className={t.type === 'income' ? 'text-green-600' : 'text-red-600'}>
-                    {t.type === 'income' ? '+' : '-'} S/ {(t.amount || 0).toFixed(2)}
+                    {t.type === 'income' ? '+' : '-'} S/ {parseFloat(t.amount || 0).toFixed(2)}
                 </span>
             )
         },
@@ -179,11 +180,11 @@ const TreasurerDashboard = ({ user }) => {
         { header: 'Fecha', key: 'date' },
         { header: 'Participante', key: 'name', className: 'font-medium text-gray-900' },
         { header: 'Rol', key: 'role', className: 'text-gray-600' },
-        { header: 'Monto', key: 'amount', tdClassName: 'text-right font-bold text-blue-700', render: (a) => `S/ ${a.amount.toFixed(2)}` }
+        { header: 'Monto', key: 'amount', tdClassName: 'text-right font-bold text-blue-700', render: (a) => `S/ ${parseFloat(a.amount || 0).toFixed(2)}` }
     ], []);
 
     // Calculate automatic income from attendees
-    const attendeeIncome = confirmedAttendees.reduce((acc, curr) => acc + (curr.amount || 0), 0);
+    const attendeeIncome = confirmedAttendees.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
 
     const handleAddCategory = async (e) => {
         e.preventDefault();
@@ -254,6 +255,34 @@ const TreasurerDashboard = ({ user }) => {
             await loadData(); // Reload legacy data for compatibility
             resetForm();
             showSuccess(`La transacción ha sido registrada exitosamente.`, `${activeTab === 'income' ? 'Ingreso' : 'Egreso'} registrado`);
+        } catch (err) {
+            console.error(err);
+            showError(err.message, 'Error al registrar');
+        }
+    };
+
+
+    // Dedicated handler for income modal (doesn't depend on activeTab)
+    const handleIncomeSubmit = async (formData) => {
+        if (!formData.accountId) {
+            showWarning('Seleccione una cuenta para continuar.', 'Cuenta requerida');
+            return;
+        }
+
+        const transactionData = {
+            fecha: formData.date,
+            descripcion: formData.description,
+            monto: parseFloat(formData.amount), // Always positive for income
+            categoria: formData.category,
+            cuenta_id: formData.accountId,
+            type: 'income' // Explicitly set type for filtering
+        };
+
+        try {
+            await createTransaction(transactionData);
+            await reloadTreasury(); // Reload treasury data to update transactions list
+            await loadData(); // Reload legacy data for compatibility
+            showSuccess('El ingreso ha sido registrado exitosamente.', 'Ingreso registrado');
         } catch (err) {
             console.error(err);
             showError(err.message, 'Error al registrar');
@@ -414,7 +443,7 @@ const TreasurerDashboard = ({ user }) => {
 
     return (
         <div className="animate-fadeIn space-y-8">
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Panel de Tesorería</h2>
                     <p className="text-gray-600">Gestión de caja y contabilidad del evento</p>
@@ -443,15 +472,16 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('income')}
-                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        onClick={() => setActiveTab('income-details')}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income-details' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
-                        <TrendingUp size={20} />
-                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
+                        <TrendingUp size={18} />
+                        <div className="absolute left-1/2 -translate-x-1/2 top-full mt-2 px-3 py-1.5 bg-black text-white text-xs rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-lg">
                             Ingresos
-                        </span>
+                            <div className="absolute left-1/2 -translate-x-1/2 -top-[6px] border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[6px] border-b-black"></div>
+                        </div>
                     </button>
+
                     <button
                         onClick={() => setActiveTab('expense')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
@@ -577,6 +607,18 @@ const TreasurerDashboard = ({ user }) => {
                         })}
                     </div>
                 </div>
+            )}
+
+            {/* Income Details Section */}
+            {activeTab === 'income-details' && (
+                <IncomeManager
+                    transactions={transactions}
+                    accounts={accounts}
+                    confirmedAttendees={confirmedAttendees}
+                    contributionStatus={contributionStatus}
+                    categories={categories}
+                    onIncomeSubmit={handleIncomeSubmit}
+                />
             )}
 
             {activeTab === 'summary' && (
@@ -746,14 +788,14 @@ const TreasurerDashboard = ({ user }) => {
                 </div>
             )}
 
-            {(activeTab === 'income' || activeTab === 'expense') && (
+            {activeTab === 'expense' && (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Form */}
                     <div className="lg:col-span-1">
                         <Card>
                             <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <Plus size={20} className={activeTab === 'income' ? 'text-green-600' : 'text-red-600'} />
-                                Registrar {activeTab === 'income' ? 'Ingreso' : 'Egreso'}
+                                <Plus size={20} className="text-red-600" />
+                                Registrar Egreso
                             </h3>
                             <form onSubmit={handleAddTransaction} className="space-y-4">
                                 <FormField
@@ -785,7 +827,7 @@ const TreasurerDashboard = ({ user }) => {
                                         { value: "", label: "Seleccionar cuenta..." },
                                         ...accounts.map(acc => ({
                                             value: acc.id,
-                                            label: `${acc.nombre} (S/ ${acc.saldo_actual.toFixed(2)})`
+                                            label: `${acc.nombre} (S/ ${(acc.saldo_actual || 0).toFixed(2)})`
                                         }))
                                     ]}
                                     required
@@ -810,8 +852,8 @@ const TreasurerDashboard = ({ user }) => {
                                     onChange={handleChange}
                                     required
                                 />
-                                <Button type="submit" className={`w-full ${activeTab === 'income' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'} text-white`}>
-                                    Guardar {activeTab === 'income' ? 'Ingreso' : 'Egreso'}
+                                <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white">
+                                    Guardar Egreso
                                 </Button>
                             </form>
                         </Card>
@@ -819,27 +861,10 @@ const TreasurerDashboard = ({ user }) => {
 
                     {/* List */}
                     <div className="lg:col-span-2 space-y-8">
-                        {activeTab === 'income' && (
-                            <div className="space-y-4">
-                                <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                                    <Users size={20} className="text-blue-600" />
-                                    Detalle de Inscripciones (Registrados)
-                                </h3>
-                                <div className="bg-blue-50 rounded-xl shadow-sm border border-blue-100 overflow-hidden">
-                                    <Table
-                                        columns={attendeeColumns}
-                                        data={confirmedAttendees.filter(a => a.amount > 0)}
-                                    />
-                                    <div className="bg-blue-100 font-bold text-blue-900 p-4 text-right flex justify-between">
-                                        <span>Subtotal Inscripciones:</span>
-                                        <span>S/ {attendeeIncome.toFixed(2)}</span>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
+
 
                         <div className="space-y-4">
-                            <h3 className="font-bold text-gray-900">Historial de {activeTab === 'income' ? 'Todos los Ingresos' : 'Egresos'}</h3>
+                            <h3 className="font-bold text-gray-900">Historial de Egresos</h3>
                             {transactions.filter(t => t.type === activeTab).length > 0 ? (
                                 <Table
                                     columns={historyColumns}
@@ -848,7 +873,7 @@ const TreasurerDashboard = ({ user }) => {
                             ) : (
                                 <EmptyState
                                     icon={FileText}
-                                    title={`No hay registros de ${activeTab === 'income' ? 'ingresos' : 'egresos'}`}
+                                    title="No hay registros de egresos"
                                     description="Comience agregando nuevos registros desde el formulario."
                                 />
                             )}
@@ -964,9 +989,10 @@ const TreasurerDashboard = ({ user }) => {
             {
                 activeTab === 'reports' && (
                     <ReportsView
-                        transactions={transactionsV2}
+                        transactions={transactions}
                         accounts={accounts}
                         budgetExecution={budgetExecution}
+                        user={user}
                     />
                 )
             }

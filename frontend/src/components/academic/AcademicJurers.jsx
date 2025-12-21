@@ -6,6 +6,7 @@ import Card from '../ui/Card';
 import Button from '../ui/Button';
 import Badge from '../ui/Badge';
 import AssignWorkToJuryModal from './AssignWorkToJuryModal';
+import AddJurorModal from './AddJurorModal';
 
 const AcademicJurers = ({ works, onUpdate }) => {
     const [jurors, setJurors] = useState([]);
@@ -17,6 +18,12 @@ const AcademicJurers = ({ works, onUpdate }) => {
         isOpen: isAssignOpen,
         open: openAssign,
         close: closeAssign
+    } = useModal();
+
+    const {
+        isOpen: isAddOpen,
+        open: openAdd,
+        close: closeAdd
     } = useModal();
 
     // Load jurors from API
@@ -72,7 +79,7 @@ const AcademicJurers = ({ works, onUpdate }) => {
             <div className="w-1/3 flex flex-col gap-4 bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex justify-between items-center">
                     <h3 className="font-bold text-gray-800">Directorio de Jurados</h3>
-                    <Button size="sm" variant="outline" className="text-xs">
+                    <Button size="sm" variant="outline" className="text-xs" onClick={openAdd}>
                         <UserPlus size={14} className="mr-1" /> Nuevo Jurado
                     </Button>
                 </div>
@@ -222,6 +229,26 @@ const AcademicJurers = ({ works, onUpdate }) => {
                 juror={selectedJuror}
                 works={works}
                 onUpdate={onUpdate}
+            />
+            {/* Add Juror Modal */}
+            <AddJurorModal
+                isOpen={isAddOpen}
+                onClose={closeAdd}
+                onUpdate={() => {
+                    // Force reload of jurors
+                    const loadJurors = async () => {
+                        setLoading(true);
+                        try {
+                            const data = await api.jurors.getAll();
+                            setJurors(data);
+                        } catch (error) {
+                            console.error("Error reloading jurors", error);
+                        } finally {
+                            setLoading(false);
+                        }
+                    };
+                    loadJurors();
+                }}
             />
         </div>
     );

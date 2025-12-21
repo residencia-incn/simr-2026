@@ -1,6 +1,6 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download } from 'lucide-react';
+import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check } from 'lucide-react';
 import { Button, Card, Badge } from '../ui';
 import QRCode from 'react-qr-code';
 
@@ -74,7 +74,7 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                <InfoItem icon={Mail} label="Email" value={attendee.email || '-'} />
+                                <InfoItem icon={Mail} label="Email" value={attendee.email || '-'} copyable />
                                 <InfoItem icon={Phone} label="Teléfono" value={attendee.phone || '-'} />
                                 <InfoItem icon={Building} label="Institución" value={attendee.institution || '-'} />
                                 <InfoItem icon={Calendar} label="Fecha Registro" value={attendee.date || '-'} />
@@ -265,17 +265,39 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
 };
 
 // Helper Components
-const InfoItem = ({ icon: Icon, label, value }) => (
-    <div className="flex items-center gap-3">
-        <div className="p-2 bg-gray-50 rounded-lg text-gray-500 print:bg-white print:border print:border-gray-200">
-            <Icon size={16} />
+const InfoItem = ({ icon: Icon, label, value, copyable }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+        if (!value || value === '-') return;
+        navigator.clipboard.writeText(value);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+        <div className="flex items-center gap-3">
+            <div className="p-2 bg-gray-50 rounded-lg text-gray-500 print:bg-white print:border print:border-gray-200">
+                <Icon size={16} />
+            </div>
+            <div className="flex-grow">
+                <p className="text-xs text-gray-400 uppercase font-bold">{label}</p>
+                <div className="flex items-center gap-2">
+                    <p className="text-gray-900 font-medium truncate max-w-[200px]" title={value}>{value}</p>
+                    {copyable && value && value !== '-' && (
+                        <button
+                            onClick={handleCopy}
+                            className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-blue-600 transition-colors"
+                            title="Copiar correo"
+                        >
+                            {copied ? <Check size={14} className="text-green-500" /> : <Copy size={14} />}
+                        </button>
+                    )}
+                </div>
+            </div>
         </div>
-        <div>
-            <p className="text-xs text-gray-400 uppercase font-bold">{label}</p>
-            <p className="text-gray-900 font-medium truncate max-w-[200px]">{value}</p>
-        </div>
-    </div>
-);
+    );
+};
 
 const DetailRow = ({ label, value }) => (
     <div className="flex justify-between border-b border-gray-100 last:border-0 pb-2 last:pb-0">

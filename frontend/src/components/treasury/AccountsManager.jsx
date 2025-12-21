@@ -126,7 +126,7 @@ const AccountsManager = ({ accounts, onCreateAccount, onUpdateAccount, onDeleteA
                                 <div className="flex items-baseline gap-2">
                                     <DollarSign size={20} className="text-gray-400" />
                                     <p className={`text-2xl font-bold ${account.saldo_actual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                        S/ {account.saldo_actual.toFixed(2)}
+                                        S/ {(account.saldo_actual || 0).toFixed(2)}
                                     </p>
                                 </div>
                             </div>

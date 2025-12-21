@@ -32,7 +32,12 @@ export const useTreasury = () => {
             ]);
 
             setAccounts(accs);
-            setTransactions(txs);
+            // Add type field to transactions based on monto
+            const txsWithType = txs.map(tx => ({
+                ...tx,
+                type: tx.type || (tx.monto >= 0 ? 'income' : 'expense')
+            }));
+            setTransactions(txsWithType);
             setContributionPlan(contrib);
             setBudgetPlan(budget);
             setConfig(cfg);
@@ -203,7 +208,14 @@ export const useTreasury = () => {
     const createTransaction = useCallback(async (transactionData) => {
         try {
             const newTx = await api.treasury.addTransactionV2(transactionData);
-            setTransactions(prev => [newTx, ...prev]);
+
+            // Add type field based on monto if not already present
+            const txWithType = {
+                ...newTx,
+                type: newTx.type || (newTx.monto >= 0 ? 'income' : 'expense')
+            };
+
+            setTransactions(prev => [txWithType, ...prev]);
 
             // Actualizar saldo de cuenta
             setAccounts(prev => prev.map(acc =>
@@ -212,7 +224,7 @@ export const useTreasury = () => {
                     : acc
             ));
 
-            return newTx;
+            return txWithType;
         } catch (err) {
             console.error('Error creating transaction:', err);
             throw err;

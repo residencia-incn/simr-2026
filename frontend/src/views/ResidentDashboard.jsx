@@ -20,9 +20,15 @@ const ResidentDashboard = ({ user, navigate }) => {
     // Fetch all works using the API
     const { data: works, loading } = useApi(api.works.getAll);
 
-    // Filter works by current user (using simplified name matching logic for mock)
-    // In a real app, the API would filtering by userId or return only user's works
-    const userWorks = works ? works.filter(w => w.author.includes(user.name.split(" ")[1])) : [];
+    // Filter works by current user
+    // Now using robust ID matching, falling back to name for legacy mock data support
+    const userWorks = works ? works.filter(w => {
+        if (w.authorId && user.id) {
+            return w.authorId === user.id;
+        }
+        // Fallback for legacy mock data without authorId
+        return w.author.includes(user.name.split(" ")[1]);
+    }) : [];
 
     // Use custom hook for sorting
     const { items: sortedWorks, requestSort, sortConfig } = useSortableData(userWorks);

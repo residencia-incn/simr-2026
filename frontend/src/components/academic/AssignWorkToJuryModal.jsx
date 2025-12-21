@@ -32,26 +32,31 @@ const AssignWorkToJuryModal = ({ isOpen, onClose, juror, works, onUpdate }) => {
     const handleAssign = async () => {
         setIsSubmitting(true);
         try {
-            // Update each selected work
-            const updates = selectedWorks.map(async (workId) => {
-                const work = works.find(w => w.id === workId);
-                if (!work) return;
+            // Update each selected work SEQUENTIALLY to avoid race conditions with local storage
+            for (const workId of selectedWorks) {
+                // Fetch fresh work data to ensure we have the latest attributes
+                const freshWork = await api.works.getById(workId);
+                if (!freshWork) continue;
 
-                let currentJury = work.jury || [];
+                let currentJury = freshWork.jury || [];
                 if (!Array.isArray(currentJury)) currentJury = [currentJury];
 
+                // Check again if already assigned (double safety)
+                if (currentJury.includes(juror.id)) continue;
+
                 await api.works.update({
-                    ...work,
+                    ...freshWork,
                     jury: [...currentJury, juror.id]
                 });
-            });
+            }
 
-            await Promise.all(updates);
-            onUpdate(); // Refresh data
+            onUpdate(); // Refresh data in parent
             onClose();
             setSelectedWorks([]);
+            // Optional: Show success toast here if global toast is available
         } catch (error) {
             console.error("Error assigning works to jury:", error);
+            alert("Hubo un error al asignar los trabajos. Por favor intente nuevamente.");
         } finally {
             setIsSubmitting(false);
         }

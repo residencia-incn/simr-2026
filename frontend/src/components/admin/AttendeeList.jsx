@@ -15,7 +15,7 @@ const AttendeeList = ({ attendees }) => {
         filteredItems: filteredAttendees
     } = useSearch(attendees, {
         searchFields: ['name', 'specialty'],
-        filterField: 'role'
+        filterField: 'eventRoles'
     });
 
     // Use custom hook for sorting
@@ -65,17 +65,39 @@ const AttendeeList = ({ attendees }) => {
         { header: 'Ocupación', key: 'occupation' },
         {
             header: 'Rol',
-            key: 'role',
+            key: 'eventRoles',
             sortable: true,
             render: (item) => {
-                const colors = {
-                    'Comité Organizador': 'purple',
-                    'Ponente': 'amber',
-                    'Jurado': 'cyan',
-                    'Asistente': 'gray',
-                    'default': 'gray'
-                };
-                return <Badge variant={colors[item.role] || colors.default}>{item.role}</Badge>;
+                // Support for array eventRoles or legacy single role
+                const roles = item.eventRoles || (item.role ? [item.role] : ['asistente']);
+
+                return (
+                    <div className="flex flex-wrap gap-1">
+                        {roles.map((role, idx) => {
+                            let variant = 'gray'; // default 'asistente'
+                            let label = role;
+
+                            // Normalize for display and color
+                            const lowerRole = String(role).toLowerCase();
+
+                            if (lowerRole.includes('organizador') || lowerRole.includes('comité')) {
+                                variant = 'purple';
+                                label = 'Comité';
+                            } else if (lowerRole.includes('ponente')) {
+                                variant = 'amber';
+                                label = 'Ponente';
+                            } else if (lowerRole.includes('jurado')) {
+                                variant = 'cyan';
+                                label = 'Jurado';
+                            } else if (lowerRole.includes('asistente')) {
+                                variant = 'gray';
+                                label = 'Asistente';
+                            }
+
+                            return <Badge key={idx} variant={variant}>{label}</Badge>;
+                        })}
+                    </div>
+                );
             }
         },
         {
@@ -125,7 +147,7 @@ const AttendeeList = ({ attendees }) => {
                 );
             }
         },
-        { header: 'Fecha Reg.', key: 'date', sortable: true }
+        { header: 'Fecha Reg.', key: 'registrationDate', sortable: true, render: (item) => item.registrationDate || item.date }
     ];
 
     return (
@@ -148,10 +170,10 @@ const AttendeeList = ({ attendees }) => {
                         onChange={(e) => setFilterRole(e.target.value)}
                         options={[
                             { value: "All", label: "Todos los Roles" },
-                            { value: "Asistente", label: "Asistentes" },
-                            { value: "Ponente", label: "Ponentes" },
-                            { value: "Jurado", label: "Jurados" },
-                            { value: "Comité Organizador", label: "Comité" }
+                            { value: "asistente", label: "Asistentes" },
+                            { value: "ponente", label: "Ponentes" },
+                            { value: "jurado", label: "Jurados" },
+                            { value: "organizador", label: "Comité" }
                         ]}
                         className="mb-0 min-w-[180px]"
                     />

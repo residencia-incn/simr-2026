@@ -77,7 +77,7 @@ export default function SIMRApp() {
     // Check if opened with virtual classroom param
     const params = new URLSearchParams(window.location.search);
     if (params.get('virtual') === 'true') {
-      setActiveRole('participant');
+      setActiveRole('aula_virtual');
       setCurrentView('participant-dashboard'); // Redirect to the dark, video-centric dashboard (Crehana style)
       return;
     }
@@ -129,8 +129,10 @@ export default function SIMRApp() {
   useEffect(() => {
     if (user && currentView === 'registration') {
       // Redirect to their respective dashboard or home
-      const role = user.role || user.roles[0];
-      updateViewForRole(role);
+      const allProfiles = user.profiles || ['perfil_basico'];
+      // Filter out 'perfil_basico' to find a "real" dashboard profile, or default to it
+      const primaryProfile = allProfiles.find(p => p !== 'perfil_basico') || 'perfil_basico';
+      updateViewForRole(primaryProfile);
     }
   }, [user, currentView]);
 
@@ -155,8 +157,10 @@ export default function SIMRApp() {
     setUser(userData);
     window.localStorage.setItem('simr_user', JSON.stringify(userData));
 
-    // Default to the primary role or the first one in the list
-    const initialRole = userData.role || userData.roles[0];
+    // Default to the first substantive profile
+    const allProfiles = userData.profiles || ['perfil_basico'];
+    const initialRole = allProfiles.find(p => p !== 'perfil_basico') || 'perfil_basico';
+
     setActiveRole(initialRole);
     window.localStorage.setItem('simr_active_role', initialRole);
 
@@ -166,7 +170,7 @@ export default function SIMRApp() {
 
   const handleRoleSwitch = (newRole) => {
     // Special handling for Aula Virtual - open in new tab
-    if (newRole === 'participant') {
+    if (newRole === 'aula_virtual') {
       // Open the same app in a new tab with a special parameter
       const url = `${window.location.origin}${window.location.pathname}?virtual=true`;
       window.open(url, '_blank');
@@ -182,17 +186,19 @@ export default function SIMRApp() {
     setIsRoleMenuOpen(false);
   };
 
-  const getDashboardView = (role) => {
-    return role === 'admin' || role === 'superadmin' ? 'admin-dashboard' :
-      role === 'secretary' ? 'secretary-dashboard' :
-        role === 'academic' ? 'academic-dashboard' :
-          role === 'admission' ? 'admission-dashboard' :
-            role === 'jury' ? 'jury-dashboard' :
-              role === 'treasurer' || role === 'accounting' ? 'treasurer-dashboard' :
-                role === 'committee' ? 'academic-dashboard' : // Reuse academic dashboard
-                  role === 'participant' ? 'participant-dashboard' :
-                    role === 'resident' ? 'resident-dashboard' :
-                      'profile';
+  const getDashboardView = (profileKey) => {
+    switch (profileKey) {
+      case 'organizacion': return 'admin-dashboard';
+      case 'secretaria': return 'secretary-dashboard';
+      case 'investigacion': return 'academic-dashboard'; // Research role
+      case 'jurado': return 'jury-dashboard';
+      case 'contabilidad': return 'treasurer-dashboard';
+      case 'asistencia': return 'admission-dashboard';
+      case 'academico': return 'academic-dashboard'; // Committee role
+      case 'aula_virtual': return 'participant-dashboard';
+      case 'trabajos': return 'resident-dashboard';
+      default: return 'profile';
+    }
   };
 
   const updateViewForRole = (role) => {
@@ -218,39 +224,38 @@ export default function SIMRApp() {
   const eventName = `SIMR ${eventYear}`;
 
   const ROLE_LABELS = {
-    admin: 'Organización',
-    secretary: 'Secretaría',
-    academic: 'Investigación',
-    admission: 'Asistencia',
-    jury: 'Jurado',
-    treasurer: 'Contabilidad',
-    accounting: 'Contabilidad', // Legacy alias for treasurer
-    participant: 'Aula Virtual',
-    resident: 'Trabajos',
-    committee: 'Académico'
+    organizacion: 'Organización',
+    secretaria: 'Secretaría',
+    investigacion: 'Investigación',
+    asistencia: 'Asistencia',
+    jurado: 'Jurado',
+    contabilidad: 'Contabilidad',
+    aula_virtual: 'Aula Virtual',
+    trabajos: 'Trabajos',
+    academico: 'Académico',
+    perfil_basico: 'Mi Perfil'
   };
 
   const ROLE_ICONS = {
-    superadmin: Shield,
-    admin: Users,
-    secretary: FileText,
-    academic: BookOpen,
-    admission: Users, // Or another icon if preferred
-    jury: Award,
-    treasurer: DollarSign,
-    accounting: DollarSign, // Legacy alias for treasurer
-    participant: Users,
-    resident: User,
-    committee: BookOpen
+    organizacion: Users,
+    secretaria: FileText,
+    investigacion: BookOpen,
+    asistencia: Users,
+    jurado: Award,
+    contabilidad: DollarSign,
+    aula_virtual: Users,
+    trabajos: User,
+    academico: BookOpen,
+    perfil_basico: CircleUser
   };
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
 
       {/* Navbar */}
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-2 cursor-pointer" onClick={() => navigate('home')}>
+          <div className="flex items-center gap-2 cursor-pointer print:hidden" onClick={() => navigate('home')}>
             <div className="bg-blue-900 text-white font-bold p-1.5 rounded text-lg">INCN</div>
             <span className="font-bold text-gray-900 text-lg hidden sm:block">{eventName}</span>
           </div>
@@ -286,7 +291,7 @@ export default function SIMRApp() {
                 <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
                   <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
                     {ROLE_LABELS[activeRole] || activeRole}
-                    {user.roles && user.roles.length > 1 && <ChevronDown size={10} />}
+                    {user.profiles && user.profiles.filter(p => p !== 'perfil_basico').length > 1 && <ChevronDown size={10} />}
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
@@ -316,16 +321,16 @@ export default function SIMRApp() {
                       </button>
                     </div>
 
-                    {user.roles && user.roles.length > 0 && (
+                    {user.profiles && user.profiles.length > 0 && (
                       <>
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                        {user.roles.filter(role => role !== 'superadmin').map(role => {
-                          const Icon = ROLE_ICONS[role] || Users;
-                          const isDashboardActive = activeRole === role;
+                        {user.profiles.filter(p => p !== 'perfil_basico').map(profile => {
+                          const Icon = ROLE_ICONS[profile] || Users;
+                          const isDashboardActive = activeRole === profile;
                           return (
                             <button
-                              key={role}
-                              onClick={() => handleRoleSwitch(role)}
+                              key={profile}
+                              onClick={() => handleRoleSwitch(profile)}
                               className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
                                      ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
                                      `}
@@ -334,7 +339,7 @@ export default function SIMRApp() {
                                 <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                                   <Icon size={16} />
                                 </div>
-                                {ROLE_LABELS[role] || role}
+                                {ROLE_LABELS[profile] || profile}
                               </div>
                               {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
                             </button>
@@ -362,7 +367,7 @@ export default function SIMRApp() {
           </div>
 
           {/* Mobile Menu Button */}
-          <button className="md:hidden p-2 text-gray-700" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
+          <button className="md:hidden p-2 text-gray-700 print:hidden" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
             {isMobileMenuOpen ? <X /> : <Menu />}
           </button>
         </div>
@@ -383,13 +388,13 @@ export default function SIMRApp() {
               <>
                 <div className="border-t border-gray-100 pt-2 mt-2">
                   <div className="text-xs text-gray-500 uppercase mb-2">Cambiar Perfil ({ROLE_LABELS[activeRole]})</div>
-                  {user.roles && user.roles.filter(role => role !== 'superadmin').map(role => (
+                  {user.profiles && user.profiles.filter(p => p !== 'perfil_basico').map(profile => (
                     <button
-                      key={role}
-                      onClick={() => handleRoleSwitch(role)}
-                      className={`block w-full text-left py-2 text-sm ${activeRole === role ? 'font-bold text-blue-700' : 'text-gray-600'}`}
+                      key={profile}
+                      onClick={() => handleRoleSwitch(profile)}
+                      className={`block w-full text-left py-2 text-sm ${activeRole === profile ? 'font-bold text-blue-700' : 'text-gray-600'}`}
                     >
-                      {ROLE_LABELS[role]}
+                      {ROLE_LABELS[profile]}
                     </button>
                   ))}
                 </div>
@@ -429,7 +434,9 @@ export default function SIMRApp() {
       </main>
 
       {/* Chat Widget */}
-      <ChatWidget />
+      <div className="print:hidden">
+        <ChatWidget />
+      </div>
 
       {/* Footer */}
       {['home', 'bases', 'roadmap', 'program', 'committee', 'gallery', 'posters', 'registration', 'login'].includes(currentView) && (

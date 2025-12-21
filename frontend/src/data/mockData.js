@@ -21,6 +21,66 @@ export const SPECIALTIES = ["Neurología", "Neuropediatría", "Neurocirugía"];
 export const WORK_TYPES = ["Reporte de Caso", "Trabajo Original", "Revisión Sistemática"];
 export const ROOMS = ["Auditorio Principal", "Sala 1 (Talleres)", "Sala Virtual"];
 
+// ============================================
+// ROLES Y PERFILES DEL SISTEMA
+// ============================================
+
+/**
+ * Roles del Evento - Define qué ES la persona en el evento
+ */
+export const EVENT_ROLES = {
+    ORGANIZER: 'organizador',
+    ATTENDEE: 'asistente',
+    JURY: 'jurado',
+    SPEAKER: 'ponente'
+};
+
+export const EVENT_ROLE_LABELS = {
+    organizador: 'Organizador (Staff)',
+    asistente: 'Asistente',
+    jurado: 'Jurado',
+    ponente: 'Ponente'
+};
+
+/**
+ * Perfiles del Sistema - Define a qué secciones tiene ACCESO
+ * Estos perfiles corresponden exactamente a las secciones del menú de navegación
+ */
+export const SYSTEM_PROFILES = {
+    BASIC: 'perfil_basico',
+    ORGANIZATION: 'organizacion',
+    SECRETARY: 'secretaria',
+    RESEARCH: 'investigacion',
+    JURY: 'jurado',
+    WORKS: 'trabajos',
+    VIRTUAL_CLASSROOM: 'aula_virtual',
+    TREASURY: 'contabilidad',
+    ATTENDANCE: 'asistencia',
+    ACADEMIC: 'academico'
+};
+
+export const PROFILE_LABELS = {
+    perfil_basico: 'Perfil Básico',
+    organizacion: 'Organización',
+    secretaria: 'Secretaría',
+    investigacion: 'Investigación',
+    jurado: 'Jurado',
+    trabajos: 'Trabajos',
+    aula_virtual: 'Aula Virtual',
+    contabilidad: 'Contabilidad',
+    asistencia: 'Asistencia',
+    academico: 'Académico'
+};
+
+/**
+ * Tipos de Inscripción - Determina perfiles automáticos
+ */
+export const REGISTRATION_TYPES = {
+    PRESENCIAL: 'presencial', // Solo perfil básico
+    PRESENCIAL_CERTIFICADO: 'presencial_certificado', // Perfil básico + Aula Virtual
+    VIRTUAL: 'virtual' // Perfil básico + Aula Virtual
+};
+
 export const EVENT_CONFIG = {
     year: "2026",
     startDate: "2026-10-22",
@@ -33,6 +93,7 @@ export const EVENT_CONFIG = {
     specialties: ["Neurología", "Neuropediatría", "Neurocirugía"],
     participantSpecialties: ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"],
     occupations: ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
+    institutions: ["INCN", "Hospital Almenara", "Hospital Rebagliati", "Hospital Loayza", "Hospital Dos de Mayo", "Hospital Cayetano Heredia", "Instituto Nacional de Salud del Niño", "Clinica Delgado", "Clinica San Felipe", "Otro"],
     residencyYears: ["R1", "R2", "R3", "R4", "R5"],
     eventAcronym: "SIMR 2026",
     eventType: "Híbrido",
@@ -185,6 +246,30 @@ export const COMMITTEE_DATA = [
         members: [
             { id: 'm-9', name: "Dr. Luis Trujillo", year: "R2 Neurología", img: "https://images.unsplash.com/photo-1560250097-0b93528c311a?auto=format&fit=crop&q=80&w=200" }
         ]
+    },
+    {
+        id: 'com-008',
+        role: "Comunicaciones",
+        title: "Comunicaciones",
+        members: [
+            { id: 'm-10', name: "Dra. Sofia Mendoza", year: "R3 Neurología", img: "https://images.unsplash.com/photo-1594744803329-e58b31de8bf5?auto=format&fit=crop&q=80&w=200" }
+        ]
+    },
+    {
+        id: 'com-009',
+        role: "Tecnología e Innovación",
+        title: "Tecnología e Innovación",
+        members: [
+            { id: 'm-11', name: "Dr. Miguel Ángel Rojas", year: "R2 Neurocirugía", img: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200" }
+        ]
+    },
+    {
+        id: 'com-010',
+        role: "Voluntariado",
+        title: "Voluntariado",
+        members: [
+            { id: 'm-12', name: "Dra. Patricia Flores", year: "R1 Neuropediatría", img: "https://images.unsplash.com/photo-1438761681033-6461ffad8d80?auto=format&fit=crop&q=80&w=200" }
+        ]
     }
 ];
 
@@ -232,202 +317,153 @@ export const PROGRAM_DATA = {
 };
 
 export const INITIAL_WORKS = [
+    // 5 Trabajos PENDIENTES (Autores: Residentes)
     {
-        id: "TRB-001",
+        id: "TRB-101",
+        title: "Eficacia de la estimulación magnética transcraneal en depresión resistente",
+        author: "Dra. María González (R4)",
+        authorId: "user-20",
+        type: "Trabajo Original",
+        specialty: "Neurocirugía",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [],
+        submittedAt: new Date().toISOString()
+    },
+    {
+        id: "TRB-102",
+        title: "Biomarcadores séricos en Esclerosis Múltiple: Estudio preliminar",
+        author: "Dr. Roberto Sánchez (R3)",
+        authorId: "user-21",
+        type: "Trabajo Original",
+        specialty: "Neurología",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [],
+        submittedAt: new Date().toISOString()
+    },
+    {
+        id: "TRB-103",
+        title: "Abordaje mínimamente invasivo en hernia discal lumbar",
+        author: "Dr. Luis Fernández (R4)",
+        authorId: "user-22",
+        type: "Reporte de Caso",
+        specialty: "Neurocirugía",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [],
+        submittedAt: new Date().toISOString()
+    },
+    {
+        id: "TRB-104",
+        title: "Perfiles cognitivos en pacientes con Epilepsia del Lóbulo Temporal",
+        author: "Dr. Carlos Ruiz (R2)",
+        authorId: "user-23",
+        type: "Trabajo Original",
+        specialty: "Neurología",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [],
+        submittedAt: new Date().toISOString()
+    },
+    {
+        id: "TRB-105",
+        title: "Manejo de hipertensión endocraneana en TEC severo: Revisión 2025",
+        author: "Dr. Henderson Vasquez",
+        authorId: "user-15",
+        type: "Revisión Sistemática",
+        specialty: "Neurocirugía",
+        status: "Pendiente",
+        day: null,
+        room: null,
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [],
+        submittedAt: new Date().toISOString()
+    },
+
+    // 5 Trabajos ACEPTADOS (Autores: Ponentes)
+    {
+        id: "TRB-201",
         title: "Encefalitis Autoinmune: Serie de casos en INCN",
-        author: "Dr. Juan Pérez (R2)",
+        author: "Dr. Juan Perez",
+        authorId: "user-1",
         type: "Trabajo Original",
         specialty: "Neurología",
         status: "Aceptado",
         day: "Lunes 22",
         room: "Auditorio Principal",
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        slidesUrl: "https://example.com/slides/encefalitis-auto.pdf",
-        slidesUpdatedAt: "2025-11-21T10:00:00",
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
         scores: [4.5, 4.8, 5.0],
         submittedAt: "2025-11-15T10:30:00",
         updatedAt: "2025-11-20T14:45:00"
     },
     {
-        id: "TRB-002",
-        title: "Moya Moya en paciente pediátrico",
-        author: "Dra. Maria Lopez (R1)",
-        type: "Reporte de Caso",
-        specialty: "Neuropediatría",
-        status: "Observado",
-        day: null,
-        room: null,
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [3.5, 4.0],
-        submittedAt: "2025-11-18T09:15:00",
-        updatedAt: "2025-11-25T11:20:00",
-        observations: "El resumen excede el límite de palabras en la introducción. Por favor corregir y ser más conciso con los objetivos."
-    },
-    {
-        id: "TRB-003",
-        title: "Uso de tPA en ACV isquémico extendido",
-        author: "Dr. Carlos Ruiz (R2)",
-        type: "Trabajo Original",
-        specialty: "Neurología",
-        status: "Aceptado",
-        day: "Martes 23",
-        room: "Sala 1",
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.2, 4.5, 4.3],
-        submittedAt: "2025-11-10T16:00:00",
-        updatedAt: "2025-11-10T16:00:00"
-    },
-    {
-        id: "TRB-004",
-        title: "Síndrome de Guillain-Barré atípico",
-        author: "Dra. Ana Torres (R1)",
-        type: "Reporte de Caso",
-        specialty: "Neurología",
-        status: "Aceptado",
-        day: "Lunes 22",
-        room: "Sala Virtual",
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [4.8, 4.9, 4.7],
-        submittedAt: "2025-11-05T08:45:00",
-        updatedAt: "2025-11-05T08:45:00"
-    },
-    {
-        id: "TRB-005",
+        id: "TRB-202",
         title: "Revisión sistemática de tratamientos para ELA",
-        author: "Dr. Pedro Castillo (R3)",
+        author: "Dr. Pedro Castillo",
+        authorId: "user-7",
         type: "Revisión Sistemática",
         specialty: "Neurología",
         status: "Aceptado",
         day: "Miércoles 24",
         room: "Auditorio Principal",
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
         scores: [4.0, 4.1, 3.9],
         submittedAt: "2025-10-25T18:20:00",
         updatedAt: "2025-11-12T09:10:00"
     },
     {
-        id: "TRB-006",
-        title: "Manifestaciones neurológicas de COVID-19",
-        author: "Dr. Carlos Ruiz (R2)",
-        type: "Revisión Sistemática",
-        specialty: "Neurología",
-        status: "Pendiente",
-        day: null,
-        room: null,
-        abstract: { intro: "Pendiente de ...", methods: "...", results: "...", conclusions: "..." },
-        scores: [],
-        submittedAt: "2025-12-01T15:30:00",
-        updatedAt: "2025-12-01T15:30:00"
-    },
-    {
-        id: "TRB-007",
-        title: "Cirugía en epilepsia temporal mesial",
-        author: "Dr. Carlos Ruiz (R2)",
-        type: "Reporte de Caso",
-        specialty: "Neurocirugía",
-        status: "Observado",
-        day: null,
-        room: null,
-        abstract: { intro: "...", methods: "...", results: "...", conclusions: "..." },
-        scores: [],
-        submittedAt: "2025-11-28T10:00:00",
-        updatedAt: "2025-11-30T17:45:00",
-        observations: "Favor aclarar la metodología quirúrgica empleada y ampliar la discusión sobre las complicaciones post-operatorias."
-    },
-    {
-        id: "TRB-008",
-        title: "Uso de estimulación cerebral profunda en Parkinson avanzado",
-        author: "Dra. María González (R4)",
+        id: "TRB-203",
+        title: "Abordaje endoscópico de tumores de base de cráneo",
+        author: "Dr. Jorge Ruiz",
+        authorId: "user-9",
         type: "Trabajo Original",
-        specialty: "Neurocirugía",
-        status: "Pendiente",
-        day: null,
-        room: null,
-        abstract: {
-            introduction: "La estimulación cerebral profunda (ECP) ha demostrado ser efectiva en pacientes con enfermedad de Parkinson avanzada que no responden adecuadamente al tratamiento farmacológico.",
-            objective: "Evaluar los resultados clínicos de la ECP bilateral del núcleo subtalámico en 25 pacientes con Parkinson avanzado.",
-            methodology: "Estudio prospectivo de 25 pacientes sometidos a ECP bilateral. Se evaluó la escala UPDRS pre y post-operatoria a los 6 y 12 meses.",
-            results: "Se observó una mejoría significativa del 65% en la escala UPDRS-III en estado off a los 12 meses. Las complicaciones fueron mínimas.",
-            conclusions: "La ECP bilateral del NST es una opción terapéutica efectiva y segura para pacientes con Parkinson avanzado."
-        },
-        scores: []
-    },
-    {
-        id: "TRB-009",
-        title: "Biomarcadores en líquido cefalorraquídeo para diagnóstico temprano de Alzheimer",
-        author: "Dr. Roberto Sánchez (R3)",
-        type: "Trabajo Original",
-        specialty: "Neurología",
-        status: "Pendiente",
-        day: null,
-        room: null,
-        abstract: {
-            introduction: "El diagnóstico temprano de la enfermedad de Alzheimer es crucial para el manejo adecuado de los pacientes.",
-            objective: "Determinar la utilidad de los biomarcadores Aβ42, tau total y p-tau en LCR para el diagnóstico temprano de Alzheimer.",
-            methodology: "Estudio de casos y controles con 40 pacientes con deterioro cognitivo leve y 30 controles sanos. Se midieron niveles de biomarcadores mediante ELISA.",
-            results: "Los pacientes con DCL que progresaron a Alzheimer mostraron niveles significativamente menores de Aβ42 y mayores de tau y p-tau.",
-            conclusions: "Los biomarcadores en LCR son útiles para predecir la conversión de DCL a Alzheimer con una sensibilidad del 85%."
-        },
-        scores: []
-    },
-    {
-        id: "TRB-010",
-        title: "Manejo endovascular del aneurisma cerebral roto: experiencia institucional",
-        author: "Dr. Luis Fernández (R4)",
-        type: "Trabajo Original",
-        specialty: "Neurocirugía",
-        status: "Pendiente",
-        day: null,
-        room: null,
-        abstract: {
-            introduction: "El tratamiento endovascular de aneurismas cerebrales rotos ha ganado popularidad en las últimas décadas.",
-            objective: "Reportar los resultados del tratamiento endovascular de aneurismas cerebrales rotos en nuestra institución durante los últimos 3 años.",
-            methodology: "Estudio retrospectivo de 45 pacientes con aneurisma cerebral roto tratados mediante coiling. Se evaluó la escala de Glasgow al ingreso y al alta, complicaciones y mortalidad.",
-            results: "La tasa de oclusión completa fue del 82%. La mortalidad fue del 11% y las complicaciones mayores del 15%.",
-            conclusions: "El tratamiento endovascular de aneurismas rotos es seguro y efectivo, con resultados comparables a la cirugía abierta."
-        },
-        scores: []
-    },
-    {
-        id: "TRB-011",
-        title: "Neurocisticercosis Racemosa: Abordaje Endoscópico",
-        author: "Dr. Henderson Vasquez (R2)",
-        type: "Reporte de Caso",
         specialty: "Neurocirugía",
         status: "Aceptado",
         day: "Martes 23",
         room: "Sala 1",
-        abstract: {
-            introduction: "La neurocisticercosis racemosa es una forma grave de la enfermedad.",
-            objective: "Describir el abordaje endoscópico para la resección de quistes racemosos.",
-            methodology: "Reporte de caso de paciente masculino de 45 años.",
-            results: "Resección completa de los quistes, mejoría clínica inmediata.",
-            conclusions: "El abordaje endoscópico es seguro y efectivo."
-        },
-        slidesUrl: null, // To test upload flow
-        scores: [4.6, 4.7, 4.5],
-        submittedAt: "2025-11-25T08:00:00",
-        updatedAt: "2025-11-30T10:00:00"
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [4.6, 4.7, 4.8],
+        submittedAt: "2025-11-28T10:00:00",
+        updatedAt: "2025-11-30T17:45:00"
     },
     {
-        id: "TRB-012",
-        title: "Manejo de TEC Grave: Protocolo Institucional",
-        author: "Dr. Henderson Vasquez (R2)",
-        type: "Trabajo Original",
-        specialty: "Neurocirugía",
-        status: "En Evaluación",
-        day: null,
-        room: null,
-        abstract: {
-            introduction: "El traumatismo encéfalo craneano (TEC) grave tiene alta morbimortalidad.",
-            objective: "Evaluar la adherencia al protocolo de manejo de TEC grave.",
-            methodology: "Estudio observacional prospectivo.",
-            results: "Pendiente de análisis.",
-            conclusions: "Pendiente."
-        },
-        scores: [],
-        submittedAt: "2025-12-05T14:30:00",
-        updatedAt: "2025-12-05T14:30:00"
+        id: "TRB-204",
+        title: "Síndrome de Guillain-Barré atípico",
+        author: "Dra. Ana Torres",
+        authorId: "user-24",
+        type: "Reporte de Caso",
+        specialty: "Neurología",
+        status: "Aceptado",
+        day: "Lunes 22",
+        room: "Sala Virtual",
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [4.8, 4.9, 4.7],
+        submittedAt: "2025-11-05T08:45:00",
+        updatedAt: "2025-11-05T08:45:00"
+    },
+    {
+        id: "TRB-205",
+        title: "Moya Moya en paciente pediátrico",
+        author: "Dra. Maria Lopez",
+        authorId: "user-25",
+        type: "Reporte de Caso",
+        specialty: "Neuropediatría",
+        status: "Aceptado",
+        day: "Jueves 25",
+        room: "Sala Virtual",
+        abstract: { introduction: "...", methods: "...", results: "...", conclusions: "..." },
+        scores: [4.5, 4.7, 4.6],
+        submittedAt: "2025-11-18T09:15:00",
+        updatedAt: "2025-11-25T11:20:00"
     }
 ];
 

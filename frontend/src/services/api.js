@@ -26,6 +26,32 @@ import { storage, STORAGE_KEYS } from './storage';
 // Helper for simulating async operations
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
 
+/**
+ * Asigna perfiles automáticamente según el tipo de inscripción
+ * @param {string} registrationType - Tipo de inscripción: 'presencial', 'presencial_certificado', 'virtual'
+ * @returns {string[]} Array de perfiles asignados
+ */
+const assignProfilesByRegistrationType = (registrationType) => {
+    const baseProfiles = ['perfil_basico']; // Perfil básico para todos
+
+    switch (registrationType) {
+        case 'presencial':
+            // Solo acceso a perfil básico (control de asistencia)
+            return baseProfiles;
+
+        case 'presencial_certificado':
+            // Acceso a Aula Virtual + perfil básico
+            return [...baseProfiles, 'aula_virtual'];
+
+        case 'virtual':
+            // Acceso a Aula Virtual + perfil básico
+            return [...baseProfiles, 'aula_virtual'];
+
+        default:
+            return baseProfiles;
+    }
+};
+
 // Default Data Constants
 const DEFAULT_DAYS = [
     { id: 'day1', label: 'Día 1', date: 'Lunes 22' },
@@ -39,10 +65,30 @@ const DEFAULT_CATEGORIES = {
 };
 
 /**
+ * Helper to fetch users securely
+ */
+const getLocalUsers = () => {
+    const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+    // FILTRAR SUPERADMIN de las listas
+    return users.filter(u => !u.isSuperAdmin);
+};
+
+/**
  * Main API Service Module
  * Handles specific data operations using the storage utility
  */
 export const api = {
+
+    // --- 0. System Config ---
+    system: {
+        getConfig: async () => {
+            await delay(100);
+            return {
+                occupations: EVENT_CONFIG.occupations,
+                institutions: EVENT_CONFIG.institutions
+            };
+        }
+    },
 
     // --- 1. Registrations ---
     registrations: {
@@ -109,8 +155,8 @@ export const api = {
     attendees: {
         getAll: async () => {
             await delay();
-            const local = storage.get(STORAGE_KEYS.ATTENDEES, []);
-            return [...MOCK_ATTENDEES, ...local];
+            // SYNC: Turn Attendees into a view of Users
+            return getLocalUsers();
         },
         add: async (attendee) => {
             await delay();
@@ -390,23 +436,149 @@ export const api = {
                 ...newWork,
                 id: `TRB-${Date.now()}`,
                 status: 'En Evaluación',
-                scores: []
+                scores: [],
+                evaluations: [] // Initialize empty evaluations array
             };
             const local = storage.get(STORAGE_KEYS.WORKS, []);
             storage.set(STORAGE_KEYS.WORKS, [...local, work]);
             return work;
+        },
+        addEvaluation: async (workId, evaluation) => {
+            await delay();
+            const currentWorks = await api.works.getAll();
+            const workIndex = currentWorks.findIndex(w => w.id === workId);
+
+            if (workIndex === -1) throw new Error("Trabajo no encontrado");
+
+            const work = currentWorks[workIndex];
+            const evaluations = work.evaluations || [];
+
+            // Check if juror already evaluated
+            const existingEvalIndex = evaluations.findIndex(e => e.jurorId === evaluation.jurorId);
+
+            if (existingEvalIndex >= 0) {
+                // Update existing evaluation
+                evaluations[existingEvalIndex] = { ...evaluation, updatedAt: new Date().toISOString() };
+            } else {
+                // Add new evaluation
+                evaluations.push({ ...evaluation, createdAt: new Date().toISOString() });
+            }
+
+            // Calculate average score if needed (simple average of all evaluations)
+            const allScores = evaluations.map(e => e.totalScore);
+            const avgScore = allScores.reduce((a, b) => a + b, 0) / allScores.length;
+
+            const updatedWork = {
+                ...work,
+                evaluations,
+                scores: allScores, // Legacy compatibility
+                averageScore: avgScore
+            };
+
+            // Update local storage
+            const newWorks = [...currentWorks];
+            newWorks[workIndex] = updatedWork;
+            storage.set(STORAGE_KEYS.WORKS, newWorks);
+
+            return updatedWork;
         }
     },
 
-    // --- 8. Jurors ---
+    // --- 8. Jurors (SYNCED WITH USERS) ---
     jurors: {
         getAll: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.JURORS, INITIAL_JURORS);
+            const users = await api.users.getAll();
+            // Filter users who have the 'jurado' role (in roles array or eventRoles)
+            return users.filter(u => {
+                const roles = u.eventRoles || [];
+                // Check eventRoles (preferred) or legacy role/roles
+                return roles.some(r => r.toLowerCase() === 'jurado') ||
+                    (u.roles && u.roles.includes('jurado')) ||
+                    u.role === 'jurado'; // Fallback
+            }).map(u => ({
+                ...u,
+                active: u.status === 'Confirmado' || u.status === 'Activo' // Map status to active boolean for UI compatibility
+            }));
         },
-        save: async (jurors) => {
+        create: async (jurorData) => {
             await delay();
-            storage.set(STORAGE_KEYS.JURORS, jurors);
+            // Check if user exists by email
+            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const normalize = (str) => str ? str.toString().trim().toLowerCase() : '';
+            const existingUser = allUsers.find(u => normalize(u.email) === normalize(jurorData.email));
+
+            if (existingUser) {
+                // Update existing user: Add 'jurado' to eventRoles and ensure profiles
+                const currentRoles = existingUser.eventRoles || [];
+                const currentProfiles = existingUser.profiles || [];
+
+                const updates = {};
+
+                // Add 'jurado' to system roles (user.roles) if missing
+                const currentSystemRoles = existingUser.roles || [];
+                const newSystemRoles = [...new Set([...currentSystemRoles, 'jurado'])];
+
+                if (newSystemRoles.length !== currentSystemRoles.length) {
+                    updates.roles = newSystemRoles;
+                }
+
+                // Add 'jurado' role if missing using SET to ensure uniqueness
+                const newRoles = [...new Set([...currentRoles, 'jurado'])];
+                if (newRoles.length !== currentRoles.length) {
+                    updates.eventRoles = newRoles;
+                }
+
+                // Add required profiles if missing
+                const requiredProfiles = ['perfil_basico', 'aula_virtual', 'jurado'];
+                const newProfiles = [...new Set([...currentProfiles, ...requiredProfiles])];
+
+                if (newProfiles.length !== currentProfiles.length) {
+                    updates.profiles = newProfiles;
+                }
+
+                // FORCE PASSWORD RESET to '123456'
+                // This is critical for users imported from lists (Attendees) who do not have a set password.
+                // The Admin expects '123456' to work for anyone they add via this modal.
+                updates.password = '123456';
+
+                if (Object.keys(updates).length > 0) {
+                    // Always update professional info if provided
+                    const updatedUser = {
+                        ...existingUser,
+                        ...updates,
+                        specialty: jurorData.specialty || existingUser.specialty,
+                        institution: jurorData.institution || existingUser.institution
+                    };
+                    return await api.users.update(updatedUser);
+                }
+                return existingUser; // No changes needed
+            } else {
+                // Create new user with 'jurado' role and specific profiles
+                return await api.users.add({
+                    ...jurorData,
+                    password: '123456', // Default as requested
+                    eventRoles: ['jurado'],
+                    profiles: ['perfil_basico', 'aula_virtual', 'jurado'], // Specific access rules
+                    roles: ['participant', 'jurado'], // Default system role + jurado
+                    role: 'participant',
+                    status: 'Confirmado'
+                });
+            }
+        },
+        // Legacy save is removed as we now write to users
+        delete: async (id) => {
+            // To "delete" a juror, we actually just remove the role, don't delete the user
+            await delay();
+            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const user = allUsers.find(u => u.id === id);
+            if (user) {
+                const newRoles = (user.eventRoles || []).filter(r => r.toLowerCase() !== 'jurado');
+                await api.users.update({
+                    ...user,
+                    eventRoles: newRoles
+                });
+            }
             return true;
         }
     },
@@ -507,46 +679,154 @@ export const api = {
     },
 
     // --- 12. Users ---
+    // --- 10. Users (CENTRALIZADO - ÚNICA FUENTE DE VERDAD) ---
     users: {
+        /**
+         * Obtiene todos los usuarios EXCEPTO el superadmin
+         * Usar para listas, tablas, reportes, etc.
+         */
         getAll: async () => {
             await delay();
-            const localUsers = storage.get(STORAGE_KEYS.USERS, []);
-            return [...MOCK_USERS, ...localUsers];
+            return getLocalUsers();
         },
+
+        /**
+         * Obtiene TODOS los usuarios incluyendo superadmin
+         * Usar solo para login y operaciones internas
+         */
+        getAllIncludingSuperAdmin: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+        },
+
+        /**
+         * Buscar usuarios por nombre o email
+         * NO incluye superadmin en resultados
+         */
         search: async (query) => {
             await delay(200);
             if (!query || query.length < 2) return [];
-            const q = query.toLowerCase();
-            const localUsers = storage.get(STORAGE_KEYS.USERS, []);
-            const allUsers = [...MOCK_USERS, ...localUsers];
 
-            return allUsers.filter(u =>
+            const q = query.toLowerCase();
+            const users = await api.users.getAll(); // Ya filtra superadmin
+
+            return users.filter(u =>
                 u.name?.toLowerCase().includes(q) ||
                 u.email?.toLowerCase().includes(q)
             );
         },
-        delete: async (id) => {
+
+        /**
+         * Agregar nuevo usuario
+         * Valida email duplicado
+         */
+        add: async (userData) => {
             await delay();
-            const local = storage.get(STORAGE_KEYS.USERS, []);
-            if (local.find(u => u.id === id)) {
-                storage.set(STORAGE_KEYS.USERS, local.filter(u => u.id !== id));
+            const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+            const email = userData.email ? userData.email.trim() : '';
+
+            // Validar email duplicado
+            const existingUser = users.find(u => u.email === email);
+            if (existingUser) {
+                throw new Error('El email ya está registrado en el sistema');
             }
+
+            const newUser = {
+                id: `user-${Date.now()}`,
+                password: '123456', // Default password
+                eventRoles: userData.eventRoles || [userData.eventRole || 'asistente'],
+                profiles: userData.profiles || ['perfil_basico'],
+                role: userData.role || 'participant',
+                roles: userData.roles || ['participant'],
+                isSuperAdmin: false, // Nunca permitir crear superadmin
+                registrationDate: new Date().toISOString().split('T')[0],
+                status: 'Confirmado',
+                ...userData,
+                email: email // Ensure trimmed email
+            };
+
+            users.push(newUser);
+            storage.set(STORAGE_KEYS.USERS, users);
+            return newUser;
+        },
+
+        /**
+         * Actualizar usuario existente
+         */
+        update: async (userData) => {
+            await delay();
+            const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+            const index = users.findIndex(u => u.id === userData.id);
+
+            if (index === -1) {
+                throw new Error('Usuario no encontrado');
+            }
+
+            const email = userData.email ? userData.email.trim() : users[index].email;
+
+            // Validar email duplicado (excepto el mismo usuario)
+            const duplicateEmail = users.find(u =>
+                u.email === email && u.id !== userData.id
+            );
+            if (duplicateEmail) {
+                throw new Error('El email ya está registrado en el sistema');
+            }
+
+            // No permitir cambiar isSuperAdmin
+            // Ensure complexity objects are fully replaced if provided
+            const updatedUser = {
+                ...users[index],
+                ...userData,
+                email: email, // Ensure trimmed email
+                eventRoles: userData.eventRoles || users[index].eventRoles, // Ensure specific fields are taken if provided
+                profiles: userData.profiles || users[index].profiles,
+                isSuperAdmin: users[index].isSuperAdmin // Mantener flag original
+            };
+
+            users[index] = updatedUser;
+            storage.set(STORAGE_KEYS.USERS, users);
+
+            return updatedUser;
+        },
+
+        /**
+         * Eliminar usuario
+         * PROHIBIDO eliminar superadmin
+         */
+        delete: async (userId) => {
+            await delay();
+            const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+            const user = users.find(u => u.id === userId);
+
+            if (!user) {
+                throw new Error('Usuario no encontrado');
+            }
+
+            // PROHIBIR eliminar superadmin
+            if (user.isSuperAdmin) {
+                throw new Error('No se puede eliminar el superadministrador del sistema');
+            }
+
+            const filtered = users.filter(u => u.id !== userId);
+            storage.set(STORAGE_KEYS.USERS, filtered);
+
             return true;
         },
-        resetPassword: async (id) => {
+
+        /**
+         * Resetear contraseña de usuario
+         */
+        resetPassword: async (userId) => {
             await delay();
-            return true; // Mock success
-        },
-        update: async (user) => {
-            await delay();
-            const local = storage.get(STORAGE_KEYS.USERS, []);
-            const updatedLocal = local.map(u => u.id === user.id ? user : u);
-            // If not in local, it might be mock, so we save it to local to "override" it
-            if (!local.find(u => u.id === user.id)) {
-                updatedLocal.push(user);
+            const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+            const index = users.findIndex(u => u.id === userId);
+
+            if (index !== -1) {
+                users[index].password = '123456';
+                storage.set(STORAGE_KEYS.USERS, users);
             }
-            storage.set(STORAGE_KEYS.USERS, updatedLocal);
-            return user;
+
+            return true;
         }
     },
 
@@ -874,10 +1154,20 @@ export const api = {
             const config = storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
             const committee = storage.get(STORAGE_KEYS.COMMITTEE, COMMITTEE_DATA);
 
+            // NOTE: En el futuro, cuando todos los usuarios tengan eventRole,
+            // esta función debería filtrar usuarios con eventRole === 'organizador'
+            // en lugar de usar COMMITTEE_DATA directamente.
+            // Ejemplo: const users = await api.users.getAll();
+            //          const organizers = users.filter(u => u.eventRole === 'organizador');
+
             const allMembers = [];
+            const seenNames = new Set();
+
             committee.forEach(group => {
                 group.members.forEach(member => {
-                    if (!allMembers.find(m => m.id === member.id)) {
+                    // Use name for duplicate detection instead of ID
+                    if (!seenNames.has(member.name)) {
+                        seenNames.add(member.name);
                         allMembers.push({
                             id: member.id,
                             nombre: member.name,
@@ -891,7 +1181,7 @@ export const api = {
             allMembers.forEach(member => {
                 config.contribution.months.forEach(month => {
                     plan.push({
-                        id: `contrib-${member.id}-${month.id}`,
+                        id: `contrib-${member.nombre}-${month.id}`,
                         organizador_id: member.id,
                         organizador_nombre: member.nombre,
                         organizador_rol: member.rol,
@@ -1023,43 +1313,26 @@ export const api = {
     },
 
     // --- 13. Authentication ---
+    // --- 13. Authentication ---
     auth: {
         login: async (email, password) => {
             await delay();
+            const cleanEmail = email ? email.trim().toLowerCase() : '';
 
-            // Mock users
-            if (email === 'admin' && password === 'admin') {
-                return {
-                    id: '1',
-                    name: 'Super Usuario',
-                    email: 'admin@simr.pe',
-                    role: 'superadmin', // Primary role
-                    roles: ['superadmin', 'admin', 'secretary', 'academic', 'jury', 'resident', 'participant', 'treasurer', 'admission', 'committee'], // Added 'committee'
-                    image: null
-                };
+            // Buscar en base de datos centralizada (INCLUYE superadmin)
+            const users = await api.users.getAllIncludingSuperAdmin();
+
+            const user = users.find(u =>
+                (u.email?.toLowerCase() === cleanEmail || u.email?.toLowerCase() === `${cleanEmail}@simr.pe`) &&
+                u.password === password
+            );
+
+            if (user) {
+                // Retornar usuario sin password
+                const { password: _, ...userWithoutPassword } = user;
+                return userWithoutPassword;
             }
 
-            if (email === 'committee' && password === 'committee') {
-                return {
-                    id: 'committee-1',
-                    name: 'Miembro del Comité',
-                    email: 'comite@simr.pe',
-                    role: 'committee',
-                    roles: ['committee'],
-                    image: null
-                };
-            }
-
-            if (email === 'jury' && password === 'jury') {
-                return {
-                    id: '2',
-                    name: 'Dr. Roberto Paz',
-                    email: 'roberto.paz@example.com',
-                    role: 'jury',
-                    roles: ['jury'],
-                    image: null
-                };
-            }
             throw new Error('Credenciales inválidas');
         }
     }

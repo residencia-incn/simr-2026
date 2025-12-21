@@ -23,8 +23,9 @@ const ContributionsManager = ({
     const months = config?.contribution?.months || [];
 
     const handleCellClick = (organizadorId, mes) => {
+        // Try to find by ID first, fallback to name if ID is undefined
         const contrib = contributionPlan.find(
-            c => c.organizador_id === organizadorId && c.mes === mes
+            c => (c.organizador_id === organizadorId || c.organizador_nombre === organizadorId) && c.mes === mes
         );
 
         if (contrib && contrib.estado === 'pendiente') {
@@ -57,7 +58,7 @@ const ContributionsManager = ({
 
     const getCellStatus = (organizadorId, mes) => {
         const contrib = contributionPlan.find(
-            c => c.organizador_id === organizadorId && c.mes === mes
+            c => (c.organizador_id === organizadorId || c.organizador_nombre === organizadorId) && c.mes === mes
         );
         return contrib?.estado || 'pendiente';
     };
@@ -144,78 +145,67 @@ const ContributionsManager = ({
                 </div>
             )}
 
-            {/* Contribution Matrix */}
+
+            {/* Contribution Cards */}
             {contributionPlan.length > 0 ? (
-                <Card className="overflow-x-auto">
-                    <table className="w-full">
-                        <thead>
-                            <tr className="bg-gray-50 border-b border-gray-200">
-                                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900 sticky left-0 bg-gray-50 z-10">
-                                    Organizador
-                                </th>
-                                {months.map(month => (
-                                    <th key={month.id} className="px-4 py-3 text-center text-sm font-semibold text-gray-900 min-w-[100px]">
-                                        {month.label}
-                                    </th>
-                                ))}
-                                <th className="px-4 py-3 text-center text-sm font-semibold text-gray-900 min-w-[120px]">
-                                    Total
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {organizers.map((organizer, idx) => (
-                                <tr key={organizer.organizador_id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                    <td className="px-4 py-3 text-sm font-medium text-gray-900 sticky left-0 bg-inherit z-10 border-r border-gray-200">
-                                        <div className="flex items-center gap-2">
-                                            <User size={16} className="text-gray-400" />
-                                            <div>
-                                                <p className="font-semibold">{organizer.organizador_nombre}</p>
-                                                <p className="text-xs text-gray-500">{organizer.organizador_rol}</p>
-                                            </div>
-                                        </div>
-                                    </td>
+                <div className="space-y-4">
+                    {organizers.map((organizer) => (
+                        <Card key={organizer.organizador_id || organizer.organizador_nombre} className="p-6">
+                            {/* Organizer Header */}
+                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
+                                <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-blue-100 rounded-lg">
+                                        <User size={20} className="text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-gray-900">{organizer.organizador_nombre}</h4>
+                                        <p className="text-sm text-gray-500">Aportes Mensuales</p>
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm text-gray-500">Total Pagado</p>
+                                    <p className="text-xl font-bold text-green-600">
+                                        S/ {organizer.total_pagado.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        de S/ {organizer.total_esperado.toFixed(2)}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* Months Grid */}
+                            <div>
+                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Meses</h5>
+                                <div className="grid grid-cols-7 gap-2">
                                     {months.map(month => {
-                                        const estado = getCellStatus(organizer.organizador_id, month.id);
-                                        const StatusIcon = getStatusIcon(estado);
+                                        const estado = getCellStatus(organizer.organizador_id || organizer.organizador_nombre, month.id);
                                         const isPending = estado === 'pendiente';
+                                        // Extract short month name (e.g., "Enero" -> "Ene")
+                                        const shortMonth = month.label.split(' ')[0].substring(0, 3);
 
                                         return (
-                                            <td key={month.id} className="px-2 py-2 text-center">
-                                                <button
-                                                    onClick={() => handleCellClick(organizer.organizador_id, month.id)}
-                                                    disabled={!isPending}
-                                                    className={`
-                                                        w-full py-2 px-3 rounded-lg border-2 transition-all
-                                                        ${getStatusColor(estado)}
-                                                        ${isPending ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-default'}
-                                                        flex items-center justify-center gap-2
-                                                    `}
-                                                    title={isPending ? 'Click para registrar pago' : 'Pagado'}
-                                                >
-                                                    <StatusIcon size={18} />
-                                                    <span className="text-xs font-semibold">
-                                                        {isPending ? 'Pendiente' : 'Pagado'}
-                                                    </span>
-                                                </button>
-                                            </td>
+                                            <button
+                                                key={month.id}
+                                                onClick={() => handleCellClick(organizer.organizador_id || organizer.organizador_nombre, month.id)}
+                                                disabled={!isPending}
+                                                className={`
+                                                    py-3 px-2 rounded-lg font-semibold text-sm transition-all
+                                                    ${isPending
+                                                        ? 'bg-red-100 text-red-700 border-2 border-red-300 hover:bg-red-200 hover:shadow-md cursor-pointer'
+                                                        : 'bg-green-100 text-green-700 border-2 border-green-300 cursor-default'
+                                                    }
+                                                `}
+                                                title={isPending ? 'Click para registrar pago' : 'Pagado'}
+                                            >
+                                                {shortMonth}
+                                            </button>
                                         );
                                     })}
-                                    <td className="px-4 py-3 text-center border-l border-gray-200">
-                                        <div className="text-sm">
-                                            <p className="font-bold text-green-600">
-                                                S/ {organizer.total_pagado.toFixed(2)}
-                                            </p>
-                                            <p className="text-xs text-gray-500">
-                                                de S/ {organizer.total_esperado.toFixed(2)}
-                                            </p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </Card>
+                                </div>
+                            </div>
+                        </Card>
+                    ))}
+                </div>
             ) : (
                 <Card className="p-12 text-center">
                     <Calendar size={48} className="mx-auto text-gray-300 mb-4" />
