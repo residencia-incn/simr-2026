@@ -98,7 +98,6 @@ const PlanningManager = ({ currentUser }) => {
             date: new Date().toISOString().split('T')[0],
             startTime: '', // New field
             title: '',
-            startTime: '',
             status: 'open', // New: Meetings start as open
             agreements: [''],
             attendees: [],
