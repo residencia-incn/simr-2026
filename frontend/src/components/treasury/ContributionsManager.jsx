@@ -12,6 +12,7 @@ const ContributionsManager = ({
     onInitializePlan
 }) => {
     const [selectedContribution, setSelectedContribution] = useState(null);
+    const [selectedOrganizer, setSelectedOrganizer] = useState(null);
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [formData, setFormData] = useState({
         accountId: '',
@@ -146,65 +147,150 @@ const ContributionsManager = ({
             )}
 
 
-            {/* Contribution Cards */}
+            {/* Master-Detail Layout */}
             {contributionPlan.length > 0 ? (
-                <div className="space-y-4">
-                    {organizers.map((organizer) => (
-                        <Card key={organizer.organizador_id || organizer.organizador_nombre} className="p-6">
-                            {/* Organizer Header */}
-                            <div className="flex items-center justify-between mb-4 pb-4 border-b border-gray-200">
-                                <div className="flex items-center gap-3">
-                                    <div className="p-2 bg-blue-100 rounded-lg">
-                                        <User size={20} className="text-blue-600" />
-                                    </div>
-                                    <div>
-                                        <h4 className="font-bold text-gray-900">{organizer.organizador_nombre}</h4>
-                                        <p className="text-sm text-gray-500">Aportes Mensuales</p>
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <p className="text-sm text-gray-500">Total Pagado</p>
-                                    <p className="text-xl font-bold text-green-600">
-                                        S/ {organizer.total_pagado.toFixed(2)}
-                                    </p>
-                                    <p className="text-xs text-gray-500">
-                                        de S/ {organizer.total_esperado.toFixed(2)}
-                                    </p>
-                                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[600px]">
+                    {/* Left Column: Organizer List */}
+                    <Card className="lg:col-span-1 overflow-hidden flex flex-col h-full p-0">
+                        <div className="p-4 border-b border-gray-100 bg-gray-50">
+                            <div className="relative">
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar organizador..."
+                                    className="w-full pl-9 pr-4 py-2 border border-gray-200 rounded-lg text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                />
                             </div>
+                        </div>
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {organizers.map((organizer) => {
+                                const isSelected = selectedOrganizer?.organizador_id === organizer.organizador_id;
+                                const progress = (organizer.total_pagado / organizer.total_esperado) * 100;
 
-                            {/* Months Grid */}
-                            <div>
-                                <h5 className="text-sm font-semibold text-gray-700 mb-3">Meses</h5>
-                                <div className="grid grid-cols-7 gap-2">
-                                    {months.map(month => {
-                                        const estado = getCellStatus(organizer.organizador_id || organizer.organizador_nombre, month.id);
-                                        const isPending = estado === 'pendiente';
-                                        // Extract short month name (e.g., "Enero" -> "Ene")
-                                        const shortMonth = month.label.split(' ')[0].substring(0, 3);
+                                return (
+                                    <button
+                                        key={organizer.organizador_id}
+                                        onClick={() => setSelectedOrganizer(organizer)}
+                                        className={`w-full text-left p-3 rounded-lg transition-all ${isSelected
+                                            ? 'bg-blue-50 border-blue-200 ring-1 ring-blue-200'
+                                            : 'hover:bg-gray-50 border border-transparent'
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`font-semibold text-sm ${isSelected ? 'text-blue-900' : 'text-gray-700'}`}>
+                                                {organizer.organizador_nombre}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="text-gray-500">Pagado: S/ {organizer.total_pagado.toFixed(0)}</span>
+                                            <span className={progress >= 100 ? 'text-green-600 font-bold' : 'text-gray-400'}>
+                                                {progress.toFixed(0)}%
+                                            </span>
+                                        </div>
+                                        <div className="mt-1.5 h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                            <div
+                                                className={`h-full rounded-full ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'
+                                                    }`}
+                                                style={{ width: `${Math.min(progress, 100)}%` }}
+                                            />
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </Card>
 
-                                        return (
-                                            <button
-                                                key={month.id}
-                                                onClick={() => handleCellClick(organizer.organizador_id || organizer.organizador_nombre, month.id)}
-                                                disabled={!isPending}
-                                                className={`
-                                                    py-3 px-2 rounded-lg font-semibold text-sm transition-all
-                                                    ${isPending
-                                                        ? 'bg-red-100 text-red-700 border-2 border-red-300 hover:bg-red-200 hover:shadow-md cursor-pointer'
-                                                        : 'bg-green-100 text-green-700 border-2 border-green-300 cursor-default'
-                                                    }
-                                                `}
-                                                title={isPending ? 'Click para registrar pago' : 'Pagado'}
-                                            >
-                                                {shortMonth}
-                                            </button>
-                                        );
-                                    })}
+                    {/* Right Column: Details */}
+                    <div className="lg:col-span-2 h-full">
+                        {selectedOrganizer ? (
+                            <Card className="h-full flex flex-col p-0 overflow-hidden">
+                                {/* Detail Header */}
+                                <div className="p-6 border-b border-gray-100 bg-gray-50 flex justify-between items-center">
+                                    <div className="flex items-center gap-4">
+                                        <div className="h-12 w-12 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm">
+                                            <User size={24} className="text-blue-600" />
+                                        </div>
+                                        <div>
+                                            <h2 className="text-lg font-bold text-gray-900">{selectedOrganizer.organizador_nombre}</h2>
+                                            <p className="text-sm text-gray-500">Historial de aportes</p>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm font-medium text-gray-500">Total Pagado</p>
+                                        <p className="text-2xl font-bold text-green-600">S/ {selectedOrganizer.total_pagado.toFixed(2)}</p>
+                                        <p className="text-xs text-gray-400">de S/ {selectedOrganizer.total_esperado.toFixed(2)}</p>
+                                    </div>
                                 </div>
+
+                                {/* Detail Body (Months) */}
+                                <div className="p-6 flex-1 overflow-y-auto">
+                                    <h4 className="font-semibold text-gray-900 mb-4 flex items-center gap-2">
+                                        <Calendar size={18} className="text-gray-400" />
+                                        Cronograma de Pagos
+                                    </h4>
+
+                                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                        {months.map(month => {
+                                            const estado = getCellStatus(selectedOrganizer.organizador_id || selectedOrganizer.organizador_nombre, month.id);
+                                            const isPending = estado === 'pendiente';
+                                            const isPaid = estado === 'pagado';
+
+                                            return (
+                                                <button
+                                                    key={month.id}
+                                                    onClick={() => handleCellClick(selectedOrganizer.organizador_id || selectedOrganizer.organizador_nombre, month.id)}
+                                                    disabled={!isPending}
+                                                    className={`
+                                                        relative p-4 rounded-xl border-2 text-left transition-all
+                                                        ${isPaid
+                                                            ? 'bg-green-50 border-green-200 opacity-90'
+                                                            : isPending
+                                                                ? 'bg-white border-dashed border-red-300 hover:border-red-400 hover:bg-red-50 cursor-pointer shadow-sm hover:shadow-md'
+                                                                : 'bg-gray-50 border-gray-200'
+                                                        }
+                                                    `}
+                                                >
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className={`font-bold ${isPaid ? 'text-green-800' : 'text-gray-700'}`}>
+                                                            {month.label}
+                                                        </span>
+                                                        {isPaid ? (
+                                                            <CheckCircle size={18} className="text-green-600" />
+                                                        ) : (
+                                                            <div className="h-4 w-4 rounded-full border-2 border-red-300" />
+                                                        )}
+                                                    </div>
+
+                                                    <div className="text-sm">
+                                                        {isPaid ? (
+                                                            <span className="text-green-700 font-medium bg-green-100 px-2 py-0.5 rounded text-xs">
+                                                                Pagado
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-red-600 font-medium flex items-center gap-1">
+                                                                <span className="text-xs">Pendiente:</span>
+                                                                S/ {config?.contribution?.monthlyAmount?.toFixed(0)}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            </Card>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
+                                <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center border border-gray-200 shadow-sm mb-4">
+                                    <User size={32} className="text-gray-300" />
+                                </div>
+                                <h3 className="text-lg font-semibold text-gray-900 mb-1">Selecciona un Organizador</h3>
+                                <p className="text-gray-500 max-w-xs">
+                                    Haz clic en un nombre de la lista izquierda para ver el detalle de sus aportes.
+                                </p>
                             </div>
-                        </Card>
-                    ))}
+                        )}
+                    </div>
                 </div>
             ) : (
                 <Card className="p-12 text-center">

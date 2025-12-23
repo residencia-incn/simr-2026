@@ -33,7 +33,7 @@ const TreasurerCharts = ({ transactions, categories }) => {
                 <div className="flex justify-center items-end h-48 gap-8 px-8">
                     {/* Income Bar */}
                     <div className="flex flex-col items-center group w-20">
-                        <div className="relative w-full bg-gray-100 rounded-t-lg overflow-hidden h-40 flex items-end">
+                        <div className="relative w-full bg-gray-100 rounded-t-lg h-40 flex items-end">
                             <div
                                 className="w-full bg-green-500 rounded-t-lg transition-all duration-1000 group-hover:bg-green-400"
                                 style={{ height: `${incomeHeight}%` }}
@@ -47,7 +47,7 @@ const TreasurerCharts = ({ transactions, categories }) => {
 
                     {/* Expense Bar */}
                     <div className="flex flex-col items-center group w-20">
-                        <div className="relative w-full bg-gray-100 rounded-t-lg overflow-hidden h-40 flex items-end">
+                        <div className="relative w-full bg-gray-100 rounded-t-lg h-40 flex items-end">
                             <div
                                 className="w-full bg-red-500 rounded-t-lg transition-all duration-1000 group-hover:bg-red-400"
                                 style={{ height: `${expenseHeight}%` }}

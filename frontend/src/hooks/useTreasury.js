@@ -33,11 +33,23 @@ export const useTreasury = () => {
 
             setAccounts(accs);
             // Add type field to transactions based on monto
-            const txsWithType = txs.map(tx => ({
-                ...tx,
-                type: tx.type || (tx.monto >= 0 ? 'income' : 'expense')
-            }));
-            setTransactions(txsWithType);
+            setAccounts(accs);
+
+            // Normalize transactions from Spanish (storage) to English (UI)
+            const normalizeTransaction = (tx) => ({
+                id: tx.id,
+                date: tx.fecha || tx.date,
+                description: tx.descripcion || tx.description,
+                amount: parseFloat(tx.monto !== undefined ? tx.monto : (tx.amount || 0)),
+                category: tx.categoria || tx.category,
+                accountId: tx.cuenta_id || tx.accountId,
+                type: tx.type || (parseFloat(tx.monto || tx.amount || 0) >= 0 ? 'income' : 'expense'),
+                // Keep original fields just in case
+                ...tx
+            });
+
+            const txsNormalized = txs.map(normalizeTransaction);
+            setTransactions(txsNormalized);
             setContributionPlan(contrib);
             setBudgetPlan(budget);
             setConfig(cfg);
@@ -85,8 +97,8 @@ export const useTreasury = () => {
      */
     const totalIncome = useMemo(() =>
         transactions
-            .filter(tx => tx.monto > 0)
-            .reduce((sum, tx) => sum + tx.monto, 0)
+            .filter(tx => tx.type === 'income')
+            .reduce((sum, tx) => sum + (tx.amount || 0), 0)
         , [transactions]);
 
     /**
@@ -94,8 +106,8 @@ export const useTreasury = () => {
      */
     const totalExpenses = useMemo(() =>
         transactions
-            .filter(tx => tx.monto < 0)
-            .reduce((sum, tx) => sum + Math.abs(tx.monto), 0)
+            .filter(tx => tx.type === 'expense')
+            .reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0)
         , [transactions]);
 
     /**
@@ -104,8 +116,8 @@ export const useTreasury = () => {
     const budgetExecution = useMemo(() => {
         return budgetPlan.map(item => {
             const ejecutado = transactions
-                .filter(tx => tx.categoria === item.categoria && tx.monto < 0)
-                .reduce((sum, tx) => sum + Math.abs(tx.monto), 0);
+                .filter(tx => (tx.category === item.categoria || tx.categoria === item.categoria) && tx.type === 'expense')
+                .reduce((sum, tx) => sum + Math.abs(tx.amount || 0), 0);
 
             const porcentaje = item.presupuestado > 0
                 ? (ejecutado / item.presupuestado) * 100
@@ -209,13 +221,19 @@ export const useTreasury = () => {
         try {
             const newTx = await api.treasury.addTransactionV2(transactionData);
 
-            // Add type field based on monto if not already present
-            const txWithType = {
-                ...newTx,
-                type: newTx.type || (newTx.monto >= 0 ? 'income' : 'expense')
+            // Normalize for UI
+            const normalizedTx = {
+                id: newTx.id,
+                date: newTx.fecha || newTx.date,
+                description: newTx.descripcion || newTx.description,
+                amount: parseFloat(newTx.monto !== undefined ? newTx.monto : (newTx.amount || 0)),
+                category: newTx.categoria || newTx.category,
+                accountId: newTx.cuenta_id || newTx.accountId,
+                type: newTx.type || (newTx.monto >= 0 ? 'income' : 'expense'),
+                ...newTx
             };
 
-            setTransactions(prev => [txWithType, ...prev]);
+            setTransactions(prev => [normalizedTx, ...prev]);
 
             // Actualizar saldo de cuenta
             setAccounts(prev => prev.map(acc =>
@@ -224,7 +242,7 @@ export const useTreasury = () => {
                     : acc
             ));
 
-            return txWithType;
+            return normalizedTx;
         } catch (err) {
             console.error('Error creating transaction:', err);
             throw err;
@@ -282,7 +300,18 @@ export const useTreasury = () => {
             ));
 
             // Actualizar transacciones
-            setTransactions(prev => [result.transaction, ...prev]);
+            // Actualizar transacciones con normalización
+            const normalizedTx = {
+                id: result.transaction.id,
+                date: result.transaction.fecha,
+                description: result.transaction.descripcion,
+                amount: parseFloat(result.transaction.monto),
+                category: result.transaction.categoria,
+                accountId: result.transaction.cuenta_id,
+                type: 'income', // Contributions are always income
+                ...result.transaction
+            };
+            setTransactions(prev => [normalizedTx, ...prev]);
 
             // Actualizar saldo de cuenta
             setAccounts(prev => prev.map(acc =>
@@ -384,6 +413,9 @@ export const useTreasury = () => {
         // Budget Operations
         updateBudgetCategory,
         updateConfig,
+
+        setCategories,
+        renameCategory: api.treasury.renameCategory,
 
         // Reload
         reload: loadTreasuryData

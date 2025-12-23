@@ -482,7 +482,9 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                                 onChange={handleChange}
                                 options={[
                                     { value: "", label: "Seleccionar..." },
-                                    ...(categories.income || []).map(cat => ({ value: cat, label: cat }))
+                                    ...(categories.income || [])
+                                        .filter(cat => !['Inscripciones', 'Aportes'].includes(cat))
+                                        .map(cat => ({ value: cat, label: cat }))
                                 ]}
                                 required
                             />

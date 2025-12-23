@@ -1292,6 +1292,22 @@ export const api = {
             return categories;
         },
 
+        renameCategory: async (type, oldName, newName) => {
+            await delay();
+            const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
+
+            // Validate: check if new name already exists
+            if (categories[type].includes(newName)) throw new Error('Ya existe una categoría con ese nombre');
+
+            // Find and replace
+            const index = categories[type].indexOf(oldName);
+            if (index !== -1) {
+                categories[type][index] = newName;
+                storage.set(STORAGE_KEYS.TREASURY_CATEGORIES, categories);
+            }
+            return categories;
+        },
+
         deleteCategory: async (type, category) => {
             await delay();
             const categories = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers } from 'lucide-react';
+import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp } from 'lucide-react';
 import { Button, Card, FormField, LoadingSpinner } from '../ui';
 import { showSuccess, showError, showConfirm } from '../../utils/alerts';
 
@@ -174,6 +174,7 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                             items={categories.income}
                             onDelete={(cat) => onDeleteCategory('income', cat)}
                             onAdd={(cat) => onAddCategory('income', cat)}
+                            onRename={(oldName, newName) => onRenameCategory('income', oldName, newName)}
                         />
                     </Card>
 
@@ -187,6 +188,7 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                             items={categories.expense}
                             onDelete={(cat) => onDeleteCategory('expense', cat)}
                             onAdd={(cat) => onAddCategory('expense', cat)}
+                            onRename={(oldName, newName) => onRenameCategory('expense', oldName, newName)}
                         />
                     </Card>
                 </div>
@@ -195,14 +197,37 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
     );
 };
 
-const CategoryList = ({ type, items, onDelete, onAdd }) => {
+const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes'];
+
+const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
     const [newCat, setNewCat] = useState('');
+    const [editingCat, setEditingCat] = useState(null);
+    const [editValue, setEditValue] = useState('');
 
     const handleSubmit = (e) => {
         e.preventDefault();
         if (!newCat.trim()) return;
         onAdd(newCat.trim());
         setNewCat('');
+    };
+
+    const startEditing = (cat) => {
+        setEditingCat(cat);
+        setEditValue(cat);
+    };
+
+    const cancelEditing = () => {
+        setEditingCat(null);
+        setEditValue('');
+    };
+
+    const saveEditing = (oldName) => {
+        if (!editValue.trim() || editValue === oldName) {
+            cancelEditing();
+            return;
+        }
+        onRename(oldName, editValue.trim());
+        cancelEditing();
     };
 
     return (
@@ -218,17 +243,57 @@ const CategoryList = ({ type, items, onDelete, onAdd }) => {
                 <Button type="submit" size="sm" className="bg-gray-800 text-white">Añadir</Button>
             </form>
             <div className="grid grid-cols-1 gap-2">
-                {items.map((cat) => (
-                    <div key={cat} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg group">
-                        <span className="text-sm font-medium text-gray-700">{cat}</span>
-                        <button
-                            onClick={() => onDelete(cat)}
-                            className="text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                        >
-                            ×
-                        </button>
-                    </div>
-                ))}
+                {items.map((cat) => {
+                    const isImmutable = IMMUTABLE_CATEGORIES.includes(cat);
+                    const isEditing = editingCat === cat;
+
+                    return (
+                        <div key={cat} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg group hover:bg-gray-100 transition-colors">
+                            {isEditing ? (
+                                <div className="flex-1 flex gap-2 items-center">
+                                    <input
+                                        type="text"
+                                        value={editValue}
+                                        onChange={(e) => setEditValue(e.target.value)}
+                                        className="flex-1 px-2 py-1 text-sm border rounded shadow-sm outline-none focus:ring-1 focus:ring-blue-500"
+                                        autoFocus
+                                    />
+                                    <button onClick={() => saveEditing(cat)} className="text-green-600 hover:text-green-700">
+                                        <Save size={16} />
+                                    </button>
+                                    <button onClick={cancelEditing} className="text-gray-400 hover:text-gray-600">
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <>
+                                    <span className={`text-sm font-medium ${isImmutable ? 'text-blue-700 italic' : 'text-gray-700'}`}>
+                                        {cat} {isImmutable && <span className="text-[10px] bg-blue-100 text-blue-600 px-1 py-0.5 rounded ml-2">Sistema</span>}
+                                    </span>
+
+                                    {!isImmutable && (
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => startEditing(cat)}
+                                                className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+                                                title="Editar nombre"
+                                            >
+                                                <TrendingUp size={14} className="rotate-90" /> {/* Edit icon replacement */}
+                                            </button>
+                                            <button
+                                                onClick={() => onDelete(cat)}
+                                                className="p-1 text-gray-400 hover:text-red-600 transition-colors"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    )}
+                                </>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </div>
     );

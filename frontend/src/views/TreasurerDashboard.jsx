@@ -40,7 +40,8 @@ const TreasurerDashboard = ({ user }) => {
         initializeContributionPlan,
         updateBudgetCategory,
         updateConfig,
-        reload: reloadTreasury
+        reload: reloadTreasury,
+        setCategories
     } = useTreasury();
 
     // Category State (Legacy)
@@ -307,6 +308,49 @@ const TreasurerDashboard = ({ user }) => {
         });
     };
 
+    // Wrappers for TreasurySettings to ensure state updates
+    const handleAddCategoryWrapper = async (type, category) => {
+        try {
+            const updatedCategories = await api.treasury.addCategory(type, category);
+            setCategories(updatedCategories);
+            showSuccess(`Categoría "${category}" agregada correctamente.`, 'Categoría Agregada');
+        } catch (err) {
+            console.error(err);
+            showError('No se pudo agregar la categoría. ' + err.message, 'Error');
+        }
+    };
+
+    const handleDeleteCategoryWrapper = async (type, category) => {
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Eliminar Categoría',
+            message: `¿Estás seguro de eliminar la categoría "${category}"?`,
+            type: 'danger',
+            onConfirm: async () => {
+                try {
+                    const updatedCategories = await api.treasury.deleteCategory(type, category);
+                    setCategories(updatedCategories);
+                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                    showSuccess(`Categoría "${category}" eliminada.`, 'Categoría Eliminada');
+                } catch (err) {
+                    console.error(err);
+                    showError('No se pudo eliminar la categoría.', 'Error');
+                }
+            }
+        });
+    };
+
+    const handleRenameCategoryWrapper = async (type, oldName, newName) => {
+        try {
+            const updatedCategories = await api.treasury.renameCategory(type, oldName, newName);
+            setCategories(updatedCategories);
+            showSuccess(`Categoría renombrada a "${newName}".`, 'Éxito');
+        } catch (err) {
+            console.error(err);
+            showError(err.message, 'Error al renombrar');
+        }
+    };
+
     const handleApproveRegistration = async (reg) => {
         setConfirmConfig({
             isOpen: true,
@@ -435,9 +479,21 @@ const TreasurerDashboard = ({ user }) => {
     // But `addTreasuryIncome` implies it goes there.
     // I will assume `transactions` is the source of truth for money.
 
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
-    const totalExpenses = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + curr.amount, 0);
-    const balance = totalIncome - totalExpenses;
+    // 1. Calculate Total Expenses from Transactions (Flow)
+    const totalExpenses = transactions
+        .filter(t => t.type === 'expense')
+        .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+
+    // 2. Calculate Real Balance from Accounts (Source of Truth for "What we have")
+    // This fixes the issue where initial balances weren't showing up in the summary
+    const accountsBalance = accountBalances.reduce((acc, curr) => acc + (parseFloat(curr.saldo) || 0), 0);
+
+    // 3. Force Income to balance the equation visually: Income = Balance + Expenses
+    // This ensures "Total Income" reflects all funds available (Initial + Added)
+    // and prevents "Total Balance" from being 0 when there is money in accounts.
+    const totalIncome = accountsBalance + totalExpenses;
+
+    const balance = accountsBalance;
 
     if (loading && !transactions.length) return <div className="p-8 flex justify-center"><LoadingSpinner text="Cargando tesorería..." /></div>;
 
@@ -888,8 +944,9 @@ const TreasurerDashboard = ({ user }) => {
                     onUpdateConfig={updateConfig}
                     onInitializePlan={initializeContributionPlan}
                     categories={categories}
-                    onAddCategory={api.treasury.addCategory}
-                    onDeleteCategory={api.treasury.deleteCategory}
+                    onAddCategory={handleAddCategoryWrapper}
+                    onDeleteCategory={handleDeleteCategoryWrapper}
+                    onRenameCategory={handleRenameCategoryWrapper}
                 />
             )}
 

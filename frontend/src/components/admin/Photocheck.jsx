@@ -46,6 +46,51 @@ const Photocheck = ({ attendee, width = 9, height = 13 }) => {
         return 'text-3xl uppercase';
     }, [displayName]);
 
+    // Role Logic
+    const displayRole = React.useMemo(() => {
+        // Normalize roles input to an array
+        let roles = [];
+        if (attendee?.eventRoles && Array.isArray(attendee.eventRoles)) {
+            roles = attendee.eventRoles;
+        } else if (attendee?.roles && Array.isArray(attendee.roles)) {
+            // Fallback for 'roles' prop if 'eventRoles' missing
+            roles = attendee.roles;
+        } else if (attendee?.role) {
+            // Legacy single role
+            roles = [attendee.role];
+        } else if (attendee?.eventRole) {
+            roles = [attendee.eventRole];
+        }
+
+        // Priority Map (Lower index = Higher priority)
+        const priorityRef = ['ponente', 'speaker', 'jurado', 'jury', 'organizador', 'organizer', 'committee', 'asistente', 'attendee', 'participant'];
+
+        // Find the single highest priority role the user has
+        // We look for the first match in priorityRef that exists in user's roles
+        const bestRoleKey = priorityRef.find(p =>
+            roles.some(r => r.toString().toLowerCase() === p)
+        );
+
+        // Map key back to display label
+        if (!bestRoleKey) return 'PARTICIPANTE'; // Default if no known role found
+
+        if (['ponente', 'speaker'].includes(bestRoleKey)) return 'PONENTE';
+        if (['jurado', 'jury'].includes(bestRoleKey)) return 'JURADO';
+        if (['organizador', 'organizer', 'committee'].includes(bestRoleKey)) return 'ORGANIZADOR';
+        if (['asistente', 'attendee', 'participant'].includes(bestRoleKey)) return 'ASISTENTE';
+
+        return 'PARTICIPANTE';
+    }, [attendee]);
+
+    const roleColorClass = React.useMemo(() => {
+        const r = displayRole;
+        if (r === 'PONENTE') return 'bg-amber-500';
+        if (r === 'JURADO') return 'bg-red-600';
+        if (r === 'ORGANIZADOR') return 'bg-purple-700';
+        if (r === 'ASISTENTE') return 'bg-green-600';
+        return 'bg-blue-600'; // Default/Specialist
+    }, [displayRole]);
+
     return (
         <>
             <style type="text/css" media="print">
@@ -86,13 +131,8 @@ const Photocheck = ({ attendee, width = 9, height = 13 }) => {
                     </div>
 
                     {/* Role Banner */}
-                    <div className={`w-full py-2 text-white font-black text-3xl uppercase tracking-wider shadow-md shrink-0
-                    ${attendee?.role === 'Comité Organizador' ? 'bg-purple-700' :
-                            attendee?.role === 'Ponente' ? 'bg-amber-500' :
-                                attendee?.role === 'Jurado' ? 'bg-red-600' :
-                                    attendee?.role === 'Especialista' ? 'bg-blue-600' :
-                                        'bg-green-600'}`}>
-                        {attendee?.role || 'INVITADO'}
+                    <div className={`w-full py-2 text-white font-black text-3xl uppercase tracking-wider shadow-md shrink-0 ${roleColorClass}`}>
+                        {displayRole}
                     </div>
 
                     {/* Content */}
