@@ -18,40 +18,45 @@ const GalleryManager = () => {
     } = useModal();
 
     // Form Hook
-    const {
-        values: formData,
-        handleChange,
-        reset: resetForm,
-        setValues
-    } = useForm({
+    const initialValues = React.useMemo(() => ({
         title: '',
         year: new Date().getFullYear(),
         category: '',
         url: '',
         description: ''
-    });
+    }), []);
+
+    const {
+        values: formData,
+        handleChange,
+        reset: resetForm,
+        setValues
+    } = useForm(initialValues);
 
     // File Upload Hook
     const {
         preview,
         handleFileChange: onFileChange,
-        fileInputRef
+        fileInputRef,
+        uploading
     } = useFileUpload({
         maxSize: 5 * 1024 * 1024,
-        acceptedTypes: ['image/*']
+        acceptedTypes: ['image/*'],
+        onUpload: async (file) => {
+            try {
+                const url = await api.upload.image(file);
+                setValues(prev => ({ ...prev, url }));
+            } catch (error) {
+                console.error("Upload failed", error);
+                showError('Error al subir la imagen', 'Intente nuevamente');
+            }
+        }
     });
 
     // Confirmation Dialog State
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, action: null, message: '' });
     const openConfirm = (action, message) => setConfirmConfig({ isOpen: true, action, message });
     const closeConfirm = () => setConfirmConfig({ ...confirmConfig, isOpen: false });
-
-    // Update form URL when file preview changes
-    useEffect(() => {
-        if (preview) {
-            setValues(prev => ({ ...prev, url: preview }));
-        }
-    }, [preview, setValues]);
 
     // Initialize form when editing
     useEffect(() => {
@@ -181,8 +186,9 @@ const GalleryManager = () => {
                                             variant="outline"
                                             onClick={() => fileInputRef.current?.click()}
                                             className="whitespace-nowrap"
+                                            disabled={uploading}
                                         >
-                                            <ImageIcon size={18} className="mr-2" /> Subir
+                                            <ImageIcon size={18} className="mr-2" /> {uploading ? 'Subiendo...' : 'Subir'}
                                         </Button>
                                     </div>
                                     <p className="text-xs text-gray-500">Puedes pegar una URL externa o subir una imagen local.</p>

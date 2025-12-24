@@ -24,8 +24,8 @@ const GalleryView = () => {
         loadGallery();
     }, []);
 
-    const filteredItems = galleryItems.filter(item => item.year === selectedYear);
-    const availableYears = [...new Set(galleryItems.map(item => item.year))].sort((a, b) => b - a);
+    const filteredItems = galleryItems.filter(item => parseInt(item.year) === parseInt(selectedYear));
+    const availableYears = [...new Set(galleryItems.map(item => parseInt(item.year)))].sort((a, b) => b - a);
 
     // Get unique categories for the selected year
     const categories = [...new Set(filteredItems.map(item => item.category))];

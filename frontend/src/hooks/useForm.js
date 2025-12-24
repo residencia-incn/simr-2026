@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Custom hook for form handling with validation and optional persistence
@@ -37,7 +37,7 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
         }
     }, [values, persistKey]);
 
-    const handleChange = (e) => {
+    const handleChange = useCallback((e) => {
         const { name, value, type, checked } = e.target;
         const newValue = type === 'checkbox' ? checked : value;
 
@@ -53,9 +53,9 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
                 [name]: null
             }));
         }
-    };
+    }, [errors]);
 
-    const handleBlur = (e) => {
+    const handleBlur = useCallback((e) => {
         const { name } = e.target;
         setTouched(prev => ({
             ...prev,
@@ -72,9 +72,9 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
                 }));
             }
         }
-    };
+    }, [validate, values]);
 
-    const handleSubmit = async (onSubmit) => {
+    const handleSubmit = useCallback((onSubmit) => {
         return async (e) => {
             if (e) e.preventDefault();
 
@@ -106,9 +106,9 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
                 setIsSubmitting(false);
             }
         };
-    };
+    }, [values, validate]);
 
-    const reset = () => {
+    const reset = useCallback(() => {
         setValues(initialValues);
         setErrors({});
         setTouched({});
@@ -116,21 +116,21 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
         if (persistKey && typeof window !== 'undefined') {
             window.localStorage.removeItem(persistKey);
         }
-    };
+    }, [initialValues, persistKey]);
 
-    const setFieldValue = (name, value) => {
+    const setFieldValue = useCallback((name, value) => {
         setValues(prev => ({
             ...prev,
             [name]: value
         }));
-    };
+    }, []);
 
-    const setFieldError = (name, error) => {
+    const setFieldError = useCallback((name, error) => {
         setErrors(prev => ({
             ...prev,
             [name]: error
         }));
-    };
+    }, []);
 
     return {
         values,

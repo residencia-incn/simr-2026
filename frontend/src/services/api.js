@@ -79,6 +79,19 @@ const getLocalUsers = () => {
  */
 export const api = {
 
+    // --- Upload Service ---
+    upload: {
+        image: async (file) => {
+            await delay(1000); // Simulate network delay
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+    },
+
     // --- 0. System Config ---
     system: {
         getConfig: async () => {

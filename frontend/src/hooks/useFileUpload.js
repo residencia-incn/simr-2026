@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 
 /**
  * Custom hook for file upload handling
@@ -12,6 +12,7 @@ export const useFileUpload = (options = {}) => {
         onUpload = null
     } = options;
 
+    const fileInputRef = useRef(null);
     const [file, setFile] = useState(null);
     const [preview, setPreview] = useState(null);
     const [error, setError] = useState(null);
@@ -57,6 +58,8 @@ export const useFileUpload = (options = {}) => {
             setError(validationError);
             setFile(null);
             setPreview(null);
+            // Reset input so change event fires again for same file if needed
+            if (fileInputRef.current) fileInputRef.current.value = '';
             return;
         }
 
@@ -83,6 +86,8 @@ export const useFileUpload = (options = {}) => {
                 setError(err.message || 'Error al subir archivo');
             } finally {
                 setUploading(false);
+                // Reset input to allow re-upload if needed
+                if (fileInputRef.current) fileInputRef.current.value = '';
             }
         }
     }, [validateFile, onUpload]);
@@ -101,6 +106,9 @@ export const useFileUpload = (options = {}) => {
         setPreview(null);
         setError(null);
         setUploading(false);
+        if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+        }
     }, []);
 
     return {
@@ -110,7 +118,8 @@ export const useFileUpload = (options = {}) => {
         uploading,
         handleFileChange,
         convertToBase64,
-        clear
+        clear,
+        fileInputRef
     };
 };
 

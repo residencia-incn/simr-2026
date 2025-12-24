@@ -326,7 +326,7 @@ export default function SIMRApp() {
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
                         {user.profiles.filter(p => p !== 'perfil_basico').map(profile => {
                           const Icon = ROLE_ICONS[profile] || Users;
-                          const isDashboardActive = activeRole === profile;
+                          const isDashboardActive = activeRole === profile && currentView === getDashboardView(profile);
                           return (
                             <button
                               key={profile}

@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html class="dark" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Neurology Congress - Interactive Media Wall</title>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#1736cf",
+                        "background-light": "#f6f6f8",
+                        "background-dark": "#111421",
+                    },
+                    fontFamily: {
+                        "display": ["Inter", "sans-serif"]
+                    },
+                    borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+                },
+            },
+        }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-[#111422] dark:text-white overflow-hidden min-h-screen flex flex-col">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-b-[#e5e7eb] dark:border-b-[#242a47] px-6 lg:px-10 py-3 bg-white dark:bg-[#111422] sticky top-0 z-40 opacity-50 pointer-events-none select-none">
+<div class="flex items-center gap-4 lg:gap-8">
+<div class="flex items-center gap-4 text-[#111422] dark:text-white">
+<div class="size-8 text-primary">
+<span class="material-symbols-outlined text-[32px]">neurology</span>
+</div>
+<h2 class="hidden md:block text-lg font-bold leading-tight tracking-[-0.015em]">Neurology Congress 2024</h2>
+</div>
+<nav class="hidden md:flex items-center gap-6 lg:gap-9">
+<a class="text-[#111422] dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Home</a>
+<a class="text-[#111422] dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Schedule</a>
+<a class="text-primary text-sm font-bold leading-normal" href="#">Gallery</a>
+<a class="text-[#111422] dark:text-white text-sm font-medium leading-normal hover:text-primary transition-colors" href="#">Speakers</a>
+</nav>
+</div>
+<div class="flex items-center gap-4 lg:gap-8">
+<label class="hidden sm:flex flex-col min-w-40 h-10 max-w-64">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full bg-[#f0f2f5] dark:bg-[#242a47]">
+<div class="text-[#64748b] dark:text-[#939cc8] flex items-center justify-center pl-4 rounded-l-lg">
+<span class="material-symbols-outlined text-[20px]">search</span>
+</div>
+<input class="flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg bg-transparent text-[#111422] dark:text-white focus:outline-0 focus:ring-0 border-none h-full placeholder:text-[#64748b] dark:placeholder:text-[#939cc8] px-4 pl-2 text-sm font-normal leading-normal" placeholder="Search gallery" value=""/>
+</div>
+</label>
+</div>
+</header>
+<main class="flex-1 w-full max-w-[1920px] mx-auto p-4 lg:p-8 overflow-y-auto blur-[2px] opacity-40 pointer-events-none select-none">
+<div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+<div>
+<h1 class="text-2xl font-bold mb-1">Interactive Media Wall</h1>
+<p class="text-sm text-[#64748b] dark:text-[#939cc8]">Explore highlights from the 2024 congress</p>
+</div>
+<div class="flex items-center gap-2">
+<span class="text-sm font-medium mr-2">Sort by:</span>
+<button class="px-3 py-1.5 rounded-lg border border-[#e5e7eb] dark:border-[#242a47] text-sm">Most Recent</button>
+<button class="px-3 py-1.5 rounded-lg bg-primary text-white text-sm">Popular</button>
+</div>
+</div>
+<div class="columns-2 md:columns-3 lg:columns-4 gap-4 space-y-4">
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-[4/3] bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBXDcStr35ioLRvEkZHiMgIvInOwzFJrTQ0dDyuArgI314n_nL2Z5Gsl6wfwdgP2RgDPltA7K5llu-iezxyQxhTfsd4BwgZm4H7F4lqdfX-ser9tWykJVx6WaUYSu57wUKKKK1nYpe-bKWBFpBlYoQXZ0d_UUvccarC-VnVF4q3T4jktJ6Rlg0GadkCzMovZ-c9lzdta2iPh6fpZeP1YXTBMzua0_db0XHnV9XD_ycTn1yJ8gDT331HOW94OFg2Je-p6MHChdr22TU");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-[3/4] bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDLpZG9rvkuQmqKnf4-sWgr4c0us1qW9OpjNugCESjMl5RRxNKf0cGpoYBoPTlVjYpVCXBApptoCXQl8Ktkmergmpd-fg4SbYOAxyQFtVBxOVbNpF4TMHwW5rj3iAGBkFXyt9H--GtW0zLHvOgC_vyUmhREUOVHjhywnSd_1r31FFyUO4jPZbAemUpDFIeogf6aYe_61CkGiG9AGXlCtRwg63A-6Ti_Nx2E2zqB3oy4oFNiI_HIr-hx_Plw9GiBIAjAAL1NlRidGbw");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-video bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCJDyK1utWqmdkZJrIN9THQ85o7HvB4hECikE-1jWCR0obCRAZs4k67MVZB9GpeHHYtl4u1ePtV52ws8KBcryWQo7wAATJv2wGDP3hNeR6QP57RRz7zEbi0l6xR4-ciRlPhRWSaK64AXdutNR6R_-ZTuZopLW7rxoH7oSh_3UDoo5h-1xvn0SvpJ3x0JzKc0Jmejj6HPGnurF9N9wdKuxzZwMEnjCqTw5WzTVJ2IekDe4daT-CcvbCtTEFZhYhcUVEEcqRB_y1arjw");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-square bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBHFJuU9eZr_yM5J_NthQqGqRCdWq-ZUpw0YNNVUbRigwsGd5Yf5urwRH9BY8YlaB0IO8y0pjTZ_5GU7Mqg5GUZg3Xgcxzddk_Mj6j6HYnfn8ZvSIyRwTt_jr5x167BzKZWZd2Td9KnQ9pSCI4uGpb4KYSv7ouCEy9Z-0jLld1ynhPneMLuRwSEiFyuIX7LTZs9i0b2DXlMQsl5UlTvFreLxv5ZbCRUTvKicq8D2gMsZqDQhYoskf_JaTStGpacFN7WJ38ky3VMtdk");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-[4/3] bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA5F4cjbhGb7YhD9zKf9ehta2MK-ZBORPEtvSwVrxg866o6LFoRzI0pVrUFRPoQ1QJMWC7htCYuKFXhjbUx4ZI_MAaF4BPgvbjToGwwY7bDOEvNd8ABttoWzc43exASGk4UXvCQNhzzPBKiGQ4zGfa_0eYEll6yQF_CPv7AlFBN3jtN8Ooio5o7JmP1ncfuz2vh3FEHm540BaARDX7MGp5teeNETANlj7_zLJ9xzAthC4WGfJUaHVOAnK9Xl5W_9JROPrLZtwwYV40");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-video bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuABJbm6DKQQ5TnvFsl3gTpDDES9b9W4Q3P6v8Ukh3433C8PkpZx_tO_ivLoFhCrMA1Z8up8dmosnTnFAFMfmCJ8hzoa9MFquy_W2KS0VsCSjhxY15ww9AKFi99xi7ixlNjd0qXCPoQq88lKH4rHpS3ts6QQW6P503UZBaq5J_zp1wlGJY3azd4vdTNtaylj6PFfrmNageyTzGoPQuFiN_ydoznZRu6dKGdaiIP7mCzM7IpTf7oDmHkeNAks4QzXyLHZFwvCz7cQ3D8");'></div>
+</div>
+<div class="break-inside-avoid relative rounded-lg overflow-hidden aspect-[3/4] bg-gray-200 dark:bg-gray-800">
+<div class="absolute inset-0 bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0r9F-UUW9a3ohjKajkFN8a6jf5fX2RmH-uW1lQAdHSEW_3QJIuw0ltc4t_0ZwDBG6SYg416vrK0I7yAtd-JfrZgOASjTGgBrg5JQ-abj3p6Nr0CcUnER4e9ijCSF_o_-e47PeGH77NLXjN_41ygXLFE-Cyjx8Xd2HsZu34eaKXQ0dTC8W0U4jzaD472xy1ECf901XIVzdg4BerYNC8xsp_pgFm7zl3CzxHAMPZsIHZZn239GYTePpkeD9ctReYhp1aWGD7teY9eo");'></div>
+</div>
+</div>
+</main>
+<div aria-modal="true" class="fixed inset-0 z-50 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8" role="dialog">
+<div class="absolute inset-0 bg-[#0b0e17]/90 backdrop-blur-md transition-opacity duration-300"></div>
+<button aria-label="Close Gallery" class="absolute top-4 right-4 sm:top-6 sm:right-6 z-50 p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors group">
+<span class="material-symbols-outlined text-[28px] opacity-70 group-hover:opacity-100 transition-opacity">close</span>
+</button>
+<div class="relative w-full max-w-7xl h-full flex flex-col justify-center gap-6">
+<div class="relative w-full flex-1 min-h-0 bg-black rounded-xl overflow-hidden shadow-2xl border border-white/10 group select-none">
+<div class="absolute inset-0 w-full h-full bg-contain bg-center bg-no-repeat transition-transform duration-700" data-alt="Doctor presenting MRI scan on a large screen during a conference" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0r9F-UUW9a3ohjKajkFN8a6jf5fX2RmH-uW1lQAdHSEW_3QJIuw0ltc4t_0ZwDBG6SYg416vrK0I7yAtd-JfrZgOASjTGgBrg5JQ-abj3p6Nr0CcUnER4e9ijCSF_o_-e47PeGH77NLXjN_41ygXLFE-Cyjx8Xd2HsZu34eaKXQ0dTC8W0U4jzaD472xy1ECf901XIVzdg4BerYNC8xsp_pgFm7zl3CzxHAMPZsIHZZn239GYTePpkeD9ctReYhp1aWGD7teY9eo");'>
+<div class="absolute inset-0 -z-10 bg-cover bg-center blur-3xl opacity-40" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC0r9F-UUW9a3ohjKajkFN8a6jf5fX2RmH-uW1lQAdHSEW_3QJIuw0ltc4t_0ZwDBG6SYg416vrK0I7yAtd-JfrZgOASjTGgBrg5JQ-abj3p6Nr0CcUnER4e9ijCSF_o_-e47PeGH77NLXjN_41ygXLFE-Cyjx8Xd2HsZu34eaKXQ0dTC8W0U4jzaD472xy1ECf901XIVzdg4BerYNC8xsp_pgFm7zl3CzxHAMPZsIHZZn239GYTePpkeD9ctReYhp1aWGD7teY9eo");'></div>
+</div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none"></div>
+<div class="absolute top-6 right-6 z-10 flex items-center gap-3">
+<button class="flex items-center gap-2 bg-black/40 hover:bg-primary/90 backdrop-blur-md text-white px-4 py-2 rounded-lg transition-all border border-white/10 group/btn shadow-lg">
+<span class="material-symbols-outlined text-[20px]">share</span>
+<span class="hidden sm:inline text-sm font-medium">Share</span>
+</button>
+<button aria-label="Fullscreen" class="flex items-center justify-center size-10 bg-black/40 hover:bg-primary/90 backdrop-blur-md text-white rounded-lg transition-all border border-white/10 shadow-lg">
+<span class="material-symbols-outlined text-[24px]">fullscreen</span>
+</button>
+</div>
+<button aria-label="Previous image" class="absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-20 size-14 flex items-center justify-center rounded-full bg-white/10 hover:bg-primary backdrop-blur-md text-white border border-white/10 transition-all shadow-lg hover:scale-110 group/nav">
+<span class="material-symbols-outlined text-[32px] opacity-80 group-hover/nav:opacity-100">chevron_left</span>
+</button>
+<button aria-label="Next image" class="absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-20 size-14 flex items-center justify-center rounded-full bg-white/10 hover:bg-primary backdrop-blur-md text-white border border-white/10 transition-all shadow-lg hover:scale-110 group/nav">
+<span class="material-symbols-outlined text-[32px] opacity-80 group-hover/nav:opacity-100">chevron_right</span>
+</button>
+<div class="absolute bottom-0 left-0 w-full p-6 lg:p-10 z-10">
+<div class="flex flex-col md:flex-row md:items-end justify-between gap-6 max-w-[95%] mx-auto">
+<div class="flex flex-col gap-3 max-w-3xl">
+<div class="flex items-center gap-3 animate-fade-in">
+<span class="bg-primary text-white text-xs font-bold px-3 py-1 rounded shadow-sm backdrop-blur-sm tracking-wide">KEYNOTE</span>
+<span class="flex items-center gap-1.5 text-white/90 text-sm font-medium">
+<span class="material-symbols-outlined text-[18px]">calendar_today</span>
+                                    Oct 12, 2023
+                                </span>
+</div>
+<h1 class="text-white text-2xl lg:text-4xl font-bold leading-tight drop-shadow-md">Dr. Elena Rivas on Neuroplasticity</h1>
+<p class="text-white/80 text-base lg:text-lg font-normal leading-relaxed max-w-[700px] line-clamp-2 md:line-clamp-none drop-shadow-sm">
+                                An in-depth look at recent discoveries in synaptic pruning during the opening ceremony. The lecture covered advanced imaging techniques and implications for future cognitive therapies.
+                            </p>
+</div>
+<div class="hidden md:flex shrink-0">
+<button class="flex items-center gap-2 text-white/80 hover:text-white hover:bg-white/10 px-5 py-2.5 rounded-lg transition-colors border border-transparent hover:border-white/10">
+<span class="material-symbols-outlined">download</span>
+<span class="text-sm font-medium">Download High-Res</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+<div class="h-auto shrink-0 w-full overflow-hidden">
+<div class="flex justify-center w-full">
+<div class="flex gap-3 overflow-x-auto pb-2 pt-1 px-4 snap-x scrollbar-hide [-ms-scrollbar-style:none] [scrollbar-width:none] max-w-full mask-linear-fade">
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer ring-2 ring-primary ring-offset-2 ring-offset-black transition-all">
+<div class="w-full h-full rounded-md bg-cover bg-center" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBXDcStr35ioLRvEkZHiMgIvInOwzFJrTQ0dDyuArgI314n_nL2Z5Gsl6wfwdgP2RgDPltA7K5llu-iezxyQxhTfsd4BwgZm4H7F4lqdfX-ser9tWykJVx6WaUYSu57wUKKKK1nYpe-bKWBFpBlYoQXZ0d_UUvccarC-VnVF4q3T4jktJ6Rlg0GadkCzMovZ-c9lzdta2iPh6fpZeP1YXTBMzua0_db0XHnV9XD_ycTn1yJ8gDT331HOW94OFg2Je-p6MHChdr22TU");'></div>
+<div class="absolute inset-0 bg-primary/20 rounded-md"></div>
+</div>
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer overflow-hidden opacity-50 hover:opacity-100 transition-opacity group">
+<div class="w-full h-full bg-cover bg-center transform group-hover:scale-110 transition-transform duration-500" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDLpZG9rvkuQmqKnf4-sWgr4c0us1qW9OpjNugCESjMl5RRxNKf0cGpoYBoPTlVjYpVCXBApptoCXQl8Ktkmergmpd-fg4SbYOAxyQFtVBxOVbNpF4TMHwW5rj3iAGBkFXyt9H--GtW0zLHvOgC_vyUmhREUOVHjhywnSd_1r31FFyUO4jPZbAemUpDFIeogf6aYe_61CkGiG9AGXlCtRwg63A-6Ti_Nx2E2zqB3oy4oFNiI_HIr-hx_Plw9GiBIAjAAL1NlRidGbw");'></div>
+</div>
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer overflow-hidden opacity-50 hover:opacity-100 transition-opacity group">
+<div class="w-full h-full bg-cover bg-center transform group-hover:scale-110 transition-transform duration-500" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCJDyK1utWqmdkZJrIN9THQ85o7HvB4hECikE-1jWCR0obCRAZs4k67MVZB9GpeHHYtl4u1ePtV52ws8KBcryWQo7wAATJv2wGDP3hNeR6QP57RRz7zEbi0l6xR4-ciRlPhRWSaK64AXdutNR6R_-ZTuZopLW7rxoH7oSh_3UDoo5h-1xvn0SvpJ3x0JzKc0Jmejj6HPGnurF9N9wdKuxzZwMEnjCqTw5WzTVJ2IekDe4daT-CcvbCtTEFZhYhcUVEEcqRB_y1arjw");'></div>
+</div>
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer overflow-hidden opacity-50 hover:opacity-100 transition-opacity group">
+<div class="w-full h-full bg-cover bg-center transform group-hover:scale-110 transition-transform duration-500" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBHFJuU9eZr_yM5J_NthQqGqRCdWq-ZUpw0YNNVUbRigwsGd5Yf5urwRH9BY8YlaB0IO8y0pjTZ_5GU7Mqg5GUZg3Xgcxzddk_Mj6j6HYnfn8ZvSIyRwTt_jr5x167BzKZWZd2Td9KnQ9pSCI4uGpb4KYSv7ouCEy9Z-0jLld1ynhPneMLuRwSEiFyuIX7LTZs9i0b2DXlMQsl5UlTvFreLxv5ZbCRUTvKicq8D2gMsZqDQhYoskf_JaTStGpacFN7WJ38ky3VMtdk");'></div>
+</div>
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer overflow-hidden opacity-50 hover:opacity-100 transition-opacity group">
+<div class="w-full h-full bg-cover bg-center transform group-hover:scale-110 transition-transform duration-500" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA5F4cjbhGb7YhD9zKf9ehta2MK-ZBORPEtvSwVrxg866o6LFoRzI0pVrUFRPoQ1QJMWC7htCYuKFXhjbUx4ZI_MAaF4BPgvbjToGwwY7bDOEvNd8ABttoWzc43exASGk4UXvCQNhzzPBKiGQ4zGfa_0eYEll6yQF_CPv7AlFBN3jtN8Ooio5o7JmP1ncfuz2vh3FEHm540BaARDX7MGp5teeNETANlj7_zLJ9xzAthC4WGfJUaHVOAnK9Xl5W_9JROPrLZtwwYV40");'></div>
+</div>
+<div class="relative min-w-[100px] sm:min-w-[140px] h-[60px] sm:h-[80px] rounded-lg cursor-pointer overflow-hidden opacity-50 hover:opacity-100 transition-opacity group">
+<div class="w-full h-full bg-cover bg-center transform group-hover:scale-110 transition-transform duration-500" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuABJbm6DKQQ5TnvFsl3gTpDDES9b9W4Q3P6v8Ukh3433C8PkpZx_tO_ivLoFhCrMA1Z8up8dmosnTnFAFMfmCJ8hzoa9MFquy_W2KS0VsCSjhxY15ww9AKFi99xi7ixlNjd0qXCPoQq88lKH4rHpS3ts6QQW6P503UZBaq5J_zp1wlGJY3azd4vdTNtaylj6PFfrmNageyTzGoPQuFiN_ydoznZRu6dKGdaiIP7mCzM7IpTf7oDmHkeNAks4QzXyLHZFwvCz7cQ3D8");'></div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+</body></html>
