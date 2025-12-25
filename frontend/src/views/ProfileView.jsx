@@ -6,6 +6,7 @@ import QRCode from 'react-qr-code';
 import AttendanceScanner from '../components/common/AttendanceScanner';
 import { api } from '../services/api';
 import { showConfirm, showSuccess } from '../utils/alerts';
+import { UserAvatar } from '../components/common/UserAvatar';
 
 const ProfileView = ({ user, onSave }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -51,8 +52,7 @@ const ProfileView = ({ user, onSave }) => {
         file: imageFile,
         preview: imagePreview,
         handleFileChange,
-        clear: clearImage,
-        base64: imageBase64
+        clear: clearImage
     } = useFileUpload({
         acceptedTypes: ['image/*'],
         maxSize: 5 * 1024 * 1024 // 5MB
@@ -66,6 +66,7 @@ const ProfileView = ({ user, onSave }) => {
         dni: user?.dni || '',
         cmp: user?.cmp || '',
         rne: user?.rne || '',
+        gender: user?.gender || 'unspecified',
     }, null, 'user_profile_draft');
 
     useEffect(() => {
@@ -78,6 +79,7 @@ const ProfileView = ({ user, onSave }) => {
                 dni: user.dni || '',
                 cmp: user.cmp || '',
                 rne: user.rne || '',
+                gender: user.gender || 'unspecified',
             });
             setCurrentImage(user.image || null);
         }
@@ -92,6 +94,10 @@ const ProfileView = ({ user, onSave }) => {
         if (result.isConfirmed) {
             setCurrentImage(null);
             clearImage();
+            // Immediately update the parent component to sync across the app
+            if (onSave) {
+                onSave({ ...user, image: null });
+            }
         }
     };
 
@@ -128,9 +134,11 @@ const ProfileView = ({ user, onSave }) => {
         e.preventDefault();
         setMessage(null);
 
+        // Preserve all existing user data and only update changed fields
         const updatedProfile = {
-            ...form,
-            image: imageBase64 || currentImage
+            ...user, // Preserve all existing user data (id, roles, profiles, etc.)
+            ...form, // Update form fields (name, email, phone, institution, etc.)
+            image: imagePreview || currentImage // Update image (imagePreview contains base64)
         };
 
         // Here we would call an API to update the user
@@ -143,6 +151,10 @@ const ProfileView = ({ user, onSave }) => {
             setMessage({ type: 'success', text: 'Perfil actualizado correctamente.' });
             setIsEditing(false);
             if (onSave) onSave(updatedProfile);
+            // Update currentImage to reflect the saved state
+            if (imagePreview) {
+                setCurrentImage(imagePreview);
+            }
         }, 800);
     };
 
@@ -212,7 +224,12 @@ const ProfileView = ({ user, onSave }) => {
                                         className="w-full h-full object-cover"
                                     />
                                 ) : (
-                                    <User size={64} className="text-blue-400" />
+                                    <UserAvatar
+                                        image={null}
+                                        gender={form.gender || user?.gender || 'unspecified'}
+                                        name={user?.name}
+                                        size={64}
+                                    />
                                 )}
                             </div>
 
@@ -649,6 +666,25 @@ const ProfileView = ({ user, onSave }) => {
                                         readOnly={!isEditing}
                                         className="md:col-span-2"
                                     />
+
+                                    {/* Gender Selection */}
+                                    <div className="md:col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Sexo
+                                        </label>
+                                        <select
+                                            name="gender"
+                                            value={form.gender}
+                                            onChange={handleChange}
+                                            disabled={!isEditing}
+                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                }`}
+                                        >
+                                            <option value="unspecified">No Especifica</option>
+                                            <option value="male">Hombre</option>
+                                            <option value="female">Mujer</option>
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <div className="border-t border-gray-100 pt-6 mt-2">

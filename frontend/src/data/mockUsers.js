@@ -50,7 +50,8 @@ export const MOCK_USERS = [
         registrationDate: '2024-01-01',
         status: 'Confirmado',
         amount: 0,
-        image: null
+        image: null,
+        gender: 'unspecified'
     },
 
     // ============================================
@@ -81,7 +82,8 @@ export const MOCK_USERS = [
         grade: 18,
         attendancePercentage: 90,
         certificationApproved: true,
-        image: null
+        image: null,
+        gender: 'male'
     },
     {
         id: 'user-2',
@@ -108,7 +110,8 @@ export const MOCK_USERS = [
         grade: 16,
         attendancePercentage: 85,
         certificationApproved: false,
-        image: null
+        image: null,
+        gender: 'female'
     },
     {
         id: 'user-3',
@@ -135,7 +138,8 @@ export const MOCK_USERS = [
         grade: 12,
         attendancePercentage: 30,
         certificationApproved: false,
-        image: null
+        image: null,
+        gender: 'male'
     },
     {
         id: 'user-4',

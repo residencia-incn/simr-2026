@@ -4,122 +4,300 @@ import { Button, Modal, FormField, ConfirmDialog, LoadingSpinner, EmptyState } f
 import { api } from '../../services/api';
 import { useApi, useModal, useForm, useFileUpload } from '../../hooks';
 import { showError } from '../../utils/alerts';
+import AdminPhotoGrid from './gallery/AdminPhotoGrid';
+import AdminAlbumList from './gallery/AdminAlbumList';
+import MediaUploadModal from './gallery/MediaUploadModal';
+import FilterDrawer from './gallery/FilterDrawer';
 
 const GalleryManager = () => {
     // Hooks
     const { data: items, loading, refetch } = useApi(api.content.getGallery);
+    const [view, setView] = useState('grid'); // 'grid' | 'albums'
+    const [selectedAlbum, setSelectedAlbum] = useState(null);
 
-    // Modal Hook
+    // UI State
+    const [isUploadOpen, setIsUploadOpen] = useState(false);
+    const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // Filter State
+    const [availableYears, setAvailableYears] = useState([2024, 2023, 2022, 2021]);
+    const [activeFilters, setActiveFilters] = useState({
+        sortOrder: 'desc',
+        sortBy: 'date',
+        year: '2024',
+        categories: ['pre-congress', 'day-1', 'day-2'],
+        tags: []
+    });
+
+    // Edit State (Legacy Form)
     const {
         isOpen: isEditing,
-        data: editingItem,
         open: openEdit,
-        close: closeEdit
+        close: closeEdit,
+        data: editingItem
     } = useModal();
-
-    // Form Hook
-    const initialValues = React.useMemo(() => ({
-        title: '',
-        year: new Date().getFullYear(),
-        category: '',
-        url: '',
-        description: ''
-    }), []);
 
     const {
         values: formData,
         handleChange,
-        reset: resetForm,
-        setValues
-    } = useForm(initialValues);
-
-    // File Upload Hook
-    const {
-        preview,
-        handleFileChange: onFileChange,
-        fileInputRef,
-        uploading
-    } = useFileUpload({
-        maxSize: 5 * 1024 * 1024,
-        acceptedTypes: ['image/*'],
-        onUpload: async (file) => {
-            try {
-                const url = await api.upload.image(file);
-                setValues(prev => ({ ...prev, url }));
-            } catch (error) {
-                console.error("Upload failed", error);
-                showError('Error al subir la imagen', 'Intente nuevamente');
-            }
-        }
+        setValues: setFormData,
+        reset
+    } = useForm({
+        title: '',
+        year: new Date().getFullYear(),
+        category: '',
+        description: '',
+        url: ''
     });
 
-    // Confirmation Dialog State
-    const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, action: null, message: '' });
-    const openConfirm = (action, message) => setConfirmConfig({ isOpen: true, action, message });
-    const closeConfirm = () => setConfirmConfig({ ...confirmConfig, isOpen: false });
+    const {
+        file,
+        uploading,
+        handleFileChange,
+        uploadFile,
+        setFile: setUploadFile,
+        fileInputRef
+    } = useFileUpload();
 
-    // Initialize form when editing
+    // Effects
     useEffect(() => {
-        if (editingItem && !editingItem.isNew) {
-            setValues(editingItem);
-        } else if (editingItem && editingItem.isNew) {
-            resetForm();
+        if (editingItem) {
+            setFormData({
+                title: editingItem.title || '',
+                year: editingItem.year || new Date().getFullYear(),
+                category: editingItem.category || '',
+                description: editingItem.description || '',
+                url: editingItem.url || ''
+            });
+        } else {
+            reset();
         }
-    }, [editingItem, setValues, resetForm]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [editingItem]);
 
-    const handleSave = async () => {
+    const handleYearChange = (year) => {
+        setActiveFilters(prev => ({ ...prev, year: year.toString() }));
+    };
+
+    const handleAddYear = () => {
+        // Simple logic: Add the next logical year based on the max existing year
+        const maxYear = Math.max(...availableYears);
+        const newYear = maxYear + 1;
+        setAvailableYears([newYear, ...availableYears]);
+        handleYearChange(newYear);
+    };
+
+    const getFilteredItems = () => {
+        if (!items) return [];
+
+        let filtered = [...items];
+
+        // 1. Filter by Year
+        if (activeFilters.year !== 'all') {
+            filtered = filtered.filter(item => item.year === parseInt(activeFilters.year));
+        }
+
+        // 2. Filter by Categories
+        if (activeFilters.categories && activeFilters.categories.length > 0) {
+            filtered = filtered.filter(item => {
+                if (!item.category) return false;
+                const itemCat = item.category.toLowerCase().replace(' ', '-');
+                return activeFilters.categories.includes(itemCat);
+            });
+        }
+
+        // 3. Filter by Tags
+        if (activeFilters.tags && activeFilters.tags.length > 0) {
+            filtered = filtered.filter(item => {
+                if (!item.tags) return true;
+                return activeFilters.tags.some(tag => item.tags.includes(tag));
+            });
+        }
+
+        // 4. Sorting
+        filtered.sort((a, b) => {
+            let valA, valB;
+
+            switch (activeFilters.sortBy) {
+                case 'date':
+                    valA = new Date(a.date || 0).getTime();
+                    valB = new Date(b.date || 0).getTime();
+                    break;
+                case 'event_date':
+                    valA = new Date(a.eventDate || a.date || 0).getTime();
+                    valB = new Date(b.eventDate || b.date || 0).getTime();
+                    break;
+                case 'title':
+                    valA = (a.title || '').toLowerCase();
+                    valB = (b.title || '').toLowerCase();
+                    break;
+                case 'popularity':
+                    valA = a.views || 0;
+                    valB = b.views || 0;
+                    break;
+                default:
+                    valA = new Date(a.date || 0).getTime();
+                    valB = new Date(b.date || 0).getTime();
+            }
+
+            if (activeFilters.sortOrder === 'asc') {
+                return valA > valB ? 1 : -1;
+            } else {
+                return valA < valB ? 1 : -1;
+            }
+        });
+
+        return filtered;
+    };
+
+    const filteredItems = getFilteredItems();
+
+    const handleSave = async (data) => {
+        let payload = data || formData;
+
+        // Handle File Upload if coming from MediaUploadModal with a File object
+        if (data && data.file) {
+            try {
+                const uploadedUrl = await api.upload.image(data.file);
+                payload = {
+                    ...payload,
+                    url: uploadedUrl,
+                    type: data.type || 'image', // Ensure type is set
+                };
+
+                // Remove the file object before saving to gallery config
+                delete payload.file;
+                delete payload.preview;
+            } catch (error) {
+                console.error("Upload failed", error);
+                showError('Error al subir el archivo', 'Intente nuevamente');
+                return;
+            }
+        }
+
         let newItems;
-        // Ensure items is an array
         const currentItems = items || [];
 
         if (editingItem && !editingItem.isNew) {
-            newItems = currentItems.map(item => item.id === editingItem.id ? { ...formData, id: item.id } : item);
+            newItems = currentItems.map(item => item.id === editingItem.id ? { ...payload, id: item.id } : item);
         } else {
-            newItems = [{ ...formData, id: Date.now() }, ...currentItems];
+            // Create new item
+            const newItem = {
+                ...payload,
+                id: Date.now(),
+                // Ensure required fields
+                year: parseInt(payload.year) || new Date().getFullYear(),
+                likes: 0,
+                views: 0
+            };
+            newItems = [newItem, ...currentItems];
         }
 
         try {
             await api.content.saveGallery(newItems);
             refetch(); // Reload data
             closeEdit();
-            resetForm();
+            setIsUploadOpen(false); // Close upload modal if open
+            reset();
         } catch (err) {
             console.error("Failed to save gallery", err);
             showError('No se pudo guardar la galería.', 'Error al guardar');
         }
     };
 
+    const {
+        isOpen: isConfirmOpen,
+        open: openConfirm,
+        close: closeConfirm,
+        data: confirmData
+    } = useModal();
+
     const handleDelete = async (id) => {
-        openConfirm(async () => {
-            const currentItems = items || [];
-            const newItems = currentItems.filter(item => item.id !== id);
-            try {
-                await api.content.saveGallery(newItems);
-                refetch();
-            } catch (err) {
-                console.error("Failed to delete item", err);
+        openConfirm({
+            message: '¿Estás seguro de eliminar esta imagen?',
+            action: async () => {
+                const currentItems = items || [];
+                const newItems = currentItems.filter(item => item.id !== id);
+                try {
+                    await api.content.saveGallery(newItems);
+                    refetch();
+                } catch (err) {
+                    console.error("Failed to delete item", err);
+                }
+                closeConfirm();
             }
-            closeConfirm();
-        }, '¿Estás seguro de eliminar esta imagen?');
+        });
     };
 
     const startAdd = () => {
-        resetForm();
-        openEdit({ isNew: true });
+        setIsUploadOpen(true);
+    };
+
+    const handleViewAlbums = () => {
+        setView('albums');
+        setSelectedAlbum(null);
+    };
+
+    const handleSelectAlbum = (album) => {
+        setSelectedAlbum(album);
+        setView('grid');
+    };
+
+    const onFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            handleFileChange(e);
+            // Auto upload for preview
+            try {
+                const url = await api.upload.image(file);
+                setFormData(prev => ({ ...prev, url }));
+            } catch (err) {
+                console.error(err);
+            }
+        }
     };
 
     if (loading) return <LoadingSpinner text="Cargando galería..." className="py-12" />;
 
     return (
-        <div className="space-y-6">
-            <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold text-gray-900">Gestión de Galería</h3>
-                {!isEditing && (
-                    <Button onClick={startAdd} className="bg-blue-600 text-white flex items-center gap-2">
-                        <Plus size={18} /> Nueva Foto
-                    </Button>
-                )}
-            </div>
+        <div className="h-full bg-[#0e101b] rounded-xl overflow-hidden shadow-2xl border border-gray-800">
+            {view === 'grid' && (
+                <AdminPhotoGrid
+                    items={filteredItems}
+                    selectedYear={parseInt(activeFilters.year)}
+                    years={availableYears}
+                    onYearChange={handleYearChange}
+                    onAddYear={handleAddYear}
+                    onEdit={openEdit}
+                    onDelete={handleDelete}
+                    onUpload={startAdd}
+                    onViewAlbums={handleViewAlbums}
+                    onOpenFilters={() => setIsFilterOpen(true)}
+                />
+            )}
+
+            {view === 'albums' && (
+                <AdminAlbumList
+                    onSelectAlbum={handleSelectAlbum}
+                    onCreateAlbum={() => console.log("Create album clicked")}
+                />
+            )}
+
+            <MediaUploadModal
+                isOpen={isUploadOpen}
+                onClose={() => setIsUploadOpen(false)}
+                onSave={handleSave}
+            />
+
+            <FilterDrawer
+                isOpen={isFilterOpen}
+                onClose={() => setIsFilterOpen(false)}
+                onApply={(filters) => {
+                    setActiveFilters(filters);
+                    setIsFilterOpen(false);
+                }}
+                initialFilters={activeFilters}
+            />
 
             {isEditing && (
                 <Modal
@@ -223,46 +401,13 @@ const GalleryManager = () => {
             )}
 
             <ConfirmDialog
-                isOpen={confirmConfig.isOpen}
+                isOpen={isConfirmOpen}
                 onClose={closeConfirm}
-                onConfirm={confirmConfig.action}
-                message={confirmConfig.message}
+                onConfirm={confirmData?.action}
+                message={confirmData?.message || ''}
                 title="Confirmar eliminación"
                 variant="danger"
             />
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {!items || items.length === 0 ? (
-                    <EmptyState
-                        icon={ImageIcon}
-                        title="Galería vacía"
-                        description="No hay imágenes en la galería aún."
-                    />
-                ) : (
-                    items.map(item => (
-                        <div key={item.id} className="bg-white p-3 rounded-xl border border-gray-100 shadow-sm flex gap-4 group hover:shadow-md transition-shadow">
-                            <img src={item.url} alt={item.title} className="w-24 h-24 object-cover rounded-lg bg-gray-100" />
-                            <div className="flex-1 flex flex-col justify-between">
-                                <div>
-                                    <h4 className="font-bold text-gray-900 text-sm line-clamp-1">{item.title}</h4>
-                                    <div className="flex items-center gap-2 mt-1">
-                                        <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">{item.year}</span>
-                                        <span className="text-xs text-gray-500">{item.category}</span>
-                                    </div>
-                                </div>
-                                <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <button onClick={() => openEdit(item)} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                        <Edit2 size={16} />
-                                    </button>
-                                    <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                        <Trash2 size={16} />
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                )}
-            </div>
         </div>
     );
 };

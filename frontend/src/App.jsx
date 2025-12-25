@@ -26,6 +26,7 @@ import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
 import SmartRegistrationForm from './views/RegistrationView';
 import DevelopmentView from './components/common/DevelopmentView';
+import { SmallUserAvatar } from './components/common/UserAvatar';
 // import StudentDashboard from './views/StudentDashboard';
 
 export default function SIMRApp() {
@@ -295,12 +296,12 @@ export default function SIMRApp() {
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
-                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700 font-bold border border-blue-200 overflow-hidden">
-                      {user.image ? (
-                        <img src={user.image} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        user.name.charAt(0)
-                      )}
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center border border-blue-200 overflow-hidden">
+                      <SmallUserAvatar
+                        image={user.image}
+                        gender={user.gender || 'unspecified'}
+                        name={user.name}
+                      />
                     </div>
                   </div>
                 </div>
