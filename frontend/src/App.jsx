@@ -131,6 +131,11 @@ function SIMRAppContent() {
     return section ? section.isVisible : true;
   };
 
+  const isSectionDevelopment = (id) => {
+    const section = config?.publicSections?.find(s => s.id === id);
+    return section ? section.isDevelopment : false;
+  };
+
   // Ideally useAuth() but we are integrating slowly.
   // user object now has .permissions derived in AuthContext if we use login() from there.
   // BUT App.jsx has its own 'user' state which might NOT have permissions if just loaded from localStorage "simr_user" unless AuthProvider updated it.
