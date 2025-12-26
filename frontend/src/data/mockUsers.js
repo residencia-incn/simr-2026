@@ -34,18 +34,23 @@ export const MOCK_USERS = [
         lastName: 'Usuario',
         dni: '00000000',
 
-        // Nuevos campos
-        eventRoles: ['organizador'],
-        profiles: ['organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos',
-            'aula_virtual', 'contabilidad', 'asistencia', 'academico', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'admin',
+        hasPaid: true,
+        modality: 'virtual',
+        modules: ['mi_perfil', 'organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos',
+            'aula_virtual', 'contabilidad', 'asistencia', 'academico'],
+        permissions: ['admin:all'], // Super admin tiene acceso total
         isSuperAdmin: true, // FLAG PARA FILTRAR
 
-        // Legacy
+        // Legacy (mantener por compatibilidad)
+        profiles: ['organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos',
+            'aula_virtual', 'contabilidad', 'asistencia', 'academico', 'perfil_basico'],
 
         specialty: 'Administración',
         occupation: 'Administrador del Sistema',
         institution: 'SIMR 2026',
-        modality: 'Virtual',
         registrationType: 'virtual',
         registrationDate: '2024-01-01',
         status: 'Confirmado',
@@ -66,14 +71,18 @@ export const MOCK_USERS = [
         lastName: 'Perez',
         dni: '12345678',
 
-        eventRoles: ['ponente', 'asistente'],
-        profiles: ['aula_virtual', 'trabajos', 'perfil_basico'], // Presencial sin certificado
+        // Nuevos campos RBAC
+        eventRole: 'ponente',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'aula_virtual', 'trabajos'],
         isSuperAdmin: false,
 
+        // Legacy
+        profiles: ['aula_virtual', 'trabajos', 'perfil_basico'],
 
         occupation: 'Especialista',
         institution: 'Hospital Rebagliati',
-        modality: 'Presencial',
         registrationType: 'presencial',
         registrationDate: '2025-10-15',
         status: 'Confirmado',
@@ -177,14 +186,18 @@ export const MOCK_USERS = [
         lastName: 'Torres',
         dni: '55667788',
 
-        eventRoles: ['jurado', 'asistente'],
-        profiles: ['jurado', 'aula_virtual', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'jurado',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'jurado', 'aula_virtual'],
         isSuperAdmin: false,
 
+        // Legacy
+        profiles: ['jurado', 'aula_virtual', 'perfil_basico'],
 
         occupation: 'Especialista',
         institution: 'Cayetano Heredia',
-        modality: 'Presencial',
         registrationType: 'presencial_certificado',
         registrationDate: '2025-10-12',
         status: 'Confirmado',
@@ -204,14 +217,19 @@ export const MOCK_USERS = [
         lastName: 'Mendez',
         dni: '99887766',
 
-        eventRoles: ['organizador'],
-        profiles: ['organizacion', 'secretaria', 'aula_virtual', 'trabajos', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'secretaria',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'secretaria', 'aula_virtual', 'trabajos'],
         isSuperAdmin: false,
 
+        // Legacy
+        profiles: ['organizacion', 'secretaria', 'aula_virtual', 'trabajos', 'perfil_basico'],
 
         occupation: 'Residente',
         institution: 'INCN',
-        modality: 'Presencial',
         registrationType: 'presencial_certificado',
         registrationDate: '2025-09-01',
         status: 'Confirmado',

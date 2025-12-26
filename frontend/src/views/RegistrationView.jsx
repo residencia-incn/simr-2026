@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar, AlertCircle } from 'lucide-react';
+import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar, AlertCircle, Send } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useFileUpload, useApi } from '../hooks';
@@ -18,12 +18,30 @@ const RegistrationView = () => {
     const [validationErrors, setValidationErrors] = useState({});
     const [showSuccessModal, setShowSuccessModal] = useState(false);
 
+    // Work submission specific state
+    const [viewMode, setViewMode] = useState('registration'); // 'registration' | 'work_submission'
+    const [workForm, setWorkForm] = useState({
+        type: '',
+        specialty: '',
+        title: '',
+        introduccion: '',
+        metodologia: '',
+        resultados: '',
+        conclusiones: ''
+    });
+    const [workDeclarations, setWorkDeclarations] = useState({});
+    const [academicConfig, setAcademicConfig] = useState(null);
+
     const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
 
     useEffect(() => {
         const loadConfig = async () => {
-            const data = await api.content.getConfig();
-            setConfig(data);
+            const [eventConfig, acConfig] = await Promise.all([
+                api.content.getConfig(),
+                api.academic.getConfig()
+            ]);
+            setConfig(eventConfig);
+            setAcademicConfig(acConfig);
         };
         loadConfig();
     }, []);
@@ -195,7 +213,8 @@ const RegistrationView = () => {
 
         // Clear errors and proceed
         setValidationErrors({});
-        if (currentStep < 3) setCurrentStep(currentStep + 1);
+        const maxSteps = viewMode === 'registration' ? 3 : 2;
+        if (currentStep < maxSteps) setCurrentStep(currentStep + 1);
     };
 
     const handlePrevious = () => {
@@ -303,6 +322,107 @@ const RegistrationView = () => {
         console.log('Form reset complete');
     };
 
+    // Check if work submission is allowed based on deadlines
+    const getDeadlineStatus = () => {
+        if (!academicConfig?.submissionDeadline) {
+            return { allowed: true, message: '', status: 'open' };
+        }
+
+        const now = new Date();
+        const deadline = new Date(academicConfig.submissionDeadline);
+
+        if (now <= deadline) {
+            return {
+                allowed: true,
+                message: academicConfig.submissionDeadline,
+                status: 'open',
+                penalty: 0
+            };
+        }
+
+        // Verificar si prórroga está ACTIVADA
+        if (academicConfig.extensionEnabled && academicConfig.extensionDeadline) {
+            const extension = new Date(academicConfig.extensionDeadline);
+            if (now <= extension) {
+                return {
+                    allowed: true,
+                    message: academicConfig.extensionDeadline,
+                    status: 'extension',
+                    penalty: academicConfig.latePenalty || 0
+                };
+            }
+        }
+
+        return {
+            allowed: false,
+            message: 'El plazo para envío de trabajos ha finalizado',
+            status: 'closed'
+        };
+    };
+
+    const handleSubmitWork = async () => {
+        try {
+            // Validate work form
+            if (!workForm.type || !workForm.specialty || !workForm.title ||
+                !workForm.introduccion || !workForm.metodologia ||
+                !workForm.resultados || !workForm.conclusiones) {
+                showWarning('Complete todos los campos del formulario de trabajo.', 'Campos incompletos');
+                return;
+            }
+
+            // Validate required declarations
+            const missingDeclarations = academicConfig?.declarations?.filter(
+                d => d.required && !workDeclarations[d.id]
+            ) || [];
+
+            if (missingDeclarations.length > 0) {
+                showWarning('Debe aceptar todas las declaraciones obligatorias.', 'Declaraciones requeridas');
+                return;
+            }
+
+            // Check submission deadline
+            const deadlineStatus = getDeadlineStatus();
+            if (!deadlineStatus.allowed) {
+                showError('El plazo para envío de trabajos ha finalizado.', 'Fuera de plazo');
+                return;
+            }
+
+            // Create user with limited access (only 'trabajos' module)
+            const newUser = await api.users.add({
+                ...form,
+                name: `${form.lastName} ${form.firstName}`.trim(),
+                password: '123456', // Default password
+                modules: ['trabajos'], // Only access to works module
+                eventRoles: ['asistente'],
+                status: 'registered_only' // Special status for work-only registration
+            });
+
+            // Create work linked to the new user
+            await api.works.create({
+                title: workForm.title,
+                specialty: workForm.specialty,
+                type: workForm.type,
+                abstract: {
+                    introduccion: workForm.introduccion,
+                    metodologia: workForm.metodologia,
+                    resultados: workForm.resultados,
+                    conclusiones: workForm.conclusiones
+                },
+                authors: [{ id: newUser.id, name: newUser.name, role: 'Autor Principal' }],
+                status: 'En Evaluación',
+                date: new Date().toISOString(),
+                penalty: deadlineStatus.penalty,
+                declarations: Object.keys(workDeclarations).filter(k => workDeclarations[k])
+            });
+
+            showSuccess('Tu trabajo ha sido enviado correctamente. Recibirás un correo con tus credenciales de acceso.', 'Trabajo enviado con éxito');
+            setShowSuccessModal(true);
+        } catch (error) {
+            console.error('Work submission error:', error);
+            showError(error.message || 'Ocurrió un error al enviar el trabajo.', 'Error en el envío');
+        }
+    };
+
     const ticketOptions = [
         { id: 'presencial', title: 'Presencial', subtitle: 'Gratis', price: 0, icon: User, color: 'blue' },
         { id: 'presencial_cert', title: 'Presencial + Certificado', subtitle: 'S/ 50.00', price: 50, icon: Award, color: 'emerald' },
@@ -339,15 +459,43 @@ const RegistrationView = () => {
                 {/* Main Card */}
                 <Card className="p-0 shadow-2xl border-0 overflow-hidden rounded-3xl min-h-[600px] flex flex-col relative">
 
-                    {/* Header INSIDE Card */}
-                    <div className="bg-white p-8 pb-4 flex items-center justify-between border-b border-gray-50">
-                        <div className="flex items-center gap-4">
-                            <div className="w-1.5 h-10 bg-blue-600 rounded-full"></div>
-                            <h1 className="text-3xl font-bold text-gray-900">Inscripción SIMR 2026</h1>
-                            <span className="text-gray-400 text-sm mt-1 hidden sm:block">Complete el proceso en 3 simples pasos.</span>
+                    {/* Header INSIDE Card with Tab Navigation */}
+                    <div className="bg-white border-b border-gray-100">
+                        {/* Tab Navigation */}
+                        <div className="flex border-b border-gray-200">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setViewMode('registration');
+                                    setCurrentStep(1);
+                                }}
+                                className={`flex-1 px-8 py-6 font-bold text-lg transition-all ${viewMode === 'registration'
+                                    ? 'text-white bg-blue-700 border-b-4 border-blue-900'
+                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 bg-white'
+                                    }`}
+                            >
+                                Inscripción
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    setViewMode('work_submission');
+                                    setCurrentStep(1);
+                                }}
+                                className={`flex-1 px-8 py-6 font-bold text-lg transition-all ${viewMode === 'work_submission'
+                                    ? 'text-white bg-blue-700 border-b-4 border-blue-900'
+                                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 bg-white'
+                                    }`}
+                            >
+                                Enviar Trabajo
+                            </button>
                         </div>
-                        <div className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-md text-sm tracking-wide">
-                            {currentStep} de 3
+
+                        {/* Step Counter Only */}
+                        <div className="p-4 flex justify-end bg-gray-50">
+                            <div className="bg-blue-600 text-white px-6 py-2 rounded-full font-bold shadow-md text-sm tracking-wide">
+                                {currentStep} de {viewMode === 'registration' ? '3' : '2'}
+                            </div>
                         </div>
                     </div>
 
@@ -364,7 +512,7 @@ const RegistrationView = () => {
                     )}
 
                     {/* Right Navigation Arrow (Inside Card) */}
-                    {currentStep < 3 && (
+                    {currentStep < (viewMode === 'registration' ? 3 : 2) && (
                         <button
                             type="button"
                             onClick={handleNext}
@@ -380,7 +528,71 @@ const RegistrationView = () => {
                         {/* Step 1 Content */}
                         {currentStep === 1 && (
                             <div className="animate-fadeIn space-y-8">
-                                <div className="space-y-6">
+                                {/* Deadline Banner - Only for work submission mode */}
+                                {viewMode === 'work_submission' && (() => {
+                                    const deadlineStatus = getDeadlineStatus();
+                                    return (
+                                        <>
+                                            {deadlineStatus.status === 'open' && (
+                                                <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-4 text-white flex items-center justify-between shadow-md">
+                                                    <div className="flex items-center gap-3">
+                                                        <Calendar size={24} />
+                                                        <div>
+                                                            <p className="text-sm font-medium opacity-90">Fecha límite de envío</p>
+                                                            <p className="text-lg font-bold">
+                                                                {new Date(deadlineStatus.message).toLocaleDateString('es-PE', {
+                                                                    day: '2-digit',
+                                                                    month: '2-digit',
+                                                                    year: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {deadlineStatus.status === 'extension' && (
+                                                <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl p-4 text-white flex items-center justify-between shadow-md">
+                                                    <div className="flex items-center gap-3">
+                                                        <AlertCircle size={24} />
+                                                        <div>
+                                                            <p className="text-sm font-medium opacity-90">⚠️ Prórroga - Envío con penalidad de {deadlineStatus.penalty} puntos</p>
+                                                            <p className="text-lg font-bold">
+                                                                Fecha límite: {new Date(deadlineStatus.message).toLocaleDateString('es-PE', {
+                                                                    day: '2-digit',
+                                                                    month: '2-digit',
+                                                                    year: 'numeric',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {deadlineStatus.status === 'closed' && (
+                                                <div className="bg-gradient-to-r from-red-500 to-red-700 rounded-xl p-6 text-white shadow-lg">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="bg-white/20 p-3 rounded-full">
+                                                            <X size={32} />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xl font-bold">Plazo Finalizado</p>
+                                                            <p className="text-sm opacity-90 mt-1">{deadlineStatus.message}</p>
+                                                            <p className="text-sm opacity-90 mt-2">Puede inscribirse al evento en la pestaña "Inscripción"</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </>
+                                    );
+                                })()}
+
+                                {/* Form Content - Disabled if work submission is closed */}
+                                <div className={`space-y-6 ${viewMode === 'work_submission' && !getDeadlineStatus().allowed ? 'opacity-50 pointer-events-none' : ''}`}>
                                     <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
                                         <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
                                             <User size={24} />
@@ -518,7 +730,7 @@ const RegistrationView = () => {
                         )}
 
                         {/* Step 2 Content */}
-                        {currentStep === 2 && (
+                        {currentStep === 2 && viewMode === 'registration' && (
                             <div className="animate-fadeIn grid md:grid-cols-2 gap-12">
                                 {/* Left Column: Tickets / Modalidad */}
                                 <div className="space-y-6">
@@ -578,6 +790,100 @@ const RegistrationView = () => {
                                                 </div>
                                             </label>
                                         ))}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Step 2 Content - Work Submission */}
+                        {currentStep === 2 && viewMode === 'work_submission' && (
+                            <div className="animate-fadeIn space-y-6">
+                                {/* Work Form */}
+                                <div className="space-y-6">
+                                    <div className="grid md:grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Trabajo *</label>
+                                            <select
+                                                value={workForm.type}
+                                                onChange={(e) => setWorkForm({ ...workForm, type: e.target.value })}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 focus:bg-white"
+                                            >
+                                                <option value="">Seleccione...</option>
+                                                <option value="Trabajo Original">Trabajo Original</option>
+                                                <option value="Caso Clínico">Caso Clínico</option>
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Subespecialidad (Tema) *</label>
+                                            <select
+                                                value={workForm.specialty}
+                                                onChange={(e) => setWorkForm({ ...workForm, specialty: e.target.value })}
+                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 focus:bg-white"
+                                            >
+                                                <option value="">Seleccione...</option>
+                                                {specialties.map((spec, i) => (
+                                                    <option key={i} value={spec}>{spec}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Título del Trabajo *</label>
+                                        <input
+                                            type="text"
+                                            value={workForm.title}
+                                            onChange={(e) => setWorkForm({ ...workForm, title: e.target.value })}
+                                            placeholder="Ej: Síndrome de Miller Fisher post-COVID..."
+                                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 focus:bg-white"
+                                        />
+                                        <div className="text-xs text-right text-gray-400 mt-1">0 / 20 palabras</div>
+                                    </div>
+
+                                    <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
+                                        <h4 className="text-sm font-bold text-gray-700">Resumen Estructurado</h4>
+                                        {['introduccion', 'metodologia', 'resultados', 'conclusiones'].map((section) => (
+                                            <div key={section}>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2 capitalize">{section} *</label>
+                                                <textarea
+                                                    value={workForm[section]}
+                                                    onChange={(e) => setWorkForm({ ...workForm, [section]: e.target.value })}
+                                                    rows={4}
+                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white resize-none"
+                                                />
+                                                <div className="text-xs text-right text-gray-400 mt-1">0 / 150 palabras</div>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Declaraciones Juradas */}
+                                    <div className="pt-6 space-y-3">
+                                        <h4 className="text-sm font-bold text-gray-700">Declaraciones Juradas</h4>
+                                        {academicConfig?.declarations?.map(decl => (
+                                            <div key={decl.id} className="flex items-start gap-2 text-sm text-gray-700">
+                                                <input
+                                                    type="checkbox"
+                                                    id={`work-${decl.id}`}
+                                                    checked={workDeclarations[decl.id] || false}
+                                                    onChange={(e) => setWorkDeclarations({ ...workDeclarations, [decl.id]: e.target.checked })}
+                                                    className="mt-1 rounded text-blue-700 focus:ring-blue-500"
+                                                />
+                                                <label htmlFor={`work-${decl.id}`} className="cursor-pointer select-none">
+                                                    {decl.text} {decl.required && <span className="text-red-500">*</span>}
+                                                </label>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    <div className="flex justify-end pt-4">
+                                        <button
+                                            type="button"
+                                            onClick={handleSubmitWork}
+                                            className="bg-green-500 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-600 transition-all shadow-lg flex items-center gap-2"
+                                        >
+                                            <Send size={20} />
+                                            Enviar Trabajo
+                                        </button>
                                     </div>
                                 </div>
                             </div>

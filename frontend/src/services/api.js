@@ -187,86 +187,7 @@ export const api = {
         }
     },
 
-    // --- 3. Treasury ---
-    treasury: {
-        getTransactions: async () => {
-            await delay();
-            const stored = storage.get(STORAGE_KEYS.TREASURY);
-            if (!stored) {
-                // Seed initial if empty
-                storage.set(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
-                return INITIAL_TRANSACTIONS;
-            }
-            return stored;
-        },
-        addTransaction: async (tx) => {
-            await delay();
-            const current = await api.treasury.getTransactions();
-            const newTx = {
-                id: Date.now(),
-                date: new Date().toISOString().split('T')[0],
-                ...tx
-            };
-            storage.set(STORAGE_KEYS.TREASURY, [newTx, ...current]);
-            return newTx;
-        },
-        deleteTransaction: async (id) => {
-            await delay();
-            const current = await api.treasury.getTransactions();
-            const updated = current.filter(t => t.id !== id);
-            storage.set(STORAGE_KEYS.TREASURY, updated);
-            return true;
-        },
-        addIncome: async (amount, description, category) => {
-            return await api.treasury.addTransaction({
-                type: 'income',
-                amount: parseFloat(amount),
-                description,
-                category
-            });
-        },
-        addExpense: async (amount, description, category) => {
-            return await api.treasury.addTransaction({
-                type: 'expense',
-                amount: parseFloat(amount),
-                description,
-                category
-            });
-        },
-        // ... categories methods ...
-        getBudgets: async () => {
-            await delay();
-            const stored = storage.get(STORAGE_KEYS.TREASURY_BUDGETS);
-            if (!stored) return INITIAL_BUDGETS;
-            return stored;
-        },
-        updateBudget: async (budgetList) => {
-            await delay();
-            storage.set(STORAGE_KEYS.TREASURY_BUDGETS, budgetList);
-            return true;
-        },
-        getCategories: async () => {
-            await delay();
-            const stored = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES);
-            if (!stored) return DEFAULT_CATEGORIES;
-            return {
-                income: stored.income || DEFAULT_CATEGORIES.income,
-                expense: stored.expense || DEFAULT_CATEGORIES.expense
-            };
-        },
-        // ...
-        getStats: async () => {
-            await delay();
-            const transactions = await api.treasury.getTransactions();
-            const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-            const manualExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
-            return {
-                income: manualIncome,
-                expense: manualExpense,
-                balance: manualIncome - manualExpense
-            };
-        }
-    },
+    // --- 3. Treasury (Implementation merged with V2 block below) ---
 
     // --- 4. Program ---
     program: {
@@ -793,6 +714,7 @@ export const api = {
                 email: email, // Ensure trimmed email
                 eventRoles: userData.eventRoles || users[index].eventRoles, // Ensure specific fields are taken if provided
                 profiles: userData.profiles || users[index].profiles,
+                modules: userData.modules || users[index].modules || [], // Preserve modules array
                 isSuperAdmin: users[index].isSuperAdmin // Mantener flag original
             };
 
@@ -1275,19 +1197,54 @@ export const api = {
             return storage.get(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
         },
 
-        addTransaction: async (transaction) => {
+        addTransaction: async (tx) => {
             await delay();
-            const current = storage.get(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
-            storage.set(STORAGE_KEYS.TREASURY, [transaction, ...current]);
-            return transaction;
+            const current = await api.treasury.getTransactions();
+            const newTx = {
+                id: Date.now(),
+                date: new Date().toISOString().split('T')[0],
+                ...tx
+            };
+            storage.set(STORAGE_KEYS.TREASURY, [newTx, ...current]);
+            return newTx;
         },
 
         deleteTransaction: async (id) => {
             await delay();
-            const current = storage.get(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
+            const current = await api.treasury.getTransactions();
             const updated = current.filter(t => t.id !== id);
             storage.set(STORAGE_KEYS.TREASURY, updated);
             return true;
+        },
+
+        addIncome: async (amount, description, category) => {
+            return await api.treasury.addTransaction({
+                type: 'income',
+                amount: parseFloat(amount),
+                description,
+                category
+            });
+        },
+
+        addExpense: async (amount, description, category) => {
+            return await api.treasury.addTransaction({
+                type: 'expense',
+                amount: parseFloat(amount),
+                description,
+                category
+            });
+        },
+
+        getStats: async () => {
+            await delay();
+            const transactions = await api.treasury.getTransactions();
+            const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+            const manualExpense = transactions.filter(t => t.type === 'expense').reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+            return {
+                income: manualIncome,
+                expense: manualExpense,
+                balance: manualIncome - manualExpense
+            };
         },
 
         getCategories: async () => {

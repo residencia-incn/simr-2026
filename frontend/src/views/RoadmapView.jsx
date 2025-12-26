@@ -56,8 +56,8 @@ const RoadmapView = () => {
                 <div className="space-y-12">
                     {events.map((event, index) => {
                         const isEven = index % 2 === 0;
-                        const isPast = new Date(event.date) < new Date();
-                        const isToday = new Date(event.date).toDateString() === new Date().toDateString();
+                        const isPast = event.date ? new Date(event.date) < new Date() : false;
+                        const isToday = event.date ? new Date(event.date).toDateString() === new Date().toDateString() : false;
 
                         return (
                             <div key={event.id} className={`relative flex items-center md:justify-between ${isEven ? 'md:flex-row-reverse' : ''}`}>
@@ -66,7 +66,7 @@ const RoadmapView = () => {
                                 <div className={`absolute left-8 md:left-1/2 -translate-x-1/2 w-12 h-12 rounded-full border-4 flex items-center justify-center z-10 bg-white
                                     ${isPast ? 'border-blue-500 text-blue-500' : isToday ? 'border-orange-500 text-orange-500 animate-pulse' : 'border-gray-200 text-gray-400'}
                                 `}>
-                                    {isPast ? <CheckCircle size={20} className="fill-blue-50" /> : <span className="text-xs font-bold">{event.year}</span>}
+                                    {isPast ? <CheckCircle size={20} className="fill-blue-50" /> : <span className="text-xs font-bold">{event.year || new Date(event.date).getFullYear()}</span>}
                                 </div>
 
                                 {/* Content Card */}
@@ -78,11 +78,11 @@ const RoadmapView = () => {
                                             {getIcon(event.icon)}
                                         </div>
                                         <div className={`text-sm font-bold ${isPast ? 'text-blue-600' : 'text-gray-500'}`}>
-                                            {new Date(event.date + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long' })}
+                                            {event.date ? new Date(event.date + 'T00:00:00').toLocaleDateString('es-PE', { day: 'numeric', month: 'long' }) : 'Fecha por confirmar'}
                                         </div>
                                     </div>
-                                    <h3 className={`text-xl font-bold mb-2 ${isPast ? 'text-gray-900' : 'text-gray-800'}`}>{event.title}</h3>
-                                    <p className="text-gray-600 text-sm leading-relaxed">{event.description}</p>
+                                    <h3 className={`text-xl font-bold mb-2 ${isPast ? 'text-gray-900' : 'text-gray-800'}`}>{event.title || 'Sin título'}</h3>
+                                    <p className="text-gray-600 text-sm leading-relaxed">{event.description || ''}</p>
                                 </div>
 
                                 {/* Empty Space for Desktop Alignment */}

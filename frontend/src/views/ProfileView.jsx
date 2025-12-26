@@ -59,6 +59,8 @@ const ProfileView = ({ user, onSave }) => {
     });
 
     const { values: form, handleChange, setValues } = useForm({
+        firstName: user?.firstName || '',
+        lastName: user?.lastName || '',
         name: user?.name || '',
         email: user?.email || '',
         phone: user?.phone || '',
@@ -72,6 +74,8 @@ const ProfileView = ({ user, onSave }) => {
     useEffect(() => {
         if (user) {
             setValues({
+                firstName: user.firstName || '',
+                lastName: user.lastName || '',
                 name: user.name || '',
                 email: user.email || '',
                 phone: user.phone || '',
@@ -134,28 +138,35 @@ const ProfileView = ({ user, onSave }) => {
         e.preventDefault();
         setMessage(null);
 
+        // Sync name field from firstName and lastName for backward compatibility
+        const fullName = `${form.lastName} ${form.firstName}`.trim();
+
         // Preserve all existing user data and only update changed fields
         const updatedProfile = {
             ...user, // Preserve all existing user data (id, roles, profiles, etc.)
-            ...form, // Update form fields (name, email, phone, institution, etc.)
+            ...form, // Update form fields (firstName, lastName, email, phone, institution, etc.)
+            name: fullName, // Sync combined name field
             image: imagePreview || currentImage // Update image (imagePreview contains base64)
         };
 
-        // Here we would call an API to update the user
-        // For now, we'll simulate a save and call the parent handler if provided
+        try {
+            // Call API to update the user in the database
+            await api.users.update(updatedProfile);
 
-        console.log("Saving profile:", updatedProfile);
-
-        // Simulate success
-        setTimeout(() => {
             setMessage({ type: 'success', text: 'Perfil actualizado correctamente.' });
             setIsEditing(false);
+
+            // Call parent handler if provided to update context/state
             if (onSave) onSave(updatedProfile);
+
             // Update currentImage to reflect the saved state
             if (imagePreview) {
                 setCurrentImage(imagePreview);
             }
-        }, 800);
+        } catch (error) {
+            console.error('Error saving profile:', error);
+            setMessage({ type: 'error', text: error.message || 'Error al guardar el perfil.' });
+        }
     };
 
     const handleScanSuccess = async (data) => {
@@ -632,13 +643,20 @@ const ProfileView = ({ user, onSave }) => {
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid md:grid-cols-2 gap-5">
                                     <FormField
-                                        label="Nombre Completo"
-                                        name="name"
-                                        value={form.name}
+                                        label="Apellidos"
+                                        name="lastName"
+                                        value={form.lastName}
                                         onChange={handleChange}
                                         readOnly={!isEditing}
                                         required
-                                        className="md:col-span-2"
+                                    />
+                                    <FormField
+                                        label="Nombres"
+                                        name="firstName"
+                                        value={form.firstName}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        required
                                     />
                                     <FormField
                                         label="Correo Electrónico"

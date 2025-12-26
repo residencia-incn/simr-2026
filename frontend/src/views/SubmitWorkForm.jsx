@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, Send, AlertCircle, Info, Users, User, Search, X, Plus } from 'lucide-react';
+import { ChevronRight, Send, AlertCircle, Info, Users, User, Search, X, Plus, Calendar } from 'lucide-react';
 import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import FormField from '../components/ui/FormField';
@@ -86,6 +86,44 @@ const SubmitWorkForm = ({ navigate }) => {
     const countWords = (str) => {
         if (!str) return 0;
         return str.trim().split(/\s+/).length;
+    };
+
+    // Check if work submission is allowed based on deadlines
+    const getDeadlineStatus = () => {
+        if (!academicConfig?.submissionDeadline) {
+            return { allowed: true, message: '', status: 'open' };
+        }
+
+        const now = new Date();
+        const deadline = new Date(academicConfig.submissionDeadline);
+
+        if (now <= deadline) {
+            return {
+                allowed: true,
+                message: academicConfig.submissionDeadline,
+                status: 'open',
+                penalty: 0
+            };
+        }
+
+        // Verificar si prórroga está ACTIVADA
+        if (academicConfig.extensionEnabled && academicConfig.extensionDeadline) {
+            const extension = new Date(academicConfig.extensionDeadline);
+            if (now <= extension) {
+                return {
+                    allowed: true,
+                    message: academicConfig.extensionDeadline,
+                    status: 'extension',
+                    penalty: academicConfig.latePenalty || 0
+                };
+            }
+        }
+
+        return {
+            allowed: false,
+            message: 'El plazo para envío de trabajos ha finalizado',
+            status: 'closed'
+        };
     };
 
     const validate = (values) => {
@@ -245,7 +283,69 @@ const SubmitWorkForm = ({ navigate }) => {
             <Card>
                 <h2 className="text-2xl font-bold text-gray-900 mb-6">Envío de Trabajo Científico</h2>
 
-                <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                {/* Deadline Banner */}
+                {(() => {
+                    const deadlineStatus = getDeadlineStatus();
+                    return (
+                        <>
+                            {deadlineStatus.status === 'open' && (
+                                <div className="bg-gradient-to-r from-green-500 to-emerald-600 rounded-xl p-4 text-white flex items-center justify-between shadow-md mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <Calendar size={24} />
+                                        <div>
+                                            <p className="text-sm font-medium opacity-90">Fecha límite de envío</p>
+                                            <p className="text-lg font-bold">
+                                                {new Date(deadlineStatus.message).toLocaleDateString('es-PE', {
+                                                    day: '2-digit',
+                                                    month: '2-digit',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {deadlineStatus.status === 'extension' && (
+                                <div className="bg-gradient-to-r from-amber-500 to-orange-600 rounded-xl p-4 text-white flex items-center justify-between shadow-md mb-6">
+                                    <div className="flex items-center gap-3">
+                                        <AlertCircle size={24} />
+                                        <div>
+                                            <p className="text-sm font-medium opacity-90">⚠️ Prórroga - Envío con penalidad de {deadlineStatus.penalty} puntos</p>
+                                            <p className="text-lg font-bold">
+                                                Fecha límite: {new Date(deadlineStatus.message).toLocaleDateString('es-PE', {
+                                                    day: '2-digit',
+                                                    month: '2-digit',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {deadlineStatus.status === 'closed' && (
+                                <div className="bg-gradient-to-r from-red-500 to-red-700 rounded-xl p-6 text-white shadow-lg mb-6">
+                                    <div className="flex items-center gap-4">
+                                        <div className="bg-white/20 p-3 rounded-full">
+                                            <X size={32} />
+                                        </div>
+                                        <div>
+                                            <p className="text-xl font-bold">Plazo Finalizado</p>
+                                            <p className="text-sm opacity-90 mt-1">{deadlineStatus.message}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    );
+                })()}
+
+                <form onSubmit={handleSubmit(onSubmit)} className={`space-y-6 ${!getDeadlineStatus().allowed ? 'opacity-50 pointer-events-none' : ''}`}>
                     {/* Authorship Section */}
                     <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
                         <label className="block text-sm font-bold text-gray-700 mb-3">Autoría del Trabajo</label>

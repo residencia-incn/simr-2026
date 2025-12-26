@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BookOpen, Users, Code, Database, FileText, GitBranch, Map, Settings, ChevronRight } from 'lucide-react';
+import { BookOpen, Users, Code, Database, FileText, GitBranch, Map, Settings, ChevronRight, Shield, CheckCircle, AlertTriangle, Sliders } from 'lucide-react';
 import { Card } from '../components/ui';
 
 const DocumentationView = () => {
@@ -7,6 +7,7 @@ const DocumentationView = () => {
 
     const sections = [
         { id: 'overview', label: 'Visión General', icon: BookOpen },
+        { id: 'rbac', label: 'Roles y Permisos (RBAC)', icon: Shield },
         { id: 'architecture', label: 'Arquitectura', icon: Map },
         { id: 'test-users', label: 'Usuarios de Prueba', icon: Users },
         { id: 'components', label: 'Mapa de Componentes', icon: Code },
@@ -77,7 +78,17 @@ const DocumentationView = () => {
                 { name: 'ProgramManager', path: '/components/admin/ProgramManager.jsx', description: 'Gestión del programa científico con bloques horarios' },
                 { name: 'CommitteeManager', path: '/components/admin/CommitteeManager.jsx', description: 'Gestión de miembros del comité organizador' },
                 { name: 'CertificationManager', path: '/components/admin/CertificationManager.jsx', description: 'Aprobación de notas y emisión de certificados' },
-                { name: 'SystemConfiguration', path: '/components/admin/SystemConfiguration.jsx', description: 'Configuración general del sistema' }
+                { name: 'SystemConfiguration', path: '/components/admin/SystemConfiguration.jsx', description: 'Configuración general del sistema' },
+                { name: 'UserManagement', path: '/components/admin/UserManagement.jsx', description: 'Gestión de usuarios y asignación de roles' },
+                { name: 'PermissionsModal', path: '/components/admin/PermissionsModal.jsx', description: 'Gestor manual de permisos RBAC' }
+            ]
+        },
+        {
+            category: 'Autenticación & Seguridad',
+            items: [
+                { name: 'AuthContext', path: '/context/AuthContext.tsx', description: 'Provider global para estado de usuario y permisos' },
+                { name: 'PermissionGate', path: '/components/auth/PermissionGate.tsx', description: 'Wrapper para proteger componentes basado en scopes' },
+                { name: 'LoginModal', path: '/views/LoginModal.jsx', description: 'Modal de autenticación de usuarios' }
             ]
         },
         {
@@ -124,6 +135,30 @@ const DocumentationView = () => {
     ];
 
     const gitCommits = [
+        {
+            hash: '5c3d2e1',
+            date: '2025-12-25',
+            message: 'feat: Add Advanced Permissions Mode to User Management',
+            details: [
+                'Added toggle in PermissionsModal to switch between Module View and Advanced View',
+                'Implemented granular scope-level permission control (profile:read, accounting:write, etc.)',
+                'Created comprehensive UI for selecting individual permissions grouped by category',
+                'Updated documentation with complete scope list and usage examples',
+                'Added support for custom permission arrays alongside module-based permissions'
+            ]
+        },
+        {
+            hash: '4f2a1b0',
+            date: '2025-12-25',
+            message: 'feat: Implement RBAC System (Roles & Permissions)',
+            details: [
+                'Created AuthContext with permission derivation from legacy roles',
+                'Implemented PermissionGate component for UI protection',
+                'Added PermissionsModal for manual scope management in Admin',
+                'Protected critical routes (Treasury, Jury, Admin) in App.jsx',
+                'Added fine-grained permission control (accounting:read, users:manage, etc.)'
+            ]
+        },
         {
             hash: 'a7b8c9d',
             date: '2025-12-09',
@@ -202,6 +237,254 @@ const DocumentationView = () => {
                                 <div className="p-3 bg-gray-50 rounded border">
                                     <strong className="text-yellow-600">Tesorería</strong>
                                     <p className="text-gray-600 text-xs mt-1">Ingresos, egresos, balance financiero</p>
+                                </div>
+                            </div>
+                        </Card>
+                    </div>
+                );
+
+            case 'rbac':
+                return (
+                    <div className="space-y-6">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-2">Sistema de Roles y Permisos (RBAC)</h2>
+                            <p className="text-gray-600">
+                                El sistema utiliza un control de acceso basado en roles (Legacy) y permisos granulares (Scopes).
+                                Esto permite tanto la asignación rápida de perfiles como la personalización detallada de accesos.
+                            </p>
+                        </div>
+
+                        <Card>
+                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                                <Shield className="text-blue-600" size={20} />
+                                Conceptos Fundamentales
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-4 bg-purple-50 rounded-lg border border-purple-100">
+                                    <h4 className="font-bold text-purple-900 mb-2">Roles (Función en el Evento)</h4>
+                                    <p className="text-sm text-purple-800 mb-2">
+                                        Define la función principal del usuario en el evento.
+                                    </p>
+                                    <ul className="text-sm space-y-1 text-purple-700">
+                                        <li>• <strong>Asistente:</strong> Participante básico</li>
+                                        <li>• <strong>Organizador:</strong> Miembro del staff</li>
+                                        <li>• <strong>Jurado:</strong> Evaluador de trabajos</li>
+                                        <li>• <strong>Ponente:</strong> Presentador</li>
+                                    </ul>
+                                </div>
+                                <div className="p-4 bg-green-50 rounded-lg border border-green-100">
+                                    <h4 className="font-bold text-green-900 mb-2">Módulos (Áreas de Acceso)</h4>
+                                    <p className="text-sm text-green-800 mb-2">
+                                        Secciones específicas de la aplicación a las que el usuario tiene acceso.
+                                    </p>
+                                    <div className="text-xs font-mono bg-white p-2 rounded border border-green-200 text-green-700 space-y-1">
+                                        <div>mi_perfil</div>
+                                        <div>aula_virtual</div>
+                                        <div>contabilidad</div>
+                                        <div>secretaria</div>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                    <h4 className="font-bold text-blue-900 mb-2">Permisos (Scopes)</h4>
+                                    <p className="text-sm text-blue-800 mb-2">
+                                        Permisos granulares que controlan acciones específicas.
+                                    </p>
+                                    <div className="text-xs font-mono bg-white p-2 rounded border border-blue-200 text-blue-700 space-y-1">
+                                        <div>accounting:read</div>
+                                        <div>users:manage</div>
+                                        <div>papers:write</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card>
+                            <h3 className="font-bold text-gray-900 mb-4">Lógica de Asignación de Módulos</h3>
+
+                            <div className="space-y-4">
+                                <div className="p-4 bg-gray-50 rounded-lg">
+                                    <h4 className="font-bold text-gray-800 mb-2">1. Asistente</h4>
+                                    <p className="text-sm text-gray-600 mb-2">Acceso base: <code className="bg-white px-2 py-1 rounded">mi_perfil</code></p>
+                                    <p className="text-sm text-gray-600">
+                                        <strong>Condicional:</strong> Si pagó modalidad Virtual o Presencial+Certificado →
+                                        <code className="bg-white px-2 py-1 rounded ml-1">aula_virtual</code>
+                                    </p>
+                                </div>
+
+                                <div className="p-4 bg-blue-50 rounded-lg">
+                                    <h4 className="font-bold text-blue-800 mb-2">2. Organizador (Staff)</h4>
+                                    <p className="text-sm text-blue-700 mb-2">
+                                        Acceso común: <code className="bg-white px-2 py-1 rounded">mi_perfil</code>,
+                                        <code className="bg-white px-2 py-1 rounded ml-1">aula_virtual</code>,
+                                        <code className="bg-white px-2 py-1 rounded ml-1">trabajos</code>
+                                    </p>
+                                    <p className="text-sm text-blue-700 font-bold mb-1">Acceso específico por función:</p>
+                                    <ul className="text-sm space-y-1 text-blue-600">
+                                        <li>• <strong>Tesorero:</strong> + <code className="bg-white px-2 py-1 rounded">contabilidad</code></li>
+                                        <li>• <strong>Secretaria:</strong> + <code className="bg-white px-2 py-1 rounded">secretaria</code></li>
+                                        <li>• <strong>Investigación:</strong> + <code className="bg-white px-2 py-1 rounded">investigacion</code></li>
+                                        <li>• <strong>Académico:</strong> + <code className="bg-white px-2 py-1 rounded">academico</code></li>
+                                        <li>• <strong>Admin:</strong> + <code className="bg-white px-2 py-1 rounded">organizacion</code> (acceso total)</li>
+                                    </ul>
+                                </div>
+
+                                <div className="p-4 bg-purple-50 rounded-lg">
+                                    <h4 className="font-bold text-purple-800 mb-2">3. Jurado</h4>
+                                    <p className="text-sm text-purple-700">
+                                        Acceso: <code className="bg-white px-2 py-1 rounded">mi_perfil</code>,
+                                        <code className="bg-white px-2 py-1 rounded ml-1">jurado</code>,
+                                        <code className="bg-white px-2 py-1 rounded ml-1">aula_virtual</code>
+                                    </p>
+                                </div>
+
+                                <div className="p-4 bg-green-50 rounded-lg">
+                                    <h4 className="font-bold text-green-800 mb-2">4. Ponente</h4>
+                                    <p className="text-sm text-green-700">
+                                        Acceso: <code className="bg-white px-2 py-1 rounded">mi_perfil</code>,
+                                        <code className="bg-white px-2 py-1 rounded ml-1">aula_virtual</code>
+                                    </p>
+                                </div>
+                            </div>
+                        </Card>
+
+                        <Card>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 text-gray-700 uppercase text-xs">
+                                        <tr>
+                                            <th className="px-4 py-3 rounded-tl-lg">Módulo / Scope</th>
+                                            <th className="px-4 py-3 text-center">Admin</th>
+                                            <th className="px-4 py-3 text-center">Tesorero</th>
+                                            <th className="px-4 py-3 text-center">Académico</th>
+                                            <th className="px-4 py-3 text-center">Participante</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        <tr>
+                                            <td className="px-4 py-2 font-medium">Contabilidad <span className="block text-xs text-gray-400 font-mono">accounting:read</span></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-gray-300">-</td>
+                                            <td className="text-center text-gray-300">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-4 py-2 font-medium">Usuarios <span className="block text-xs text-gray-400 font-mono">users:manage</span></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-gray-300">-</td>
+                                            <td className="text-center text-gray-300">-</td>
+                                            <td className="text-center text-gray-300">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-4 py-2 font-medium">Trabajos <span className="block text-xs text-gray-400 font-mono">papers:read</span></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-gray-300">-</td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-gray-300">-</td>
+                                        </tr>
+                                        <tr>
+                                            <td className="px-4 py-2 font-medium">Aula Virtual <span className="block text-xs text-gray-400 font-mono">classroom:read</span></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-gray-300">-</td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                            <td className="text-center text-green-600"><CheckCircle size={16} className="inline" /></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+
+                        <Card className="bg-yellow-50 border-yellow-200">
+                            <h3 className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
+                                <AlertTriangle size={18} />
+                                Gestión Manual de Permisos
+                            </h3>
+                            <p className="text-sm text-yellow-800 mb-2">
+                                Los administradores pueden asignar módulos o permisos específicos manualmente,
+                                sobrescribiendo la asignación automática basada en roles.
+                            </p>
+                            <p className="text-sm text-yellow-800 mb-2">
+                                Esto se realiza desde <strong>Administración &gt; Usuarios</strong>, usando el botón de "Escudo" (🛡️).
+                            </p>
+                            <p className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
+                                <strong>Ejemplo:</strong> Un usuario con rol "Asistente" que no pagó puede recibir acceso manual
+                                al módulo <code>aula_virtual</code> como cortesía.
+                            </p>
+                        </Card>
+
+                        <Card className="bg-purple-50 border-purple-200">
+                            <h3 className="font-bold text-purple-900 mb-3 flex items-center gap-2">
+                                <Sliders size={18} />
+                                Modo Avanzado: Control Granular de Permisos
+                            </h3>
+                            <p className="text-sm text-purple-800 mb-3">
+                                El <strong>Modo Avanzado</strong> permite un control preciso a nivel de scopes individuales,
+                                ideal para casos donde se necesita limitar o expandir accesos específicos sin cambiar el módulo completo.
+                            </p>
+
+                            <div className="space-y-3">
+                                <div className="bg-white p-3 rounded-lg border border-purple-200">
+                                    <h4 className="font-bold text-purple-900 mb-2 text-sm">¿Cómo acceder?</h4>
+                                    <ol className="text-sm text-purple-800 space-y-1 list-decimal list-inside">
+                                        <li>Ir a <strong>Organización &gt; Gestión de Usuarios</strong></li>
+                                        <li>Click en el icono de escudo (🛡️) del usuario</li>
+                                        <li>Activar el toggle <strong>"Modo Avanzado"</strong></li>
+                                        <li>Seleccionar/deseleccionar permisos específicos</li>
+                                        <li>Guardar cambios</li>
+                                    </ol>
+                                </div>
+
+                                <div className="bg-white p-3 rounded-lg border border-purple-200">
+                                    <h4 className="font-bold text-purple-900 mb-2 text-sm">Casos de Uso</h4>
+                                    <ul className="text-sm text-purple-800 space-y-2">
+                                        <li>• <strong>Restricción específica:</strong> Un usuario con módulo "Contabilidad" pero sin permiso de escritura (<code>accounting:write</code>), solo lectura.</li>
+                                        <li>• <strong>Acceso temporal:</strong> Dar <code>jury:evaluate</code> a un organizador para que evalúe trabajos sin acceso completo al módulo Jurado.</li>
+                                        <li>• <strong>Permisos mixtos:</strong> Combinar permisos de diferentes módulos sin activar todos los módulos completos.</li>
+                                    </ul>
+                                </div>
+
+                                <div className="bg-white p-3 rounded-lg border border-purple-200">
+                                    <h4 className="font-bold text-purple-900 mb-2 text-sm">Lista Completa de Scopes</h4>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                            <p className="font-bold text-purple-900 mb-1">Perfil y Básico</p>
+                                            <ul className="font-mono text-purple-700 space-y-0.5">
+                                                <li>• profile:read</li>
+                                                <li>• profile:write</li>
+                                                <li>• classroom:read</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-purple-900 mb-1">Académico</p>
+                                            <ul className="font-mono text-purple-700 space-y-0.5">
+                                                <li>• papers:read</li>
+                                                <li>• papers:submit</li>
+                                                <li>• papers:write</li>
+                                                <li>• papers:manage</li>
+                                                <li>• papers:grade</li>
+                                                <li>• academic:read</li>
+                                                <li>• academic:write</li>
+                                                <li>• jury:assign</li>
+                                                <li>• jury:read</li>
+                                                <li>• jury:evaluate</li>
+                                                <li>• research:read</li>
+                                                <li>• research:write</li>
+                                            </ul>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-purple-900 mb-1">Administrativo</p>
+                                            <ul className="font-mono text-purple-700 space-y-0.5">
+                                                <li>• accounting:read</li>
+                                                <li>• accounting:write</li>
+                                                <li>• secretary:read</li>
+                                                <li>• planning:read</li>
+                                                <li>• planning:write</li>
+                                                <li>• attendance:read</li>
+                                                <li>• attendance:write</li>
+                                                <li>• users:manage</li>
+                                                <li>• admin:all</li>
+                                            </ul>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </Card>

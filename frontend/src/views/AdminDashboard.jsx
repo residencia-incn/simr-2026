@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
     AlertCircle, Clock, Mail, DollarSign, TrendingUp, TrendingDown, CheckSquare, Users,
-    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode, MonitorPlay
+    LayoutDashboard, ClipboardList, Calendar, Award, Settings, Image, Map, Ticket, Shield, Target, BookOpen, QrCode, MonitorPlay, Code2
 } from 'lucide-react';
 import SuperAdminAnalytics from '../components/admin/SuperAdminAnalytics';
 import Button from '../components/ui/Button';
@@ -137,26 +137,36 @@ const AdminDashboard = ({ user }) => {
                     }
 
                     const assignedRoles = shouldHaveVirtualAccess ? ['participant'] : [];
+                    const assignedModules = shouldHaveVirtualAccess ? ['mi_perfil', 'aula_virtual'] : ['mi_perfil'];
 
                     const userPayload = {
                         id: existingUser ? existingUser.id : Date.now(),
                         name: reg.name,
+                        firstName: reg.firstName,
+                        lastName: reg.lastName,
                         email: reg.email,
                         role: shouldHaveVirtualAccess ? 'participant' : 'user', // Set primary role correctly
                         roles: existingUser ? [...new Set([...(existingUser.roles || []), ...assignedRoles])] : assignedRoles,
+                        modules: existingUser ? [...new Set([...(existingUser.modules || []), ...assignedModules])] : assignedModules,
                         institution: reg.institution,
                         password: existingUser ? existingUser.password : '123456',
                         specialty: reg.specialty
                     };
 
-                    await api.users.update(userPayload);
+                    // Use add() for new users, update() for existing users
+                    if (existingUser) {
+                        await api.users.update(userPayload);
+                    } else {
+                        await api.users.add(userPayload);
+                    }
 
                     showSuccess('La inscripción ha sido aprobada y la cuenta actualizada.', 'Inscripción aprobada');
                     loadData(); // Refresh all data
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
                 } catch (error) {
-                    console.error("Error approving registration", error);
-                    showError('No se pudo procesar la inscripción.', 'Error al procesar');
+                    console.error("Error approving registration:", error);
+                    const errorMessage = error.message || 'Error desconocido al procesar la inscripción';
+                    showError(`No se pudo procesar la inscripción: ${errorMessage}`, 'Error al procesar');
                 }
             }
         });
@@ -201,7 +211,7 @@ const AdminDashboard = ({ user }) => {
         { id: 'config', label: 'Configuración', icon: Settings },
         ...(isSuperAdmin ? [{ id: 'analytics', label: 'Analítica', icon: TrendingUp }] : []),
         ...(isSuperAdmin ? [{ id: 'users', label: 'Usuarios', icon: Shield }] : []),
-        ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: BookOpen }] : []),
+        ...(isSuperAdmin ? [{ id: 'docs', label: 'Documentación', icon: Code2 }] : []),
         { id: 'academic-module', label: 'Académico', icon: BookOpen }, // Add Academic Module Icon
         { id: 'attendance', label: 'Asistencia', icon: QrCode },
         // { id: 'virtual-classroom', label: 'Aula Virtual', icon: MonitorPlay }

@@ -27,10 +27,23 @@ import RoadmapView from './views/RoadmapView';
 import SmartRegistrationForm from './views/RegistrationView';
 import DevelopmentView from './components/common/DevelopmentView';
 import { SmallUserAvatar } from './components/common/UserAvatar';
-// import StudentDashboard from './views/StudentDashboard';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { PermissionGate } from './components/auth/PermissionGate';
 
+// Wrapper to provide Global Auth Context
 export default function SIMRApp() {
-  // Persistent User State
+  return (
+    <AuthProvider>
+      <SIMRAppContent />
+    </AuthProvider>
+  );
+}
+
+function SIMRAppContent() {
+  // Use AuthContext for proper permission management
+  const { user: authUser, login: authLogin, logout: authLogout } = useAuth();
+
+  // Persistent User State (Legacy - keeping for now to avoid breaking other views until full migration)
   const [user, setUser] = useState(() => {
     if (typeof window !== 'undefined') {
       const savedUser = window.localStorage.getItem('simr_user');
@@ -49,6 +62,14 @@ export default function SIMRApp() {
     return null;
   });
 
+  // Sync local user state with AuthContext user (which has properly derived permissions)
+  useEffect(() => {
+    // Sync if authUser exists AND (no local user OR different ID OR local user is missing modules)
+    if (authUser && (!user || user.id !== authUser.id || !user.modules || user.modules.length === 0)) {
+      setUser(authUser);
+    }
+  }, [authUser, user]);
+
   // Auto-persist user state changes
   useEffect(() => {
     if (user) {
@@ -66,6 +87,7 @@ export default function SIMRApp() {
     return null;
   });
 
+  // Default to 'rbac_demo' to show the new functionality immediately
   const [currentView, setCurrentView] = useState('home');
   const [basesTab, setBasesTab] = useState('bases');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -109,9 +131,19 @@ export default function SIMRApp() {
     return section ? section.isVisible : true;
   };
 
-  const isSectionDevelopment = (id) => {
-    const section = config?.publicSections?.find(s => s.id === id);
-    return section ? section.isDevelopment : false;
+  // Ideally useAuth() but we are integrating slowly.
+  // user object now has .permissions derived in AuthContext if we use login() from there.
+  // BUT App.jsx has its own 'user' state which might NOT have permissions if just loaded from localStorage "simr_user" unless AuthProvider updated it.
+
+  // Let's rely on user.permissions if available, or fallbacks.
+  const hasAccess = (scope) => {
+    if (!user) return false;
+    // If permissions array exists, check it
+    if (user.permissions && Array.isArray(user.permissions)) {
+      if (user.permissions.includes('admin:all')) return true;
+      return user.permissions.includes(scope);
+    }
+    return false;
   };
 
   const navItemsList = [
@@ -121,7 +153,7 @@ export default function SIMRApp() {
     { id: 'program', label: 'Programa', icon: Calendar, show: isSectionVisible('program') },
     { id: 'committee', label: 'Comité', icon: Users, show: isSectionVisible('committee') },
     { id: 'gallery', label: 'Galería', icon: ImageIcon, show: isSectionVisible('gallery') },
-    { id: 'posters', label: 'E-Posters', icon: Grid, show: isSectionVisible('posters'), isBadge: true }
+    { id: 'posters', label: 'E-Posters', icon: Grid, show: isSectionVisible('posters'), isBadge: true },
   ];
 
   const visibleNavItems = navItemsList.filter(item => item.show !== false);
@@ -155,8 +187,11 @@ export default function SIMRApp() {
   }, [isRoleMenuOpen]);
 
   const handleLogin = (userData) => {
+    // Use AuthContext login to properly derive permissions
+    authLogin(userData);
+
+    // Also update local state for legacy compatibility
     setUser(userData);
-    window.localStorage.setItem('simr_user', JSON.stringify(userData));
 
     // Default to the first substantive profile
     const allProfiles = userData.profiles || ['perfil_basico'];
@@ -171,7 +206,7 @@ export default function SIMRApp() {
 
   const handleRoleSwitch = (newRole) => {
     // Special handling for Aula Virtual - open in new tab
-    if (newRole === 'aula_virtual') {
+    if (newRole === 'aula_virtual' || newRole === 'participant') {
       // Open the same app in a new tab with a special parameter
       const url = `${window.location.origin}${window.location.pathname}?virtual=true`;
       window.open(url, '_blank');
@@ -197,6 +232,7 @@ export default function SIMRApp() {
       case 'asistencia': return 'admission-dashboard';
       case 'academico': return 'academic-dashboard'; // Committee role
       case 'aula_virtual': return 'participant-dashboard';
+      case 'participant': return 'participant-dashboard'; // Legacy role mapping
       case 'trabajos': return 'resident-dashboard';
       default: return 'profile';
     }
@@ -207,10 +243,12 @@ export default function SIMRApp() {
   };
 
   const handleLogout = () => {
+    // Use AuthContext logout for proper cleanup
+    authLogout();
+
+    // Also clear local state for legacy compatibility
     setUser(null);
     setActiveRole(null);
-    window.localStorage.removeItem('simr_user');
-    window.localStorage.removeItem('simr_active_role');
     setCurrentView('home');
   };
 
@@ -232,6 +270,7 @@ export default function SIMRApp() {
     jurado: 'Jurado',
     contabilidad: 'Contabilidad',
     aula_virtual: 'Aula Virtual',
+    participant: 'Aula Virtual', // Legacy label
     trabajos: 'Trabajos',
     academico: 'Académico',
     perfil_basico: 'Mi Perfil'
@@ -245,6 +284,7 @@ export default function SIMRApp() {
     jurado: Award,
     contabilidad: DollarSign,
     aula_virtual: Users,
+    participant: Users, // Legacy icon
     trabajos: User,
     academico: BookOpen,
     perfil_basico: CircleUser
@@ -284,15 +324,12 @@ export default function SIMRApp() {
             {/* Tasks Quick Access */}
             {user && <TasksQuickAccess user={user} />}
 
-
-
-
             {user ? (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative" ref={roleMenuRef}>
                 <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
                   <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
                     {ROLE_LABELS[activeRole] || activeRole}
-                    {user.profiles && user.profiles.filter(p => p !== 'perfil_basico').length > 1 && <ChevronDown size={10} />}
+                    {user.modules && user.modules.filter(m => m !== 'perfil_basico').length > 1 && <ChevronDown size={10} />}
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
@@ -322,16 +359,17 @@ export default function SIMRApp() {
                       </button>
                     </div>
 
-                    {user.profiles && user.profiles.length > 0 && (
+                    {/* Use modules (RBAC) instead of profiles (legacy) */}
+                    {user.modules && user.modules.length > 0 && (
                       <>
                         <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                        {user.profiles.filter(p => p !== 'perfil_basico').map(profile => {
-                          const Icon = ROLE_ICONS[profile] || Users;
-                          const isDashboardActive = activeRole === profile && currentView === getDashboardView(profile);
+                        {user.modules.filter(m => m !== 'perfil_basico' && m !== 'mi_perfil').map(module => {
+                          const Icon = ROLE_ICONS[module] || Users;
+                          const isDashboardActive = activeRole === module && currentView === getDashboardView(module);
                           return (
                             <button
-                              key={profile}
-                              onClick={() => handleRoleSwitch(profile)}
+                              key={module}
+                              onClick={() => handleRoleSwitch(module)}
                               className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
                                      ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
                                      `}
@@ -340,7 +378,7 @@ export default function SIMRApp() {
                                 <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
                                   <Icon size={16} />
                                 </div>
-                                {ROLE_LABELS[profile] || profile}
+                                {ROLE_LABELS[module] || module}
                               </div>
                               {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
                             </button>
@@ -382,6 +420,7 @@ export default function SIMRApp() {
             <button onClick={() => navigate('committee')} className="block w-full text-left font-medium py-2 text-gray-800">Comité</button>
             <button onClick={() => navigate('gallery')} className="block w-full text-left font-medium py-2 text-gray-800">Galería</button>
             <button onClick={() => navigate('posters')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">E-Posters</button>
+            <button onClick={() => navigate('rbac_demo')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">Demo RBAC</button>
             {!user && (
               <button onClick={() => navigate('registration')} className="block w-full text-left font-medium py-2 text-blue-700">Inscripción</button>
             )}
@@ -389,13 +428,13 @@ export default function SIMRApp() {
               <>
                 <div className="border-t border-gray-100 pt-2 mt-2">
                   <div className="text-xs text-gray-500 uppercase mb-2">Cambiar Perfil ({ROLE_LABELS[activeRole]})</div>
-                  {user.profiles && user.profiles.filter(p => p !== 'perfil_basico').map(profile => (
+                  {user.modules && user.modules.filter(m => m !== 'perfil_basico' && m !== 'mi_perfil').map(module => (
                     <button
-                      key={profile}
-                      onClick={() => handleRoleSwitch(profile)}
-                      className={`block w-full text-left py-2 text-sm ${activeRole === profile ? 'font-bold text-blue-700' : 'text-gray-600'}`}
+                      key={module}
+                      onClick={() => handleRoleSwitch(module)}
+                      className={`block w-full text-left py-2 text-sm ${activeRole === module ? 'font-bold text-blue-700' : 'text-gray-600'}`}
                     >
-                      {ROLE_LABELS[profile]}
+                      {ROLE_LABELS[module]}
                     </button>
                   ))}
                 </div>
@@ -418,15 +457,56 @@ export default function SIMRApp() {
         {currentView === 'gallery' && (isSectionDevelopment('gallery') ? <DevelopmentView title="Galería en Desarrollo" /> : <GalleryView />)}
         {currentView === 'posters' && (isSectionDevelopment('posters') ? <DevelopmentView title="E-Posters en Desarrollo" /> : <PostersView />)}
         {currentView === 'registration' && <SmartRegistrationForm />}
-        {currentView === 'resident-dashboard' && <ResidentDashboard user={user} navigate={navigate} />}
-        {currentView === 'participant-dashboard' && <ParticipantDashboard user={user} navigate={navigate} />}
+
+        {currentView === 'resident-dashboard' && (
+          <PermissionGate scopes={['papers:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: No tienes permisos para ver Trabajos.</div>}>
+            <ResidentDashboard user={user} navigate={navigate} />
+          </PermissionGate>
+        )}
+
+        {currentView === 'participant-dashboard' && (
+          <PermissionGate scopes={['classroom:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Aula Virtual no habilitada.</div>}>
+            <ParticipantDashboard user={user} navigate={navigate} />
+          </PermissionGate>
+        )}
+
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
-        {currentView === 'jury-dashboard' && <JuryDashboard user={user} />}
-        {currentView === 'admin-dashboard' && <AdminDashboard user={user} />}
-        {currentView === 'secretary-dashboard' && <SecretaryDashboard user={user} navigate={navigate} />}
-        {currentView === 'admission-dashboard' && <AdmissionDashboard />}
-        {currentView === 'academic-dashboard' && <AcademicDashboard role={activeRole} />}
-        {currentView === 'treasurer-dashboard' && <TreasurerDashboard user={user} />}
+
+        {currentView === 'jury-dashboard' && (
+          <PermissionGate scopes={['jury:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Panel de Jurado.</div>}>
+            <JuryDashboard user={user} />
+          </PermissionGate>
+        )}
+
+        {currentView === 'admin-dashboard' && (
+          <PermissionGate scopes={['admin:all', 'users:manage']} requireAll={false} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Panel de Organización.</div>}>
+            <AdminDashboard user={user} />
+          </PermissionGate>
+        )}
+
+        {currentView === 'secretary-dashboard' && (
+          <PermissionGate scopes={['secretary:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Secretaría.</div>}>
+            <SecretaryDashboard user={user} navigate={navigate} />
+          </PermissionGate>
+        )}
+
+        {currentView === 'admission-dashboard' && (
+          <PermissionGate scopes={['attendance:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Asistencia.</div>}>
+            <AdmissionDashboard />
+          </PermissionGate>
+        )}
+
+        {currentView === 'academic-dashboard' && (
+          <PermissionGate scopes={['academic:read', 'research:read']} requireAll={false} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Académico/Investigación.</div>}>
+            <AcademicDashboard role={activeRole} />
+          </PermissionGate>
+        )}
+
+        {currentView === 'treasurer-dashboard' && (
+          <PermissionGate scopes={['accounting:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Tesorería.</div>}>
+            <TreasurerDashboard user={user} />
+          </PermissionGate>
+        )}
 
         {/* {currentView === 'student-dashboard' && <StudentDashboard />} */}
 

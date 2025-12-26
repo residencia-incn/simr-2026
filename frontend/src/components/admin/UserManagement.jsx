@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor, UserCog, Settings } from 'lucide-react';
+import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor, UserCog } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button, FormField, Table, Modal, Badge } from '../ui';
 import { showSuccess, showError } from '../../utils/alerts';
@@ -8,7 +8,7 @@ import { useModal, useSearch, useSortableData } from '../../hooks';
 import AttendeeDetailsModal from './AttendeeDetailsModal';
 
 import RoleModal from './RoleModal';
-import ProfilesModal from './ProfilesModal';
+import PermissionsModal from './PermissionsModal';
 
 const UserManagement = () => {
     const [users, setUsers] = useState([]);
@@ -127,15 +127,24 @@ const UserManagement = () => {
         }
     };
 
-    const handleUpdateProfiles = async (profiles) => {
+
+
+    const handleUpdatePermissions = async (data) => {
         try {
-            const updatedUser = { ...selectedUser, profiles };
+            // data contiene { modules, permissions }
+            const updatedUser = {
+                ...selectedUser,
+                modules: data.modules,
+                permissions: data.permissions,
+                // Actualizar profiles para compatibilidad legacy
+                profiles: data.modules
+            };
             await api.users.update(updatedUser);
-            showSuccess(`Los perfiles de acceso han sido actualizados correctamente.`, `Perfiles de ${selectedUser.name} actualizados`);
+            showSuccess(`Los módulos y permisos han sido actualizados correctamente.`, `Permisos de ${selectedUser.name} actualizados`);
             loadUsers();
         } catch (error) {
-            console.error("Failed to update profiles", error);
-            showError('No se pudo actualizar los perfiles', 'Error');
+            console.error("Failed to update permissions", error);
+            showError('No se pudo actualizar los permisos', 'Error');
         } finally {
             setSelectedUser(null);
             setActionType(null);
@@ -293,12 +302,13 @@ const UserManagement = () => {
                             >
                                 <UserCog size={18} />
                             </button>
+
                             <button
-                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('profiles'); }}
+                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('permissions'); }}
                                 className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Perfiles"
+                                title="Módulos de Acceso"
                             >
-                                <Settings size={18} />
+                                <Shield size={18} />
                             </button>
                             <button
                                 onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('reset'); }}
@@ -367,11 +377,11 @@ const UserManagement = () => {
                 onSave={handleUpdateEventRole}
             />
 
-            <ProfilesModal
-                isOpen={actionType === 'profiles'}
+            <PermissionsModal
+                isOpen={actionType === 'permissions'}
                 onClose={() => { setSelectedUser(null); setActionType(null); }}
                 user={selectedUser}
-                onSave={handleUpdateProfiles}
+                onSave={handleUpdatePermissions}
             />
 
             <AttendeeDetailsModal

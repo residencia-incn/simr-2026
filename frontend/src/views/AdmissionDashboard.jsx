@@ -49,8 +49,9 @@ const AdmissionDashboard = () => {
                 showSuccess('La inscripción ha sido aprobada correctamente.', 'Inscripción aprobada');
                 reloadAll();
             } catch (error) {
-                console.error("Error approving registration", error);
-                showError('No se pudo procesar la inscripción.', 'Error al procesar');
+                console.error("Error approving registration:", error);
+                const errorMessage = error.message || 'Error desconocido al procesar la inscripción';
+                showError(`No se pudo procesar la inscripción: ${errorMessage}`, 'Error al procesar');
             }
         }
     };

@@ -315,27 +315,64 @@ const AcademicConfig = () => {
                                 <p className="text-[10px] text-gray-500 mt-1">Fecha máxima para envíos regulares sin penalidad.</p>
                             </div>
 
-                            <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Fecha Límite de Prórroga</label>
-                                <input
-                                    type="datetime-local"
-                                    className="w-full p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-orange-500"
-                                    value={config.extensionDeadline || ''}
-                                    onChange={(e) => handleConfigChange('extensionDeadline', e.target.value)}
-                                />
-                                <p className="text-[10px] text-orange-600 mt-1">Envíos en este periodo tendrán penalidad.</p>
+                            {/* Checkbox para activar prórroga */}
+                            <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
+                                <label className="flex items-center gap-2 cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={config.extensionEnabled || false}
+                                        onChange={(e) => handleConfigChange('extensionEnabled', e.target.checked)}
+                                        className="w-4 h-4 text-orange-600 rounded focus:ring-orange-500"
+                                    />
+                                    <span className="text-sm font-bold text-gray-700">Activar Prórroga</span>
+                                </label>
+                                <p className="text-[10px] text-gray-500 mt-1 ml-6">
+                                    Permite envíos con penalidad después de la fecha límite normal.
+                                </p>
                             </div>
 
                             <div>
-                                <label className="block text-xs font-bold text-gray-700 mb-1">Penalidad por Envío Tardío (Puntos)</label>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Fecha Límite de Prórroga
+                                    {!config.extensionEnabled && <span className="text-gray-400 font-normal ml-1">(Desactivado)</span>}
+                                </label>
+                                <input
+                                    type="datetime-local"
+                                    className={`w-full p-2 text-sm border rounded focus:ring-2 ${config.extensionEnabled
+                                            ? 'border-gray-300 focus:ring-orange-500 bg-white'
+                                            : 'border-gray-200 bg-gray-100 cursor-not-allowed'
+                                        }`}
+                                    value={config.extensionDeadline || ''}
+                                    onChange={(e) => handleConfigChange('extensionDeadline', e.target.value)}
+                                    disabled={!config.extensionEnabled}
+                                />
+                                <p className="text-[10px] text-orange-600 mt-1">Envíos en este periodo tendrán penalidad.</p>
+                                {config.extensionEnabled && config.submissionDeadline && config.extensionDeadline &&
+                                    new Date(config.extensionDeadline) <= new Date(config.submissionDeadline) && (
+                                        <p className="text-[10px] text-red-600 mt-1 flex items-center gap-1">
+                                            <AlertTriangle size={10} />
+                                            La fecha de prórroga debe ser posterior a la fecha límite normal.
+                                        </p>
+                                    )}
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-700 mb-1">
+                                    Penalidad por Envío Tardío (Puntos)
+                                    {!config.extensionEnabled && <span className="text-gray-400 font-normal ml-1">(Desactivado)</span>}
+                                </label>
                                 <div className="flex items-center gap-2">
                                     <input
                                         type="number"
                                         step="0.1"
                                         min="0"
-                                        className="w-20 p-2 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-red-500"
+                                        className={`w-20 p-2 text-sm border rounded focus:ring-2 ${config.extensionEnabled
+                                                ? 'border-gray-300 focus:ring-red-500 bg-white'
+                                                : 'border-gray-200 bg-gray-100 cursor-not-allowed'
+                                            }`}
                                         value={config.latePenalty || 0}
                                         onChange={(e) => handleConfigChange('latePenalty', parseFloat(e.target.value))}
+                                        disabled={!config.extensionEnabled}
                                     />
                                     <span className="text-sm text-gray-500">puntos menos</span>
                                 </div>
