@@ -12,21 +12,21 @@ const TasksQuickAccess = ({ user }) => {
     const [newProgress, setNewProgress] = useState(0);
     const [newComment, setNewComment] = useState('');
 
-    // Check if user has committee role
-    const hasCommitteeRole = user?.roles?.some(r => ['admin', 'academic', 'treasurer'].includes(r)) ||
-        ['admin', 'academic', 'treasurer'].includes(user?.role);
+    // Check if user is an organizer (Staff) - RBAC
+    const isOrganizer = user?.eventRole === 'organizador' ||
+        user?.eventRoles?.includes('organizador');
 
     // Load user's tasks
     const { data, loading, execute: loadTasks } = useApi(async () => {
-        if (!hasCommitteeRole) return [];
+        if (!isOrganizer) return [];
         return await api.planning.getMyTasks(user.id);
     });
 
     useEffect(() => {
-        if (hasCommitteeRole) {
+        if (isOrganizer) {
             loadTasks();
         }
-    }, [hasCommitteeRole]);
+    }, [isOrganizer]);
 
     useEffect(() => {
         if (data) {
@@ -89,7 +89,7 @@ const TasksQuickAccess = ({ user }) => {
 
     const pendingTasksCount = tasks.filter(t => t.status !== 'completed').length;
 
-    if (!hasCommitteeRole) return null;
+    if (!isOrganizer) return null;
 
     return (
         <>
@@ -135,12 +135,12 @@ const TasksQuickAccess = ({ user }) => {
                                     <Card
                                         key={task.id}
                                         className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
-                                                ? 'border-l-green-500'
-                                                : task.status === 'in_progress'
-                                                    ? 'border-l-blue-500'
-                                                    : isOverdue
-                                                        ? 'border-l-red-500'
-                                                        : 'border-l-gray-300'
+                                            ? 'border-l-green-500'
+                                            : task.status === 'in_progress'
+                                                ? 'border-l-blue-500'
+                                                : isOverdue
+                                                    ? 'border-l-red-500'
+                                                    : 'border-l-gray-300'
                                             }`}
                                         onClick={() => handleOpenTask(task)}
                                     >
@@ -185,10 +185,10 @@ const TasksQuickAccess = ({ user }) => {
                                                     <div className="flex-1 bg-gray-200 rounded-full h-2">
                                                         <div
                                                             className={`h-2 rounded-full transition-all ${task.progress === 100
-                                                                    ? 'bg-green-600'
-                                                                    : task.progress > 0
-                                                                        ? 'bg-blue-600'
-                                                                        : 'bg-gray-400'
+                                                                ? 'bg-green-600'
+                                                                : task.progress > 0
+                                                                    ? 'bg-blue-600'
+                                                                    : 'bg-gray-400'
                                                                 }`}
                                                             style={{ width: `${task.progress}%` }}
                                                         />

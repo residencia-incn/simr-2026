@@ -486,15 +486,15 @@ export const MOCK_USERS = [
 
         // Nuevos campos RBAC
         eventRole: 'organizador',
-        organizerFunction: 'secretaria',
+        organizerFunction: 'investigacion', // ✅ Cambiado de 'secretaria' a 'investigacion'
         hasPaid: true,
         modality: 'presencial',
-        modules: ['mi_perfil', 'secretaria', 'aula_virtual', 'trabajos'],
+        modules: ['mi_perfil', 'investigacion', 'aula_virtual', 'trabajos'], // ✅ Actualizado
         isSuperAdmin: false,
 
         // Legacy (mantener por compatibilidad)
         eventRoles: ['organizador'],
-        profiles: ['secretaria', 'aula_virtual', 'trabajos', 'perfil_basico'],
+        profiles: ['investigacion', 'aula_virtual', 'trabajos', 'perfil_basico'], // ✅ Actualizado
 
 
         occupation: 'Residente R1',
