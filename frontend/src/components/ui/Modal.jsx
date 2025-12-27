@@ -4,7 +4,20 @@ import { X } from 'lucide-react';
 const Modal = ({ isOpen, onClose, title, children, size = 'md', className = '' }) => {
     useEffect(() => {
         const handleEscape = (e) => {
-            if (e.key === 'Escape') onClose();
+            if (e.key === 'Escape') {
+                // Only close if this is the topmost modal
+                const allModals = document.querySelectorAll('[role="dialog"]');
+                if (allModals.length > 0) {
+                    const lastModal = allModals[allModals.length - 1];
+                    const thisModalTitle = lastModal.querySelector('h3')?.textContent;
+                    // Only close if this modal is the topmost one
+                    if (thisModalTitle === title) {
+                        onClose();
+                    }
+                } else {
+                    onClose();
+                }
+            }
         };
 
         if (isOpen) {
@@ -35,7 +48,19 @@ const Modal = ({ isOpen, onClose, title, children, size = 'md', className = '' }
             {/* Backdrop */}
             <div
                 className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity animate-fadeIn"
-                onClick={onClose}
+                onClick={(e) => {
+                    // Only close if this is the topmost modal
+                    const allModals = document.querySelectorAll('[role="dialog"]');
+                    if (allModals.length > 0) {
+                        const lastModal = allModals[allModals.length - 1];
+                        const thisModalTitle = lastModal.querySelector('h3')?.textContent;
+                        if (thisModalTitle === title) {
+                            onClose();
+                        }
+                    } else {
+                        onClose();
+                    }
+                }}
             ></div>
 
             {/* Modal Content */}
