@@ -420,9 +420,17 @@ export const MOCK_USERS = [
         lastName: 'Jara',
         dni: '11111111',
 
-        eventRoles: ['organizador'],
-        profiles: ['organizacion', 'academico', 'aula_virtual', 'trabajos', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'academico',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'academico', 'aula_virtual', 'trabajos'],
         isSuperAdmin: false,
+
+        // Legacy (mantener por compatibilidad)
+        eventRoles: ['organizador'],
+        profiles: ['academico', 'aula_virtual', 'trabajos', 'perfil_basico'],
 
 
         occupation: 'Residente R3',
@@ -444,9 +452,17 @@ export const MOCK_USERS = [
         lastName: 'Gutiérrez',
         dni: '22222222',
 
-        eventRoles: ['organizador'],
-        profiles: ['organizacion', 'contabilidad', 'aula_virtual', 'trabajos', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'tesorero',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'contabilidad', 'aula_virtual', 'trabajos'],
         isSuperAdmin: false,
+
+        // Legacy (mantener por compatibilidad)
+        eventRoles: ['organizador'],
+        profiles: ['contabilidad', 'aula_virtual', 'trabajos', 'perfil_basico'],
 
 
         occupation: 'Residente R2',
@@ -468,9 +484,17 @@ export const MOCK_USERS = [
         lastName: 'Vasquez',
         dni: '33333333',
 
-        eventRoles: ['organizador'],
-        profiles: ['organizacion', 'secretaria', 'aula_virtual', 'trabajos', 'perfil_basico'],
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'secretaria',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'secretaria', 'aula_virtual', 'trabajos'],
         isSuperAdmin: false,
+
+        // Legacy (mantener por compatibilidad)
+        eventRoles: ['organizador'],
+        profiles: ['secretaria', 'aula_virtual', 'trabajos', 'perfil_basico'],
 
 
         occupation: 'Residente R1',

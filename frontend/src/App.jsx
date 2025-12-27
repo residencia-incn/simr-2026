@@ -198,9 +198,10 @@ function SIMRAppContent() {
     // Also update local state for legacy compatibility
     setUser(userData);
 
-    // Default to the first substantive profile
-    const allProfiles = userData.profiles || ['perfil_basico'];
-    const initialRole = allProfiles.find(p => p !== 'perfil_basico') || 'perfil_basico';
+    // RBAC: Use modules instead of profiles for initial role determination
+    // Modules are derived from eventRole + organizerFunction in AuthContext
+    const allModules = userData.modules || ['mi_perfil'];
+    const initialRole = allModules.find(m => m !== 'mi_perfil') || 'mi_perfil';
 
     setActiveRole(initialRole);
     window.localStorage.setItem('simr_active_role', initialRole);
