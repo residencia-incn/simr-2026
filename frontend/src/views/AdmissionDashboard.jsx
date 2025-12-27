@@ -43,7 +43,7 @@ const AdmissionDashboard = () => {
                 };
 
                 await api.attendees.add(newAttendee);
-                await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
+                await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
                 await api.registrations.remove(reg.id);
 
                 showSuccess('La inscripción ha sido aprobada correctamente.', 'Inscripción aprobada');

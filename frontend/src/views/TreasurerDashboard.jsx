@@ -388,15 +388,7 @@ const TreasurerDashboard = ({ user }) => {
 
                     // 2. Add to Treasury Income (New System)
                     // Use first account as default (could be made configurable)
-                    const defaultAccount = accounts[0];
-                    await createTransaction({
-                        fecha: new Date().toISOString().split('T')[0],
-                        descripcion: `Inscripción: ${reg.name}`,
-                        monto: parseFloat(reg.amount),
-                        categoria: 'Inscripciones',
-                        cuenta_id: defaultAccount.id,
-                        url_comprobante: reg.voucherData || null
-                    });
+                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
 
                     // 3. Remove from Pending
                     await api.registrations.remove(reg.id);

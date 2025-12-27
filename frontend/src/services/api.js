@@ -1341,12 +1341,13 @@ export const api = {
             return true;
         },
 
-        addIncome: async (amount, description, category) => {
+        addIncome: async (amount, description, category, voucherData = null) => {
             return await api.treasury.addTransaction({
                 type: 'income',
                 amount: parseFloat(amount),
                 description,
-                category
+                category,
+                url_comprobante: voucherData
             });
         },
 

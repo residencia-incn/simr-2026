@@ -111,7 +111,7 @@ const AdminDashboard = ({ user }) => {
                     };
 
                     await api.attendees.add(newAttendee);
-                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones');
+                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
                     await api.registrations.remove(reg.id);
 
                     // User Creation / Role Assignment Logic
