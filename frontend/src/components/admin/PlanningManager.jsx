@@ -614,13 +614,35 @@ const PlanningManager = ({ currentUser }) => {
                                     required
                                 >
                                     <option value="">Seleccionar usuario...</option>
-                                    {users
-                                        .filter(u => ['admin', 'academic', 'treasurer'].some(role => u.roles?.includes(role)))
-                                        .map(user => (
-                                            <option key={user.id} value={user.id}>
-                                                {user.name} ({user.roles?.join(', ')})
-                                            </option>
-                                        ))}
+                                    {(() => {
+                                        // Get meeting for this task (if it exists)
+                                        const taskMeeting = currentTask.meetingId
+                                            ? meetings.find(m => m.id === currentTask.meetingId)
+                                            : null;
+
+                                        // If task has a meeting, show only confirmed attendees
+                                        if (taskMeeting && taskMeeting.attendance) {
+                                            const confirmedAttendees = taskMeeting.attendance
+                                                .filter(a => a.status === 'confirmed')
+                                                .map(a => users.find(u => u.id === a.userId))
+                                                .filter(u => u); // Remove nulls
+
+                                            return confirmedAttendees.map(user => (
+                                                <option key={user.id} value={user.id}>
+                                                    {user.name}
+                                                </option>
+                                            ));
+                                        }
+
+                                        // Fallback: show all organizers
+                                        return users
+                                            .filter(u => u.eventRole === 'organizador' || u.eventRoles?.includes('organizador'))
+                                            .map(user => (
+                                                <option key={user.id} value={user.id}>
+                                                    {user.name}
+                                                </option>
+                                            ));
+                                    })()}
                                 </select>
                             </div>
                             <FormField
@@ -705,45 +727,30 @@ const PlanningManager = ({ currentUser }) => {
                         });
                     };
 
-                    const handleToggleAttendance = async (userId, newStatus) => {
+                    const handleConfirmAttendance = async (userId, status) => {
                         if (isClosed) return;
 
-                        // Parse existing attendees or default to []
-                        // Assuming attendees store: { userId, status: 'verified' | 'pending' | 'absent' }
-                        // Or simplifying: if in array, verified.
-
-                        // Let's implement robust object structure for attendees
-                        const currentAttendees = Array.isArray(viewingMeetingDetails.attendees)
-                            ? viewingMeetingDetails.attendees
-                            : [];
-
-                        let newAttendees;
-                        const existingIdx = currentAttendees.findIndex(a => (a.userId || a) === userId);
-
-                        if (existingIdx >= 0) {
-                            // Update existing
-                            newAttendees = [...currentAttendees];
-                            if (typeof newAttendees[existingIdx] === 'object') {
-                                newAttendees[existingIdx] = { ...newAttendees[existingIdx], status: newStatus };
-                            } else {
-                                // Convert string ID to object
-                                newAttendees[existingIdx] = { userId, status: newStatus };
-                            }
-                        } else {
-                            // Add new
-                            newAttendees = [...currentAttendees, { userId, status: newStatus }];
+                        try {
+                            await api.planning.updateAttendanceStatus(
+                                viewingMeetingDetails.id,
+                                userId,
+                                status, // 'confirmed' or 'rejected'
+                                currentUser.id
+                            );
+                            await loadData();
+                            // Reload meeting details
+                            const updatedMeetings = await api.planning.getMeetings();
+                            const updatedMeeting = updatedMeetings.find(m => m.id === viewingMeetingDetails.id);
+                            setViewingMeetingDetails(updatedMeeting);
+                        } catch (error) {
+                            showError(error.message || 'Error al actualizar asistencia');
                         }
-
-                        const updatedMeeting = { ...viewingMeetingDetails, attendees: newAttendees };
-                        await api.planning.saveMeeting(updatedMeeting);
-                        await loadData();
-                        setViewingMeetingDetails(updatedMeeting);
                     };
 
-                    // Filter relevant users (e.g., committee members) or just show all for now to filter
-                    const relevantUsers = users.filter(u =>
-                        ['admin', 'academic', 'treasurer', 'secretary'].some(r => u.roles?.includes(r)) ||
-                        ['admin', 'academic', 'treasurer'].includes(u.role)
+                    // Get organizers who marked attendance for this meeting
+                    const meetingAttendance = viewingMeetingDetails.attendance || [];
+                    const organizerUsers = users.filter(u =>
+                        u.eventRole === 'organizador' || u.eventRoles?.includes('organizador')
                     );
 
                     return (
@@ -891,54 +898,85 @@ const PlanningManager = ({ currentUser }) => {
                                     <div className="flex items-center gap-2 mb-4 text-gray-800">
                                         <Users size={18} />
                                         <h4 className="font-bold">Participantes</h4>
+                                        <span className="text-xs text-gray-500">({meetingAttendance.length})</span>
                                     </div>
 
-                                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
-                                        {relevantUsers.length === 0 ? (
+                                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
+                                        {meetingAttendance.length === 0 ? (
                                             <div className="text-center py-8 text-gray-400 text-sm italic">
                                                 No hay usuarios disponibles
                                             </div>
                                         ) : (
-                                            relevantUsers.map(user => {
-                                                // Find status
-                                                const att = Array.isArray(viewingMeetingDetails.attendees)
-                                                    ? viewingMeetingDetails.attendees.find(a => (a.userId || a) === user.id)
-                                                    : null;
-                                                const isVerified = att && (typeof att === 'object' ? att.status === 'verified' : true); // Legacy string supp
+                                            meetingAttendance.map(attendance => {
+                                                const user = organizerUsers.find(u => u.id === attendance.userId);
+                                                if (!user) return null;
+
+                                                const isPending = attendance.status === 'pending';
+                                                const isConfirmed = attendance.status === 'confirmed';
+                                                const isRejected = attendance.status === 'rejected';
 
                                                 return (
-                                                    <div key={user.id} className="flex items-center justify-between text-sm bg-white p-2 rounded border border-gray-200">
-                                                        <span className="text-gray-700 truncate max-w-[150px]" title={user.name}>
-                                                            {user.name}
-                                                        </span>
+                                                    <div key={user.id} className="flex items-center justify-between text-sm bg-white p-3 rounded border border-gray-200">
+                                                        <div className="flex-1">
+                                                            <span className="text-gray-700 font-medium block" title={user.name}>
+                                                                {user.name}
+                                                            </span>
+                                                            <span className="text-xs text-gray-500">
+                                                                {new Date(attendance.markedAt).toLocaleString('es-PE', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    hour: '2-digit',
+                                                                    minute: '2-digit'
+                                                                })}
+                                                            </span>
+                                                        </div>
 
                                                         {isClosed ? (
-                                                            isVerified ? (
-                                                                <span className="text-green-600 text-xs font-bold flex items-center gap-1">
-                                                                    <CheckCircle size={12} /> Asistió
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-gray-400 text-xs">Ausente</span>
-                                                            )
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${isConfirmed ? 'bg-green-100 text-green-700' :
+                                                                isRejected ? 'bg-red-100 text-red-700' :
+                                                                    'bg-yellow-100 text-yellow-700'
+                                                                }`}>
+                                                                {isConfirmed ? '✅ Confirmada' :
+                                                                    isRejected ? '❌ Rechazada' :
+                                                                        '⏳ Pendiente'}
+                                                            </span>
                                                         ) : (
-                                                            <button
-                                                                onClick={() => handleToggleAttendance(user.id, isVerified ? 'absent' : 'verified')}
-                                                                className={`p-1.5 rounded-full transition-all ${isVerified
-                                                                    ? 'bg-green-100 text-green-600 hover:bg-green-200'
-                                                                    : 'bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600'
-                                                                    }`}
-                                                                title={isVerified ? "Confirmado (Click para deshacer)" : "Validar asistencia"}
-                                                            >
-                                                                {isVerified ? <CheckCircle size={18} /> : <div className="w-[18px] h-[18px] rounded-full border-2 border-current" />}
-                                                            </button>
+                                                            <div className="flex items-center gap-2">
+                                                                {isPending ? (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleConfirmAttendance(user.id, 'confirmed')}
+                                                                            className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors"
+                                                                            title="Confirmar asistencia"
+                                                                        >
+                                                                            ✅ Confirmar
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleConfirmAttendance(user.id, 'rejected')}
+                                                                            className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
+                                                                            title="Rechazar asistencia"
+                                                                        >
+                                                                            ❌ Rechazar
+                                                                        </button>
+                                                                    </>
+                                                                ) : (
+                                                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${isConfirmed ? 'bg-green-100 text-green-700' :
+                                                                        'bg-red-100 text-red-700'
+                                                                        }`}>
+                                                                        {isConfirmed ? '✅ Confirmada' : '❌ Rechazada'}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         )}
                                                     </div>
                                                 );
                                             })
                                         )}
                                     </div>
-                                    <p className="text-[10px] text-gray-400 mt-2 italic text-center">
-                                        La secretaria debe validar manualmente la asistencia de cada miembro.
+                                    <p className="text-[10px] text-gray-400 mt-3 italic text-center">
+                                        {isClosed
+                                            ? 'La asistencia fue validada manualmente por la secretaria.'
+                                            : 'La secretaria debe validar manualmente la asistencia de cada miembro.'}
                                     </p>
                                 </div>
                             </div>

@@ -876,6 +876,130 @@ export const api = {
             await delay();
             const tasks = storage.get(STORAGE_KEYS.PLANNING_TASKS, []);
             return tasks.filter(t => t.assignedTo === userId);
+        },
+
+        // --- Attendance Management for Meetings ---
+
+        /**
+         * Get active meetings (today or next 24 hours)
+         * Used by organizers to see which meetings they can mark attendance for
+         */
+        getActiveMeetings: async () => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const now = new Date();
+            const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+            return meetings.filter(m => {
+                if (m.status === 'closed') return false;
+
+                // Parse meeting date and time
+                const meetingDateTime = new Date(`${m.date}T${m.time || '00:00'}`);
+
+                // Show meetings from today until tomorrow
+                return meetingDateTime >= now && meetingDateTime <= tomorrow;
+            });
+        },
+
+        /**
+         * Mark attendance for a meeting
+         * Only organizers can mark attendance
+         */
+        markAttendance: async (meetingId, userId, userName) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const meetingIndex = meetings.findIndex(m => m.id === meetingId);
+
+            if (meetingIndex === -1) {
+                throw new Error('Reunión no encontrada');
+            }
+
+            const meeting = meetings[meetingIndex];
+
+            // Check if meeting is closed
+            if (meeting.status === 'closed') {
+                throw new Error('No se puede marcar asistencia a una reunión cerrada');
+            }
+
+            // Initialize attendance array if it doesn't exist
+            if (!meeting.attendance) {
+                meeting.attendance = [];
+            }
+
+            // Check if user already marked attendance
+            const existing = meeting.attendance.find(a => a.userId === userId);
+            if (existing) {
+                throw new Error('Ya has marcado asistencia a esta reunión');
+            }
+
+            // Add attendance record
+            meeting.attendance.push({
+                userId,
+                userName,
+                markedAt: new Date().toISOString(),
+                status: 'pending' // pending, confirmed, rejected
+            });
+
+            meetings[meetingIndex] = meeting;
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+
+            return meeting;
+        },
+
+        /**
+         * Update attendance status (confirm or reject)
+         * Only secretary can update attendance status
+         */
+        updateAttendanceStatus: async (meetingId, userId, status, confirmedBy) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const meetingIndex = meetings.findIndex(m => m.id === meetingId);
+
+            if (meetingIndex === -1) {
+                throw new Error('Reunión no encontrada');
+            }
+
+            const meeting = meetings[meetingIndex];
+
+            if (!meeting.attendance) {
+                throw new Error('No hay registros de asistencia para esta reunión');
+            }
+
+            const attendanceIndex = meeting.attendance.findIndex(a => a.userId === userId);
+            if (attendanceIndex === -1) {
+                throw new Error('Registro de asistencia no encontrado');
+            }
+
+            // Update attendance status
+            meeting.attendance[attendanceIndex] = {
+                ...meeting.attendance[attendanceIndex],
+                status, // 'confirmed' or 'rejected'
+                confirmedBy,
+                confirmedAt: new Date().toISOString()
+            };
+
+            meetings[meetingIndex] = meeting;
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+
+            return meeting;
+        },
+
+        /**
+         * Get participants of a meeting
+         * Returns only confirmed attendees
+         */
+        getMeetingParticipants: async (meetingId) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const meeting = meetings.find(m => m.id === meetingId);
+
+            if (!meeting || !meeting.attendance) {
+                return [];
+            }
+
+            // Return all attendance records (pending, confirmed, rejected)
+            // UI will filter based on needs
+            return meeting.attendance;
         }
     },
 

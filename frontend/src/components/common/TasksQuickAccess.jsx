@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare } from 'lucide-react';
+import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users } from 'lucide-react';
 import { Modal, Button, Card, LoadingSpinner } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
@@ -11,6 +11,8 @@ const TasksQuickAccess = ({ user }) => {
     const [isUpdating, setIsUpdating] = useState(false);
     const [newProgress, setNewProgress] = useState(0);
     const [newComment, setNewComment] = useState('');
+    const [activeMeetings, setActiveMeetings] = useState([]);
+    const [loadingMeetings, setLoadingMeetings] = useState(false);
 
     // Check if user is an organizer (Staff) - RBAC
     const isOrganizer = user?.eventRole === 'organizador' ||
@@ -33,6 +35,41 @@ const TasksQuickAccess = ({ user }) => {
             setTasks(data);
         }
     }, [data]);
+
+    // Load active meetings
+    useEffect(() => {
+        if (isOrganizer && isOpen) {
+            loadActiveMeetings();
+        }
+    }, [isOrganizer, isOpen]);
+
+    const loadActiveMeetings = async () => {
+        try {
+            setLoadingMeetings(true);
+            const meetings = await api.planning.getActiveMeetings();
+            setActiveMeetings(meetings);
+        } catch (error) {
+            console.error('Error loading active meetings:', error);
+        } finally {
+            setLoadingMeetings(false);
+        }
+    };
+
+    const handleMarkAttendance = async (meeting) => {
+        try {
+            await api.planning.markAttendance(meeting.id, user.id, user.name);
+            alert('✅ Asistencia marcada correctamente');
+            await loadActiveMeetings(); // Reload to show updated status
+        } catch (error) {
+            alert(error.message || 'Error al marcar asistencia');
+        }
+    };
+
+    const getAttendanceStatus = (meeting) => {
+        if (!meeting.attendance) return null;
+        const userAttendance = meeting.attendance.find(a => a.userId === user.id);
+        return userAttendance;
+    };
 
     const handleOpenTask = (task) => {
         setSelectedTask(task);
@@ -117,93 +154,168 @@ const TasksQuickAccess = ({ user }) => {
                 title="Mis Tareas Asignadas"
                 size="xl"
             >
-                <div className="space-y-4">
-                    {loading ? (
-                        <div className="py-8"><LoadingSpinner text="Cargando tareas..." /></div>
-                    ) : tasks.length === 0 ? (
-                        <div className="text-center py-8 text-gray-500">
-                            <ListTodo size={48} className="mx-auto mb-3 text-gray-300" />
-                            <p className="font-medium">No tienes tareas asignadas</p>
-                            <p className="text-sm">Cuando te asignen tareas, aparecerán aquí</p>
+                <div className="space-y-6">
+                    {/* Active Meetings Section */}
+                    <div>
+                        <div className="flex items-center gap-2 mb-3">
+                            <Calendar size={20} className="text-blue-600" />
+                            <h3 className="font-bold text-gray-800">Reuniones Activas</h3>
                         </div>
-                    ) : (
-                        <div className="space-y-3 max-h-[500px] overflow-y-auto">
-                            {tasks.map(task => {
-                                const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'completed';
 
-                                return (
-                                    <Card
-                                        key={task.id}
-                                        className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
-                                            ? 'border-l-green-500'
-                                            : task.status === 'in_progress'
-                                                ? 'border-l-blue-500'
-                                                : isOverdue
-                                                    ? 'border-l-red-500'
-                                                    : 'border-l-gray-300'
-                                            }`}
-                                        onClick={() => handleOpenTask(task)}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className="mt-1">
-                                                {getStatusIcon(task.status)}
-                                            </div>
+                        {loadingMeetings ? (
+                            <div className="py-4"><LoadingSpinner text="Cargando reuniones..." /></div>
+                        ) : activeMeetings.length === 0 ? (
+                            <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                                <Users size={32} className="mx-auto mb-2 text-gray-300" />
+                                <p className="text-sm text-gray-500">No hay reuniones activas</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {activeMeetings.map(meeting => {
+                                    const attendance = getAttendanceStatus(meeting);
+                                    const hasMarked = !!attendance;
 
-                                            <div className="flex-1 min-w-0">
-                                                <div className="flex items-start justify-between gap-2 mb-2">
-                                                    <h4 className="font-bold text-gray-800 text-sm">{task.title}</h4>
-                                                    <div className="flex gap-1 flex-shrink-0">
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getPriorityColor(task.priority)}`}>
-                                                            {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                                    return (
+                                        <Card key={meeting.id} className="border-l-4 border-l-blue-500">
+                                            <div className="flex items-start justify-between gap-3">
+                                                <div className="flex-1">
+                                                    <h4 className="font-bold text-gray-800 text-sm mb-1">{meeting.title}</h4>
+                                                    <div className="flex items-center gap-3 text-xs text-gray-600">
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar size={12} />
+                                                            {new Date(meeting.date).toLocaleDateString('es-PE')}
                                                         </span>
-                                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(task.status)}`}>
-                                                            {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En Progreso' : 'Pendiente'}
+                                                        <span className="flex items-center gap-1">
+                                                            <Clock size={12} />
+                                                            {meeting.time}
                                                         </span>
                                                     </div>
                                                 </div>
 
-                                                {task.description && (
-                                                    <p className="text-xs text-gray-600 mb-2 line-clamp-2">{task.description}</p>
-                                                )}
-
-                                                <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
-                                                    <span className="flex items-center gap-1">
-                                                        <Calendar size={12} />
-                                                        {new Date(task.dueDate).toLocaleDateString('es-PE')}
-                                                        {isOverdue && <span className="text-red-600 font-bold">(Vencida)</span>}
-                                                    </span>
-                                                    {task.comments && task.comments.length > 0 && (
-                                                        <span className="flex items-center gap-1">
-                                                            <MessageSquare size={12} />
-                                                            {task.comments.length}
+                                                <div className="flex flex-col items-end gap-2">
+                                                    {hasMarked ? (
+                                                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${attendance.status === 'confirmed'
+                                                            ? 'bg-green-100 text-green-700 border border-green-200'
+                                                            : attendance.status === 'rejected'
+                                                                ? 'bg-red-100 text-red-700 border border-red-200'
+                                                                : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                                            }`}>
+                                                            {attendance.status === 'confirmed' ? '✅ Confirmada' :
+                                                                attendance.status === 'rejected' ? '❌ Rechazada' :
+                                                                    '⏳ Pendiente'}
                                                         </span>
+                                                    ) : (
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => handleMarkAttendance(meeting)}
+                                                            className="text-xs"
+                                                        >
+                                                            <UserCheck size={14} className="mr-1" />
+                                                            Marcar Asistencia
+                                                        </Button>
                                                     )}
                                                 </div>
+                                            </div>
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
 
-                                                {/* Progress Bar */}
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                                        <div
-                                                            className={`h-2 rounded-full transition-all ${task.progress === 100
-                                                                ? 'bg-green-600'
-                                                                : task.progress > 0
-                                                                    ? 'bg-blue-600'
-                                                                    : 'bg-gray-400'
-                                                                }`}
-                                                            style={{ width: `${task.progress}%` }}
-                                                        />
+                    {/* Tasks Section */}
+                    <div className="border-t pt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                            <ListTodo size={20} className="text-blue-600" />
+                            <h3 className="font-bold text-gray-800">Tareas Asignadas</h3>
+                        </div>
+
+                        {loading ? (
+                            <div className="py-4"><LoadingSpinner text="Cargando tareas..." /></div>
+                        ) : tasks.length === 0 ? (
+                            <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                                <ListTodo size={32} className="mx-auto mb-2 text-gray-300" />
+                                <p className="text-sm text-gray-500">No tienes tareas asignadas</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                                {tasks.map(task => {
+                                    const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'completed';
+
+                                    return (
+                                        <Card
+                                            key={task.id}
+                                            className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
+                                                ? 'border-l-green-500'
+                                                : task.status === 'in_progress'
+                                                    ? 'border-l-blue-500'
+                                                    : isOverdue
+                                                        ? 'border-l-red-500'
+                                                        : 'border-l-gray-300'
+                                                }`}
+                                            onClick={() => handleOpenTask(task)}
+                                        >
+                                            <div className="flex items-start gap-3">
+                                                <div className="mt-1">
+                                                    {getStatusIcon(task.status)}
+                                                </div>
+
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                                        <h4 className="font-bold text-gray-800 text-sm">{task.title}</h4>
+                                                        <div className="flex gap-1 flex-shrink-0">
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getPriorityColor(task.priority)}`}>
+                                                                {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                                                            </span>
+                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(task.status)}`}>
+                                                                {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En Progreso' : 'Pendiente'}
+                                                            </span>
+                                                        </div>
                                                     </div>
-                                                    <span className="text-xs font-bold text-gray-700 min-w-[40px] text-right">
-                                                        {task.progress}%
-                                                    </span>
+
+                                                    {task.description && (
+                                                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{task.description}</p>
+                                                    )}
+
+                                                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
+                                                        <span className="flex items-center gap-1">
+                                                            <Calendar size={12} />
+                                                            {new Date(task.dueDate).toLocaleDateString('es-PE')}
+                                                            {isOverdue && <span className="text-red-600 font-bold">(Vencida)</span>}
+                                                        </span>
+                                                        {task.comments && task.comments.length > 0 && (
+                                                            <span className="flex items-center gap-1">
+                                                                <MessageSquare size={12} />
+                                                                {task.comments.length}
+                                                            </span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Progress Bar */}
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                                            <div
+                                                                className={`h-2 rounded-full transition-all ${task.progress === 100
+                                                                    ? 'bg-green-600'
+                                                                    : task.progress > 0
+                                                                        ? 'bg-blue-600'
+                                                                        : 'bg-gray-400'
+                                                                    }`}
+                                                                style={{ width: `${task.progress}%` }}
+                                                            />
+                                                        </div>
+                                                        <span className="text-xs font-bold text-gray-700 min-w-[40px] text-right">
+                                                            {task.progress}%
+                                                        </span>
+                                                    </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </Card>
-                                );
-                            })}
-                        </div>
-                    )}
+                                        </Card>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </Modal>
 
