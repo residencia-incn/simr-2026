@@ -143,6 +143,17 @@ const PlanningManager = ({ currentUser }) => {
 
     const handlePrintMeeting = (meeting) => {
         const meetingTasks = tasks.filter(t => t.meetingId === meeting.id);
+
+        // Get confirmed attendees
+        const confirmedAttendees = meeting.attendance
+            ? meeting.attendance
+                .filter(a => a.status === 'confirmed')
+                .map(a => {
+                    const user = users.find(u => u.id === a.userId);
+                    return user ? user.name : a.userName;
+                })
+            : [];
+
         const meetingContent = `
             <html>
             <head>
@@ -155,6 +166,10 @@ const PlanningManager = ({ currentUser }) => {
                     .meta { color: #666; font-style: italic; margin-bottom: 20px; }
                     ul { margin-top: 10px; }
                     li { margin-bottom: 5px; }
+                    .participants { margin-top: 15px; }
+                    .participants ul { list-style-type: none; padding-left: 0; }
+                    .participants li { padding: 5px 0; border-bottom: 1px solid #f3f4f6; }
+                    .participants li:before { content: "✓ "; color: #10b981; font-weight: bold; margin-right: 5px; }
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
                     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                     th { background-color: #f3f4f6; color: #374151; }
@@ -169,6 +184,14 @@ const PlanningManager = ({ currentUser }) => {
                         <strong>Fecha:</strong> ${new Date(meeting.date).toLocaleDateString('es-PE', { year: 'numeric', month: 'long', day: 'numeric' })}<br>
                         ${meeting.startTime ? `<strong>Hora de Inicio:</strong> ${meeting.startTime}<br>` : ''}
                     </div>
+                </div>
+
+                <h2>Participantes</h2>
+                <div class="participants">
+                    ${confirmedAttendees.length > 0
+                ? `<ul>${confirmedAttendees.map(name => `<li>${name}</li>`).join('')}</ul>`
+                : '<p>No se registraron participantes confirmados.</p>'
+            }
                 </div>
 
                 <h2>Acuerdos</h2>
