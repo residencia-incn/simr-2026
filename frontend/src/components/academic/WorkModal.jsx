@@ -240,7 +240,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
                                 <AlertCircle size={18} /> Observaciones
                             </h4>
                             <div className={`text-sm leading-relaxed whitespace-pre-line ${isEditing ? 'text-orange-900' : 'text-gray-600'}`}>
-                                {work.feedback || work.observations || "No hay observaciones registradas."}
+                                {work.feedback || work.observation || work.observations || "No hay observaciones registradas."}
                             </div>
 
                             {isEditing && (

@@ -68,7 +68,45 @@ const DEFAULT_CATEGORIES = {
  * Helper to fetch users securely
  */
 const getLocalUsers = () => {
-    const users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+    let users = storage.get(STORAGE_KEYS.USERS, MOCK_USERS);
+
+    // 1. Auto-sync with MOCK_USERS (Code updates)
+    const missingMockUsers = MOCK_USERS.filter(mockUser => !users.find(u => u.id === mockUser.id));
+    if (missingMockUsers.length > 0) {
+        console.log(`[Auto-Sync] Adding ${missingMockUsers.length} missing mock users.`);
+        users = [...users, ...missingMockUsers];
+        storage.set(STORAGE_KEYS.USERS, users);
+    }
+
+    // 2. Migration: Sync legacy Attendees into Users (Data unification)
+    // This ensures that if the user had attendees that weren't in the users list, they are merged.
+    const legacyAttendees = storage.get(STORAGE_KEYS.ATTENDEES, []);
+    const missingFromUsers = legacyAttendees.filter(att => {
+        const email = (att.email || '').toLowerCase().trim();
+        return email && !users.find(u => (u.email || '').toLowerCase().trim() === email);
+    });
+
+    if (missingFromUsers.length > 0 && !window.__migrationAttempted) {
+        window.__migrationAttempted = true;
+        console.log(`[Migration] Merging ${missingFromUsers.length} legacy attendees into master user list.`);
+        const migratedUsers = missingFromUsers.map(att => ({
+            id: att.id ? (String(att.id).startsWith('user-') ? att.id : `user-${att.id}`) : `user-mig-${Date.now()}-${Math.random()}`,
+            name: att.name,
+            email: (att.email || '').toLowerCase().trim(),
+            password: '123456',
+            eventRoles: att.eventRoles || [att.role || 'asistente'],
+            profiles: ['perfil_basico'],
+            registrationDate: att.date || att.registrationDate || new Date().toISOString().split('T')[0],
+            status: att.status || 'Confirmado',
+            ...att
+        }));
+        users = [...users, ...migratedUsers];
+        const success = storage.set(STORAGE_KEYS.USERS, users);
+        if (!success) {
+            console.warn('[Migration] Failed to save migrated users to storage. Content might be too large.');
+        }
+    }
+
     // FILTRAR SUPERADMIN de las listas
     return users.filter(u => !u.isSuperAdmin);
 };
@@ -92,7 +130,39 @@ export const api = {
         }
     },
 
-    // --- 0. System Config ---
+    // --- 0. Notifications ---
+    notifications: {
+        getAll: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.NOTIFICATIONS, []);
+        },
+        add: async (notification) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.NOTIFICATIONS, []);
+            const newNotification = {
+                id: `NTF-${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                read: false,
+                ...notification
+            };
+            storage.set(STORAGE_KEYS.NOTIFICATIONS, [newNotification, ...current]);
+            return newNotification;
+        },
+        markAsRead: async (id) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.NOTIFICATIONS, []);
+            const updated = current.map(n => n.id === id ? { ...n, read: true } : n);
+            storage.set(STORAGE_KEYS.NOTIFICATIONS, updated);
+            return true;
+        },
+        clear: async () => {
+            await delay();
+            storage.set(STORAGE_KEYS.NOTIFICATIONS, []);
+            return true;
+        }
+    },
+
+    // --- 0.5 System Config ---
     system: {
         getConfig: async () => {
             await delay(100);
@@ -153,6 +223,16 @@ export const api = {
                 ...registration
             };
             storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, [newReg, ...current]);
+
+            // Notify Admins/Treasurers
+            await api.notifications.add({
+                type: 'registration',
+                title: 'Nueva Inscripción',
+                message: `Nueva solicitud de ${registration.name} esperando validación.`,
+                link: '?view=admission-dashboard&role=asistencia&tab=verification',
+                profiles: ['organizacion', 'contabilidad', 'secretaria']
+            });
+
             return newReg;
         },
         remove: async (id) => {
@@ -161,29 +241,90 @@ export const api = {
             const updated = current.filter(r => r.id !== id);
             storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, updated);
             return true;
+        },
+
+        approve: async (reg) => {
+            await delay();
+
+            // 1. Create/Update User (SINGLE ENTRY POINT)
+            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const existingUser = allUsers.find(u => u.email === reg.email);
+
+            let shouldHaveVirtualAccess = false;
+
+            // Logic to determine virtual access
+            if (reg.ticketType) {
+                shouldHaveVirtualAccess = reg.ticketType !== 'presencial';
+            } else {
+                // Fallback using modality and certification flag
+                const isVirtual = reg.modalidad && reg.modalidad.toLowerCase() === 'virtual';
+                const wantsCert = reg.wantsCertification === true;
+                shouldHaveVirtualAccess = isVirtual || wantsCert;
+            }
+
+            const assignedRoles = shouldHaveVirtualAccess ? ['participant'] : [];
+            const assignedModules = shouldHaveVirtualAccess ? ['mi_perfil', 'aula_virtual'] : ['mi_perfil'];
+
+            const userPayload = {
+                id: existingUser ? existingUser.id : `user-${Date.now()}`,
+                name: reg.name,
+                firstName: reg.firstName || reg.name.split(' ')[0],
+                lastName: reg.lastName || reg.name.split(' ').slice(1).join(' '),
+                email: reg.email,
+                dni: reg.dni,
+                cmp: reg.cmp,
+                rne: reg.rne,
+                occupation: reg.occupation,
+                specialty: reg.specialty,
+                modality: reg.modalidad || reg.ticketType || 'presencial',
+                amount: reg.amount,
+                institution: reg.institution,
+                registrationDate: reg.timestamp || reg.registrationDate || new Date().toISOString(),
+                status: 'Confirmado',
+                role: shouldHaveVirtualAccess ? 'participant' : 'user',
+                roles: existingUser ? [...new Set([...(existingUser.roles || []), ...assignedRoles])] : assignedRoles,
+                eventRoles: existingUser ? [...new Set([...(existingUser.eventRoles || []), 'asistente'])] : ['asistente'],
+                modules: existingUser ? [...new Set([...(existingUser.modules || []), ...assignedModules])] : assignedModules,
+                password: existingUser ? existingUser.password : '123456',
+                voucherData: reg.voucherData,
+                image: reg.img // Ensure image is preserved if present
+            };
+
+            if (existingUser) {
+                await api.users.update(userPayload);
+            } else {
+                await api.users.add(userPayload);
+            }
+
+            // 2. Legacy: We NO LONGER need dedicated api.attendees.add here 
+            // since Attendees.getAll now proxies to Users.getAll
+
+            // 3. Add to Treasury Income
+            await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
+
+            // 4. Remove from Pending
+            await api.registrations.remove(reg.id);
+
+            return true;
         }
     },
 
-    // --- 2. Attendees ---
+    // --- 2. Attendees (UNIFICADO CON USUARIOS) ---
     attendees: {
         getAll: async () => {
-            await delay();
-            // SYNC: Turn Attendees into a view of Users
-            return getLocalUsers();
+            // Proxies directly to unified users list
+            return api.users.getAll();
         },
         add: async (attendee) => {
-            await delay();
-            const current = storage.get(STORAGE_KEYS.ATTENDEES, []);
-            const updated = [attendee, ...current];
-            storage.set(STORAGE_KEYS.ATTENDEES, updated);
-            return attendee;
+            // Proxies to users system
+            return api.users.add({
+                ...attendee,
+                eventRoles: attendee.eventRoles || [attendee.role || 'asistente']
+            });
         },
         delete: async (id) => {
-            await delay();
-            const local = storage.get(STORAGE_KEYS.ATTENDEES, []);
-            const updated = local.filter(a => a.id !== id);
-            storage.set(STORAGE_KEYS.ATTENDEES, updated);
-            return true;
+            // Proxies to users system
+            return api.users.delete(id);
         }
     },
 
@@ -362,6 +503,19 @@ export const api = {
             const currentWorks = await api.works.getAll();
             const newWorks = currentWorks.map(w => w.id === updatedWork.id ? updatedWork : w);
             storage.set(STORAGE_KEYS.WORKS, newWorks);
+
+            // Notify author if status changed to 'Observado'
+            const previousWork = currentWorks.find(w => w.id === updatedWork.id);
+            if (updatedWork.status === 'Observado' && (!previousWork || previousWork.status !== 'Observado')) {
+                await api.notifications.add({
+                    type: 'work_observation',
+                    title: 'Trabajo Observado',
+                    message: `Tu trabajo "${updatedWork.title}" ha sido observado. Por favor, realiza las correcciones.`,
+                    link: '?view=resident-dashboard&role=trabajos&section=mis-trabajos',
+                    userId: updatedWork.authorId
+                });
+            }
+
             return updatedWork;
         },
         create: async (newWork) => {
@@ -666,7 +820,7 @@ export const api = {
             }
 
             const newUser = {
-                id: `user-${Date.now()}`,
+                id: userData.id || `user-${Date.now()}`,
                 password: '123456', // Default password
                 eventRoles: userData.eventRoles || [userData.eventRole || 'asistente'],
                 profiles: userData.profiles || ['perfil_basico'],
@@ -1165,6 +1319,8 @@ export const api = {
             const newTransaction = {
                 id: `tx-${Date.now()}`,
                 estado: 'validado',
+                fecha: new Date().toISOString().split('T')[0],
+                date: new Date().toISOString(),
                 createdAt: new Date().toISOString(),
                 ...transactionData
             };
@@ -1211,39 +1367,25 @@ export const api = {
         initializeContributionPlan: async () => {
             await delay();
             const config = storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
-            const committee = storage.get(STORAGE_KEYS.COMMITTEE, COMMITTEE_DATA);
 
-            // NOTE: En el futuro, cuando todos los usuarios tengan eventRole,
-            // esta función debería filtrar usuarios con eventRole === 'organizador'
-            // en lugar de usar COMMITTEE_DATA directamente.
-            // Ejemplo: const users = await api.users.getAll();
-            //          const organizers = users.filter(u => u.eventRole === 'organizador');
+            // Get all users and filter organizers
+            const allUsers = await api.users.getAll();
+            const organizers = allUsers.filter(u =>
+                u.eventRole === 'organizador' ||
+                u.eventRoles?.includes('organizador')
+            );
 
-            const allMembers = [];
-            const seenNames = new Set();
-
-            committee.forEach(group => {
-                group.members.forEach(member => {
-                    // Use name for duplicate detection instead of ID
-                    if (!seenNames.has(member.name)) {
-                        seenNames.add(member.name);
-                        allMembers.push({
-                            id: member.id,
-                            nombre: member.name,
-                            rol: group.role
-                        });
-                    }
-                });
-            });
+            console.log('🔧 Inicializando plan de aportes con', organizers.length, 'organizadores');
+            console.log('📋 IDs de organizadores:', organizers.map(o => ({ id: o.id, nombre: o.nombre })));
 
             const plan = [];
-            allMembers.forEach(member => {
+            organizers.forEach(organizer => {
                 config.contribution.months.forEach(month => {
                     plan.push({
-                        id: `contrib-${member.nombre}-${month.id}`,
-                        organizador_id: member.id,
-                        organizador_nombre: member.nombre,
-                        organizador_rol: member.rol,
+                        id: `contrib-${organizer.id}-${month.id}`,
+                        organizador_id: organizer.id,
+                        organizador_nombre: organizer.nombre || organizer.name || 'Sin nombre',
+                        organizador_rol: organizer.eventRole || 'organizador',
                         mes: month.id,
                         mes_label: month.label,
                         monto_esperado: config.contribution.monthlyAmount,
@@ -1256,7 +1398,7 @@ export const api = {
 
             storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, plan);
 
-            const totalExpected = allMembers.length * (config.contribution.months?.length || 0) * config.contribution.monthlyAmount;
+            const totalExpected = organizers.length * (config.contribution.months?.length || 0) * config.contribution.monthlyAmount;
             const budgetPlan = storage.get(STORAGE_KEYS.TREASURY_BUDGET_PLAN, INITIAL_BUDGET_PLAN);
             const updatedBudget = budgetPlan.map(item =>
                 item.categoria === 'Aportes' ? { ...item, presupuestado: totalExpected } : item
@@ -1266,36 +1408,145 @@ export const api = {
             return plan;
         },
 
-        recordContribution: async (organizadorId, mes, accountId, amount, comprobante = null) => {
+        recordContribution: async (organizadorId, mesIds, accountId, totalAmount, comprobante = null, isValidationRequest = false) => {
             await delay();
             const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
-            const contrib = plan.find(c => c.organizador_id === organizadorId && c.mes === mes);
+            const mesArray = Array.isArray(mesIds) ? mesIds : [mesIds];
 
-            if (!contrib) throw new Error('Aporte no encontrado en el plan');
-            if (contrib.estado === 'pagado') throw new Error('Este aporte ya fue registrado');
+            console.log('🔍 Buscando aportes para:', { organizadorId, mesIds: mesArray });
 
+            // Find all matching contributions
+            const targetContribs = plan.filter(c => c.organizador_id === organizadorId && mesArray.includes(c.mes));
+
+            console.log('✅ Aportes encontrados:', targetContribs);
+
+            if (targetContribs.length === 0) {
+                console.error('❌ No se encontraron aportes. Detalles:', {
+                    organizadorId,
+                    mesIds: mesArray,
+                    planLength: plan.length,
+                    uniqueOrgIds: [...new Set(plan.map(c => c.organizador_id))]
+                });
+                throw new Error('Aportes no encontrados en el plan. Por favor, contacta al tesorero para inicializar tu plan de aportes.');
+            }
+            if (targetContribs.some(c => c.estado === 'pagado')) throw new Error('Uno o más aportes ya fueron registrados');
+
+            // If it's a validation request (from organizer), we don't create a transaction yet
+            if (isValidationRequest) {
+                const updatedPlan = plan.map(c => {
+                    if (c.organizador_id === organizadorId && mesArray.includes(c.mes)) {
+                        return {
+                            ...c,
+                            estado: 'validando',
+                            comprobante: comprobante,
+                            voucheredAt: new Date().toISOString()
+                        };
+                    }
+                    return c;
+                });
+                storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
+
+                // Notify Treasurer about new voucher to validate
+                const organizerName = targetContribs[0]?.organizador_nombre || 'Organizador';
+                const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
+                await api.notifications.add({
+                    type: 'contribution_validation',
+                    title: 'Nuevo Comprobante para Validar',
+                    message: `${organizerName} envió comprobante para ${mesLabels} (S/ ${totalAmount}).`,
+                    link: `?view=treasurer-dashboard&role=contabilidad&tab=contributions&organizerId=${organizadorId}`,
+                    profiles: ['contabilidad']
+                });
+
+                return { updatedPlan: targetContribs.map(c => ({ ...c, estado: 'validando', comprobante })) };
+            }
+
+            // Direct registration by Treasurer (creates transaction)
+            let targetAccountId = accountId;
+            if (!targetAccountId) {
+                const config = await api.treasury.getConfig();
+                targetAccountId = config?.contribution?.defaultContributionAccount;
+                if (!targetAccountId) {
+                    const accounts = await api.treasury.getAccounts();
+                    if (accounts.length > 0) targetAccountId = accounts[0].id;
+                }
+            }
+
+            if (!targetAccountId) throw new Error("No hay cuenta asignada para este aporte.");
+
+            const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
             const transaction = {
                 fecha: new Date().toISOString().split('T')[0],
-                descripcion: `Aporte ${contrib.mes_label} - ${contrib.organizador_nombre}`,
-                monto: amount,
+                descripcion: `Aporte ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
+                monto: totalAmount,
                 categoria: 'Aportes',
-                cuenta_id: accountId,
+                cuenta_id: targetAccountId,
                 url_comprobante: comprobante,
-                estado: 'validado'
+                estado: 'validado',
+                meses: mesArray // Keep track of which months this covers
             };
 
             const newTx = await api.treasury.addTransactionV2(transaction);
 
-            const updatedPlan = plan.map(c =>
-                c.id === contrib.id
-                    ? { ...c, estado: 'pagado', transaccion_id: newTx.id, fecha_pago: newTx.fecha }
-                    : c
-            );
+            const updatedPlan = plan.map(c => {
+                if (c.organizador_id === organizadorId && mesArray.includes(c.mes)) {
+                    return { ...c, estado: 'pagado', transaccion_id: newTx.id, fecha_pago: newTx.fecha, comprobante };
+                }
+                return c;
+            });
             storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
 
             return {
-                contribution: updatedPlan.find(c => c.id === contrib.id),
+                updatedMonths: targetContribs.map(c => ({ ...c, estado: 'pagado', transaccion_id: newTx.id })),
                 transaction: newTx
+            };
+        },
+
+        validateContribution: async (organizadorId, mesIds, accountId) => {
+            await delay();
+            const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
+            const mesArray = Array.isArray(mesIds) ? mesIds : [mesIds];
+            const targetContribs = plan.filter(c => c.organizador_id === organizadorId && mesArray.includes(c.mes));
+
+            if (targetContribs.length === 0) throw new Error('Aportes no encontrados');
+
+            // Use config for account if not provided
+            let targetAccountId = accountId;
+            if (!targetAccountId) {
+                const config = await api.treasury.getConfig();
+                targetAccountId = config?.contribution?.defaultContributionAccount;
+            }
+            if (!targetAccountId) {
+                const accounts = await api.treasury.getAccounts();
+                targetAccountId = accounts[0]?.id;
+            }
+
+            const totalAmount = targetContribs.reduce((sum, c) => sum + (c.monto_esperado || 0), 0);
+            const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
+
+            const transaction = {
+                fecha: new Date().toISOString().split('T')[0],
+                descripcion: `Aporte Validado ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
+                monto: totalAmount,
+                categoria: 'Aportes',
+                cuenta_id: targetAccountId,
+                url_comprobante: targetContribs[0].comprobante, // Use the first one (they should be grouped)
+                estado: 'validado',
+                meses: mesArray
+            };
+
+            const newTx = await api.treasury.addTransactionV2(transaction);
+
+            const updatedPlan = plan.map(c => {
+                if (c.organizador_id === organizadorId && mesArray.includes(c.mes)) {
+                    return { ...c, estado: 'pagado', transaccion_id: newTx.id, fecha_pago: newTx.fecha };
+                }
+                return c;
+            });
+            storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
+
+            return {
+                transaction: newTx,
+                updatedPlan
             };
         },
 
@@ -1342,22 +1593,126 @@ export const api = {
         },
 
         addIncome: async (amount, description, category, voucherData = null) => {
-            return await api.treasury.addTransaction({
+            await delay();
+            const accounts = await api.treasury.getAccounts();
+            if (accounts.length === 0) throw new Error("No hay cuentas disponibles para registrar el ingreso.");
+
+            // Try to get confirmation from treasury config
+            const config = await api.treasury.getConfig();
+            const defaultAccountId = config?.contribution?.defaultInscriptionAccount;
+
+            let targetAccountId = defaultAccountId;
+
+            // Validate if configured account still exists
+            if (targetAccountId && !accounts.find(a => a.id === targetAccountId)) {
+                console.warn(`Configured default inscription account ${targetAccountId} not found. Falling back to first account.`);
+                targetAccountId = null;
+            }
+
+            // Fallback to first account
+            if (!targetAccountId) {
+                targetAccountId = accounts[0].id;
+            }
+
+            return await api.treasury.addTransactionV2({
                 type: 'income',
-                amount: parseFloat(amount),
-                description,
-                category,
+                monto: parseFloat(amount), // Map amount -> monto
+                descripcion: description,  // Map description -> descripcion
+                categoria: category,       // Map category -> categoria
+                cuenta_id: targetAccountId,// Map accountId -> cuenta_id
                 url_comprobante: voucherData
             });
         },
 
         addExpense: async (amount, description, category) => {
-            return await api.treasury.addTransaction({
+            // For expenses, we also need an account. Logic similar to income or just pick first/default?
+            // Since this is usually manual or automated, let's pick first account if not specified (adding implicit account logic here)
+            // But addExpense signature doesn't have accountId. We should update it or pick default.
+            // For now, let's pick accounts[0] to be safe, assuming 'Caja Chica'.
+
+            const accounts = await api.treasury.getAccounts();
+            if (accounts.length === 0) throw new Error("No hay cuentas disponibles.");
+            // Ideally should be configurable too, but for now fallback to first.
+            const accountId = accounts[0].id;
+
+            return await api.treasury.addTransactionV2({
                 type: 'expense',
-                amount: parseFloat(amount),
-                description,
-                category
+                monto: parseFloat(amount),
+                descripcion: description,
+                categoria: category,
+                cuenta_id: accountId
             });
+        },
+
+        migrateLegacyData: async () => {
+            await delay();
+            const legacyTransactions = storage.get(STORAGE_KEYS.TREASURY, []);
+            if (legacyTransactions.length === 0) return { migrated: 0, message: "No hay datos antiguos para migrar." };
+
+            const currentV2 = await api.treasury.getTransactionsV2();
+            const accounts = await api.treasury.getAccounts();
+            const defaultAccount = accounts[0];
+
+            if (!defaultAccount) throw new Error("Se requiere al menos una cuenta (ej. Caja Chica) para migrar los datos.");
+
+            const migratedStartCount = currentV2.length;
+            const newV2Transactions = [];
+
+            // Helper to check duplicates (simple check by description/date/amount/type)
+            const isDuplicate = (legacyTx) => {
+                return currentV2.some(v2 =>
+                    v2.fecha === (legacyTx.date || legacyTx.fecha) &&
+                    v2.monto === parseFloat(legacyTx.amount || legacyTx.monto) &&
+                    v2.descripcion === (legacyTx.description || legacyTx.descripcion)
+                );
+            };
+
+            for (const tx of legacyTransactions) {
+                // Skip if already exists in V2
+                if (isDuplicate(tx)) continue;
+
+                // Normalize to V2
+                const newTx = {
+                    id: `migrated-${tx.id}-${Date.now()}`, // Ensure unique ID
+                    fecha: tx.date || tx.fecha || new Date().toISOString().split('T')[0],
+                    descripcion: tx.description || tx.descripcion || 'Sin descripción',
+                    monto: parseFloat(tx.amount || tx.monto || 0),
+                    categoria: tx.category || tx.categoria || 'Sin categoría',
+                    cuenta_id: tx.accountId || tx.cuenta_id || defaultAccount.id, // Fallback to default account
+                    type: tx.type || 'income',
+                    url_comprobante: tx.url_comprobante || null,
+                    estado: 'validado',
+                    migratedAt: new Date().toISOString()
+                };
+                newV2Transactions.push(newTx);
+            }
+
+            // Save new V2 list
+            const finalV2 = [...newV2Transactions, ...currentV2];
+            storage.set(STORAGE_KEYS.TREASURY_TRANSACTIONS_V2, finalV2);
+
+            // Update Account Balances (Re-calculate from scratch or add delta? Safer to add delta of migrated items)
+            // But wait, getTransactionsV2 is used to calculate balances dynamically in useTreasury usually?
+            // Actually useTreasury calculates balance from accounts state, and addTransactionV2 updates accounts state.
+            // Since we are bypassing addTransactionV2, we need to update account balances manually here too.
+            // Let's recalculate balances for affected accounts.
+
+            const updatedAccounts = accounts.map(acc => {
+                const accountTxs = newV2Transactions.filter(t => t.cuenta_id === acc.id);
+                const deltaBalance = accountTxs.reduce((sum, t) => {
+                    return sum + (t.type === 'income' || t.monto >= 0 ? t.monto : -Math.abs(t.monto));
+                }, 0);
+                return { ...acc, saldo_actual: (acc.saldo_actual || 0) + deltaBalance };
+            });
+            storage.set(STORAGE_KEYS.TREASURY_ACCOUNTS, updatedAccounts);
+
+            // Clear Legacy Storage
+            storage.set(STORAGE_KEYS.TREASURY, []);
+
+            return {
+                migrated: newV2Transactions.length,
+                message: `Se migraron ${newV2Transactions.length} registros exitosamente.`
+            };
         },
 
         getStats: async () => {

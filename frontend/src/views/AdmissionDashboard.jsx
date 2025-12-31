@@ -25,27 +25,7 @@ const AdmissionDashboard = () => {
     const handleApproveRegistration = async (reg) => {
         if (confirm(`¿Confirmar inscripción de ${reg.name}?`)) {
             try {
-                const newAttendee = {
-                    id: Date.now(),
-                    name: reg.name,
-                    role: reg.role,
-                    specialty: reg.specialty,
-                    modality: reg.modalidad,
-                    date: new Date().toISOString().split('T')[0],
-                    status: 'Confirmado',
-                    amount: reg.amount,
-                    institution: reg.institution,
-                    grade: null,
-                    certificationApproved: false,
-                    dni: reg.dni,
-                    cmp: reg.cmp,
-                    email: reg.email
-                };
-
-                await api.attendees.add(newAttendee);
-                await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
-                await api.registrations.remove(reg.id);
-
+                await api.registrations.approve(reg);
                 showSuccess('La inscripción ha sido aprobada correctamente.', 'Inscripción aprobada');
                 reloadAll();
             } catch (error) {

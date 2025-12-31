@@ -2,12 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp } from 'lucide-react';
 import { Button, Card, FormField, LoadingSpinner } from '../ui';
 import { showSuccess, showError, showConfirm } from '../../utils/alerts';
+import { api } from '../../services/api';
 
-const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories, onAddCategory, onDeleteCategory }) => {
+const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializePlan, categories, onAddCategory, onDeleteCategory }) => {
     const [activeSection, setActiveSection] = useState('contributions');
+
+    // Contribution Config State
     const [monthlyAmount, setMonthlyAmount] = useState(config?.contribution?.monthlyAmount || 50);
     const [startMonth, setStartMonth] = useState(config?.contribution?.startMonth || '2026-01');
     const [endMonth, setEndMonth] = useState(config?.contribution?.endMonth || '2026-06');
+    const [defaultContributionAccount, setDefaultContributionAccount] = useState(config?.contribution?.defaultContributionAccount || '');
+
+    // Inscription Config State
+    const [defaultInscriptionAccount, setDefaultInscriptionAccount] = useState(config?.contribution?.defaultInscriptionAccount || '');
+
     const [saving, setSaving] = useState(false);
 
     useEffect(() => {
@@ -15,6 +23,8 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
             setMonthlyAmount(config.contribution.monthlyAmount);
             setStartMonth(config.contribution.startMonth);
             setEndMonth(config.contribution.endMonth);
+            setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
+            setDefaultInscriptionAccount(config.contribution.defaultInscriptionAccount || '');
         }
     }, [config]);
 
@@ -59,10 +69,12 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                     monthlyAmount: parseFloat(monthlyAmount),
                     startMonth,
                     endMonth,
-                    months
+                    months,
+                    defaultContributionAccount,
+                    defaultInscriptionAccount
                 }
             });
-            showSuccess('Recuerda reinicializar el plan si cambiaste el rango de meses o el monto.', 'Configuración guardada');
+            showSuccess('Configuración actualizada correctamente.', 'Configuración guardada');
         } catch (error) {
             showError(error.message, 'Error al guardar');
         } finally {
@@ -77,7 +89,7 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                     onClick={() => setActiveSection('contributions')}
                     className={`pb-2 px-4 transition-all ${activeSection === 'contributions' ? 'border-b-2 border-blue-600 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
                 >
-                    Aportes
+                    Aportes e Inscripciones
                 </button>
                 <button
                     onClick={() => setActiveSection('categories')}
@@ -85,80 +97,119 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                 >
                     Categorías
                 </button>
+                <button
+                    onClick={() => setActiveSection('maintenance')}
+                    className={`pb-2 px-4 transition-all ${activeSection === 'maintenance' ? 'border-b-2 border-blue-600 text-blue-600 font-bold' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    Mantenimiento
+                </button>
             </div>
 
             {activeSection === 'contributions' && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <Card className="p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
-                            <Settings className="text-blue-600" size={20} />
-                            Variables de Aportes
-                        </h3>
-                        <form onSubmit={handleSaveConfig} className="space-y-4">
-                            <FormField
-                                label="Cuota Mensual (S/)"
-                                type="number"
-                                value={monthlyAmount}
-                                onChange={(e) => setMonthlyAmount(e.target.value)}
-                                placeholder="0.00"
-                                step="0.01"
-                                required
-                            />
-                            <div className="grid grid-cols-2 gap-4">
+                    {/* Aportes Configuration */}
+                    <div className="space-y-6">
+                        <Card className="p-6">
+                            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <Settings className="text-blue-600" size={20} />
+                                Variables de Aportes
+                            </h3>
+                            <form onSubmit={handleSaveConfig} className="space-y-4">
                                 <FormField
-                                    label="Mes Inicio"
-                                    type="month"
-                                    value={startMonth}
-                                    onChange={(e) => setStartMonth(e.target.value)}
+                                    label="Cuota Mensual (S/)"
+                                    type="number"
+                                    value={monthlyAmount}
+                                    onChange={(e) => setMonthlyAmount(e.target.value)}
+                                    placeholder="0.00"
+                                    step="0.01"
                                     required
                                 />
-                                <FormField
-                                    label="Mes Fin"
-                                    type="month"
-                                    value={endMonth}
-                                    onChange={(e) => setEndMonth(e.target.value)}
-                                    required
-                                />
-                            </div>
-                            <div className="pt-4">
-                                <Button
-                                    type="submit"
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                    disabled={saving}
-                                >
-                                    {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Cambios</>}
-                                </Button>
-                            </div>
-                        </form>
-                    </Card>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        label="Mes Inicio"
+                                        type="month"
+                                        value={startMonth}
+                                        onChange={(e) => setStartMonth(e.target.value)}
+                                        required
+                                    />
+                                    <FormField
+                                        label="Mes Fin"
+                                        type="month"
+                                        value={endMonth}
+                                        onChange={(e) => setEndMonth(e.target.value)}
+                                        required
+                                    />
+                                </div>
 
-                    <Card className="p-6 bg-amber-50 border-amber-200">
-                        <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
-                            <RefreshCw className="text-amber-600" size={20} />
-                            Acciones Críticas
-                        </h3>
-                        <p className="text-sm text-amber-800 mb-6">
-                            Al cambiar el rango de meses o el monto de aportes, debes reinicializar el plan para que los cambios se apliquen a todos los miembros.
-                            <strong> ¡Cuidado!</strong> Al reinicializar, se perderán los registros de pagos marcados en el plan actual (aunque las transacciones en el historial se mantienen).
-                        </p>
-                        <Button
-                            variant="danger"
-                            className="w-full"
-                            onClick={async () => {
-                                const confirmed = await showConfirm(
-                                    'Esto reseteará el estado de pagos en la matriz.',
-                                    '¿Reinicializar plan de aportes?',
-                                    { confirmText: 'Sí, reinicializar', confirmColor: '#dc2626' }
-                                );
-                                if (confirmed) {
-                                    onInitializePlan();
-                                }
-                            }}
-                        >
-                            <RefreshCw size={18} className="mr-2" />
-                            Reinicializar Plan de Aportes
-                        </Button>
-                    </Card>
+                                <FormField
+                                    label="Cuenta Destino (Aportes)"
+                                    type="select"
+                                    value={defaultContributionAccount}
+                                    onChange={(e) => setDefaultContributionAccount(e.target.value)}
+                                    options={[
+                                        { value: "", label: "Seleccionar cuenta..." },
+                                        ...accounts.map(acc => ({ value: acc.id, label: acc.nombre }))
+                                    ]}
+                                    helpText="Cuenta donde se registrarán automáticamente los aportes."
+                                />
+
+                                <div className="pt-2 border-t mt-4">
+                                    <h4 className="text-sm font-bold text-gray-900 mb-3 block">Configuración de Inscripciones</h4>
+                                    <FormField
+                                        label="Cuenta Destino (Inscripciones)"
+                                        type="select"
+                                        value={defaultInscriptionAccount}
+                                        onChange={(e) => setDefaultInscriptionAccount(e.target.value)}
+                                        options={[
+                                            { value: "", label: "Seleccionar cuenta..." },
+                                            ...accounts.map(acc => ({ value: acc.id, label: acc.nombre }))
+                                        ]}
+                                        helpText="Cuenta donde se registrarán las inscripciones aprobadas."
+                                    />
+                                </div>
+
+                                <div className="pt-4">
+                                    <Button
+                                        type="submit"
+                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                        disabled={saving}
+                                    >
+                                        {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Cambios</>}
+                                    </Button>
+                                </div>
+                            </form>
+                        </Card>
+                    </div>
+
+                    <div className="space-y-6">
+                        <Card className="p-6 bg-amber-50 border-amber-200">
+                            <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
+                                <RefreshCw className="text-amber-600" size={20} />
+                                Acciones Críticas
+                            </h3>
+                            <p className="text-sm text-amber-800 mb-6">
+                                Al cambiar el rango de meses o el monto de aportes, debes reinicializar el plan para que los cambios se apliquen a todos los miembros.
+                                <strong> ¡Cuidado!</strong> Al reinicializar, se perderán los registros de pagos marcados en el plan actual (aunque las transacciones en el historial se mantienen).
+                            </p>
+                            <Button
+                                variant="danger"
+                                className="w-full"
+                                onClick={async () => {
+                                    const confirmed = await showConfirm(
+                                        'Esto reseteará el estado de pagos en la matriz.',
+                                        '¿Reinicializar plan de aportes?',
+                                        { confirmText: 'Sí, reinicializar', confirmColor: '#dc2626' }
+                                    );
+                                    if (confirmed) {
+                                        onInitializePlan();
+                                    }
+                                }}
+                            >
+                                <RefreshCw size={18} className="mr-2" />
+                                Reinicializar Plan de Aportes
+                            </Button>
+                        </Card>
+                    </div>
                 </div>
             )}
 
@@ -190,6 +241,51 @@ const TreasurySettings = ({ config, onUpdateConfig, onInitializePlan, categories
                             onAdd={(cat) => onAddCategory('expense', cat)}
                             onRename={(oldName, newName) => onRenameCategory('expense', oldName, newName)}
                         />
+                    </Card>
+                </div>
+            )}
+
+            {activeSection === 'maintenance' && (
+                <div className="max-w-2xl mx-auto space-y-6">
+                    <Card className="p-6 bg-blue-50 border-blue-200">
+                        <div className="flex items-start gap-4">
+                            <div className="p-3 bg-blue-100 rounded-lg">
+                                <RefreshCw className="text-blue-600" size={24} />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-blue-900 mb-2">
+                                    Migración de Datos Antiguos a V2
+                                </h3>
+                                <p className="text-sm text-blue-800 mb-4 text-justify">
+                                    Detecta y migra registros de versiones anteriores del sistema al nuevo formato V2 compatible con el Dashboard de Tesorería.
+                                    Esto solucionará problemas de ingresos "invisibles" o datos que no aparecen en las listas.
+                                    Al finalizar, los datos antiguos se limpiarán para evitar duplicados.
+                                </p>
+                                <Button
+                                    className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white"
+                                    onClick={async () => {
+                                        try {
+                                            setSaving(true);
+                                            const result = await api.treasury.migrateLegacyData();
+                                            if (result.migrated > 0) {
+                                                showSuccess(result.message, 'Migración Exitosa');
+                                                // Trigger reload of data if possible
+                                                if (onInitializePlan) onInitializePlan(); // Hacky reload or just ask user to refresh
+                                            } else {
+                                                showSuccess('No se encontraron datos antiguos para migrar.', 'Sistema al día');
+                                            }
+                                        } catch (e) {
+                                            showError(e.message, 'Error de Migración');
+                                        } finally {
+                                            setSaving(false);
+                                        }
+                                    }}
+                                >
+                                    <RefreshCw size={18} className="mr-2" />
+                                    Ejecutar Migración de Datos (Legacy)
+                                </Button>
+                            </div>
+                        </div>
                     </Card>
                 </div>
             )}

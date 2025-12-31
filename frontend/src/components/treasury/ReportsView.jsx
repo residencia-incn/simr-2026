@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Filter, Download, TrendingUp, TrendingDown, AlertTriangle, CheckCircle, Printer } from 'lucide-react';
+import { Filter, Download, TrendingUp, TrendingDown, TriangleAlert, CheckCircle, Printer } from 'lucide-react';
 import { Button, Card, FormField, Table } from '../ui';
 
 const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
@@ -11,11 +11,19 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
         categoria: ''
     });
 
+    // Helper para obtener fecha segura
+    const getSafeDate = (tx) => {
+        return tx.fecha || tx.date || new Date().toISOString();
+    };
+
     // Filtrar transacciones
     const filteredTransactions = useMemo(() => {
+        if (!transactions) return [];
+
         return transactions.filter(tx => {
             // Extraer solo la parte de fecha (YYYY-MM-DD) sin conversión de zona horaria
-            const txDate = tx.fecha.split('T')[0];
+            const rawDate = getSafeDate(tx);
+            const txDate = rawDate.split('T')[0];
 
             if (filters.startDate && txDate < filters.startDate) return false;
             // Para la fecha final, queremos incluir todo el día seleccionado
@@ -24,7 +32,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
             if (filters.accountId && tx.cuenta_id !== filters.accountId) return false;
             if (filters.categoria && tx.categoria !== filters.categoria) return false;
             return true;
-        }).sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+        }).sort((a, b) => new Date(getSafeDate(b)) - new Date(getSafeDate(a)));
     }, [transactions, filters]);
 
     // Calcular totales
@@ -38,7 +46,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
         };
     }, [filteredTransactions]);
 
-    // Calcular saldo acumulado (Mantener lógica aunque no se muestre por si se requiere en exportación)
+    // Calcular saldo acumulado
     const transactionsWithBalance = useMemo(() => {
         let balance = 0;
         return filteredTransactions.map(tx => {
@@ -49,6 +57,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
 
     // Obtener categorías únicas
     const categories = useMemo(() => {
+        if (!transactions) return [];
         const cats = new Set(transactions.map(tx => tx.categoria));
         return Array.from(cats).sort();
     }, [transactions]);
@@ -60,7 +69,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
     const exportToCSV = () => {
         const headers = ['Fecha', 'Descripción', 'Categoría', 'Cuenta', 'Monto', 'Saldo'];
         const rows = transactionsWithBalance.map(tx => [
-            tx.fecha,
+            getSafeDate(tx).split('T')[0],
             tx.descripcion,
             tx.categoria,
             accounts.find(a => a.id === tx.cuenta_id)?.nombre || '',
@@ -82,14 +91,14 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
             case 'excedido':
                 return (
                     <span className="inline-flex items-center gap-1 px-2 py-1 bg-red-100 text-red-700 rounded-full text-xs font-semibold">
-                        <AlertTriangle size={12} />
+                        <TriangleAlert size={12} />
                         Excedido
                     </span>
                 );
             case 'alerta':
                 return (
                     <span className="inline-flex items-center gap-1 px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-semibold">
-                        <AlertTriangle size={12} />
+                        <TriangleAlert size={12} />
                         Alerta
                     </span>
                 );
@@ -264,7 +273,8 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
                                     <tr key={tx.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                         <td className="px-4 py-3 text-sm text-gray-900">
                                             {(() => {
-                                                const [year, month, day] = tx.fecha.split('T')[0].split('-');
+                                                const dateStr = getSafeDate(tx);
+                                                const [year, month, day] = dateStr.split('T')[0].split('-');
                                                 return `${day}/${month}/${year}`;
                                             })()}
                                         </td>
@@ -312,7 +322,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {budgetExecution.map((item, idx) => (
+                                {(budgetExecution || []).map((item, idx) => (
                                     <tr key={item.categoria} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.categoria}</td>
                                         <td className="px-4 py-3 text-sm text-right text-gray-900">
@@ -338,7 +348,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
                                                                 ? 'bg-yellow-500'
                                                                 : 'bg-green-600'
                                                             }`}
-                                                        style={{ width: `${Math.min(item.porcentaje, 100)}%` }}
+                                                        style={{ width: `${Math.min(item.porcentaje || 0, 100)}%` }}
                                                     />
                                                 </div>
                                             </div>
@@ -357,19 +367,19 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
                         <Card className="p-4 bg-blue-50 border-blue-200 print:shadow-none print:border">
                             <p className="text-sm text-blue-600 font-medium mb-1">Total Presupuestado</p>
                             <p className="text-2xl font-bold text-blue-900">
-                                S/ {budgetExecution.reduce((sum, item) => sum + (item.presupuestado || 0), 0).toFixed(2)}
+                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.presupuestado || 0), 0).toFixed(2)}
                             </p>
                         </Card>
                         <Card className="p-4 bg-purple-50 border-purple-200 print:shadow-none print:border">
                             <p className="text-sm text-purple-600 font-medium mb-1">Total Ejecutado</p>
                             <p className="text-2xl font-bold text-purple-900">
-                                S/ {budgetExecution.reduce((sum, item) => sum + (item.ejecutado || 0), 0).toFixed(2)}
+                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.ejecutado || 0), 0).toFixed(2)}
                             </p>
                         </Card>
                         <Card className="p-4 bg-green-50 border-green-200 print:shadow-none print:border">
                             <p className="text-sm text-green-600 font-medium mb-1">Disponible</p>
                             <p className="text-2xl font-bold text-green-900">
-                                S/ {budgetExecution.reduce((sum, item) => sum + (item.diferencia || 0), 0).toFixed(2)}
+                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.diferencia || 0), 0).toFixed(2)}
                             </p>
                         </Card>
                     </div>

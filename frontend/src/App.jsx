@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown, Shield, Award, BookOpen, DollarSign, User, CircleUser, TrendingUp } from 'lucide-react';
+import { LogOut, Menu, X, Users, ImageIcon, Grid, Home, FileText, Calendar, UserPlus, ChevronDown, Shield, Award, BookOpen, DollarSign, User, CircleUser, TrendingUp, AlertCircle, RefreshCw } from 'lucide-react';
 import { api } from './services/api';
+import { storage } from './services/storage';
 import Button from './components/ui/Button';
 import ChatWidget from './components/layout/ChatWidget';
 import HomeView from './views/HomeView';
@@ -45,19 +46,17 @@ function SIMRAppContent() {
 
   // Persistent User State (Legacy - keeping for now to avoid breaking other views until full migration)
   const [user, setUser] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedUser = window.localStorage.getItem('simr_user');
-      if (savedUser) {
-        const userData = JSON.parse(savedUser);
-        // Migrate legacy 'accounting' role to 'treasurer'
-        if (userData.roles) {
-          userData.roles = userData.roles.map(role => role === 'accounting' ? 'treasurer' : role);
-        }
-        if (userData.role === 'accounting') {
-          userData.role = 'treasurer';
-        }
-        return userData;
+    const savedUser = storage.get('simr_user');
+    if (savedUser) {
+      const userData = savedUser;
+      // Migrate legacy 'accounting' role to 'treasurer'
+      if (userData.roles) {
+        userData.roles = userData.roles.map(role => role === 'accounting' ? 'treasurer' : role);
       }
+      if (userData.role === 'accounting') {
+        userData.role = 'treasurer';
+      }
+      return userData;
     }
     return null;
   });
@@ -73,18 +72,15 @@ function SIMRAppContent() {
   // Auto-persist user state changes
   useEffect(() => {
     if (user) {
-      window.localStorage.setItem('simr_user', JSON.stringify(user));
+      storage.set('simr_user', user);
     }
   }, [user]);
 
   // Persistent Active Role
   const [activeRole, setActiveRole] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const savedRole = window.localStorage.getItem('simr_active_role');
-      // Migrate legacy 'accounting' role to 'treasurer'
-      return savedRole === 'accounting' ? 'treasurer' : savedRole || null;
-    }
-    return null;
+    const savedRole = storage.get('simr_active_role');
+    // Migrate legacy 'accounting' role to 'treasurer'
+    return savedRole === 'accounting' ? 'treasurer' : savedRole || null;
   });
 
   // Default to 'rbac_demo' to show the new functionality immediately
@@ -101,7 +97,20 @@ function SIMRAppContent() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('virtual') === 'true') {
       setActiveRole('aula_virtual');
-      setCurrentView('participant-dashboard'); // Redirect to the dark, video-centric dashboard (Crehana style)
+      setCurrentView('participant-dashboard');
+      return;
+    }
+
+    // Support Deep Linking from Notifications
+    const viewParam = params.get('view');
+    const roleParam = params.get('role');
+    const tabParam = params.get('tab');
+    if (viewParam) {
+      setCurrentView(viewParam);
+      if (roleParam) {
+        setActiveRole(roleParam);
+        storage.set('simr_active_role', roleParam);
+      }
       return;
     }
 
@@ -204,7 +213,7 @@ function SIMRAppContent() {
     const initialRole = allModules.find(m => m !== 'mi_perfil') || 'mi_perfil';
 
     setActiveRole(initialRole);
-    window.localStorage.setItem('simr_active_role', initialRole);
+    storage.set('simr_active_role', initialRole);
 
     updateViewForRole(initialRole);
     setIsMobileMenuOpen(false);
@@ -223,7 +232,7 @@ function SIMRAppContent() {
 
     // Normal role switching for other roles
     setActiveRole(newRole);
-    window.localStorage.setItem('simr_active_role', newRole);
+    storage.set('simr_active_role', newRole);
     updateViewForRole(newRole);
     setIsRoleMenuOpen(false);
   };
@@ -309,17 +318,25 @@ function SIMRAppContent() {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
-            {visibleNavItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className={`hover:text-blue-700 flex items-center gap-1 transition-all
-                  ${item.isBadge ? 'bg-blue-50 text-blue-800 px-3 py-1 rounded-full hover:shadow-sm hover:-translate-y-0.5' : 'transition-colors'}
-                `}
-              >
-                <item.icon size={16} /> {item.label}
-              </button>
-            ))}
+            {visibleNavItems.map(item => {
+              const isActive = currentView === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item.id)}
+                  className={`flex items-center gap-1 transition-all
+                    ${item.isBadge
+                      ? 'bg-blue-50 text-blue-800 px-3 py-1 rounded-full hover:shadow-sm hover:-translate-y-0.5'
+                      : isActive
+                        ? 'text-blue-700 font-bold border-b-2 border-blue-700'
+                        : 'text-gray-700 hover:text-blue-700'
+                    }
+                  `}
+                >
+                  <item.icon size={16} /> {item.label}
+                </button>
+              );
+            })}
             {!user && (
               <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
             )}
@@ -420,15 +437,24 @@ function SIMRAppContent() {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4">
-            <button onClick={() => navigate('home')} className="block w-full text-left font-medium py-2 text-gray-800">Inicio</button>
-            <button onClick={() => navigate('roadmap')} className="block w-full text-left font-medium py-2 text-gray-800">Roadmap</button>
-            <button onClick={() => navigate('program')} className="block w-full text-left font-medium py-2 text-gray-800">Programa</button>
-            <button onClick={() => navigate('committee')} className="block w-full text-left font-medium py-2 text-gray-800">Comité</button>
-            <button onClick={() => navigate('gallery')} className="block w-full text-left font-medium py-2 text-gray-800">Galería</button>
-            <button onClick={() => navigate('posters')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">E-Posters</button>
+            <button onClick={() => navigate('home')} className={`block w-full text-left font-medium py-2 ${currentView === 'home' ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}`}>Inicio</button>
+
+            {visibleNavItems.filter(item => item.id !== 'home').map(item => (
+              <button
+                key={item.id}
+                onClick={() => navigate(item.id)}
+                className={`block w-full text-left font-medium py-2 
+                  ${currentView === item.id ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}
+                  ${item.isBadge ? 'text-blue-700 font-bold' : ''}
+                `}
+              >
+                {item.label}
+              </button>
+            ))}
+
             <button onClick={() => navigate('rbac_demo')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">Demo RBAC</button>
             {!user && (
-              <button onClick={() => navigate('registration')} className="block w-full text-left font-medium py-2 text-blue-700">Inscripción</button>
+              <button onClick={() => navigate('registration')} className={`block w-full text-left font-medium py-2 ${currentView === 'registration' ? 'text-blue-700 font-bold' : 'text-blue-700'}`}>Inscripción</button>
             )}
             {user ? (
               <>

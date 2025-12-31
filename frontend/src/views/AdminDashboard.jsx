@@ -89,77 +89,7 @@ const AdminDashboard = ({ user }) => {
             type: 'warning',
             onConfirm: async () => {
                 try {
-                    const newAttendee = {
-                        id: Date.now(),
-                        name: reg.name,
-                        firstName: reg.firstName,
-                        lastName: reg.lastName,
-                        role: 'Asistente',
-                        occupation: reg.occupation,
-                        specialty: reg.specialty,
-                        modality: reg.modalidad,
-                        date: new Date().toISOString().split('T')[0],
-                        status: 'Confirmado',
-                        amount: reg.amount,
-                        institution: reg.institution,
-                        grade: null,
-                        certificationApproved: false,
-                        dni: reg.dni,
-                        cmp: reg.cmp,
-                        rne: reg.rne,
-                        email: reg.email
-                    };
-
-                    await api.attendees.add(newAttendee);
-                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
-                    await api.registrations.remove(reg.id);
-
-                    // User Creation / Role Assignment Logic
-                    const allUsers = await api.users.getAll();
-                    const existingUser = allUsers.find(u => u.email === reg.email);
-
-                    // Determine if the user should get the "Aula Virtual" (participant) role
-                    // Logic:
-                    // - "Solo Presencial" (ticket: presencial) -> No "participant" role.
-                    // - "Presencial + Certificado" (ticket: presencial_cert) -> Gets "participant" role.
-                    // - "Virtual" (ticket: virtual) -> Gets "participant" role.
-
-                    let shouldHaveVirtualAccess = false;
-
-                    if (reg.ticketType) {
-                        shouldHaveVirtualAccess = reg.ticketType !== 'presencial';
-                    } else {
-                        // Fallback using modality and certification flag if ticketType is missing
-                        // Assuming 'Presencial' without explicit type is just Presencial
-                        const isVirtual = reg.modalidad && reg.modalidad.toLowerCase() === 'virtual';
-                        const wantsCert = reg.wantsCertification === true;
-                        shouldHaveVirtualAccess = isVirtual || wantsCert;
-                    }
-
-                    const assignedRoles = shouldHaveVirtualAccess ? ['participant'] : [];
-                    const assignedModules = shouldHaveVirtualAccess ? ['mi_perfil', 'aula_virtual'] : ['mi_perfil'];
-
-                    const userPayload = {
-                        id: existingUser ? existingUser.id : Date.now(),
-                        name: reg.name,
-                        firstName: reg.firstName,
-                        lastName: reg.lastName,
-                        email: reg.email,
-                        role: shouldHaveVirtualAccess ? 'participant' : 'user', // Set primary role correctly
-                        roles: existingUser ? [...new Set([...(existingUser.roles || []), ...assignedRoles])] : assignedRoles,
-                        modules: existingUser ? [...new Set([...(existingUser.modules || []), ...assignedModules])] : assignedModules,
-                        institution: reg.institution,
-                        password: existingUser ? existingUser.password : '123456',
-                        specialty: reg.specialty
-                    };
-
-                    // Use add() for new users, update() for existing users
-                    if (existingUser) {
-                        await api.users.update(userPayload);
-                    } else {
-                        await api.users.add(userPayload);
-                    }
-
+                    await api.registrations.approve(reg);
                     showSuccess('La inscripción ha sido aprobada y la cuenta actualizada.', 'Inscripción aprobada');
                     loadData(); // Refresh all data
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));

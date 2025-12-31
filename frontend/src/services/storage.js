@@ -1,4 +1,34 @@
 /**
+ * Recursively scans and truncates strings that are too large (likely base64 images)
+ * to prevent QuotaExceededError in LocalStorage.
+ */
+function sanitizeData(data, maxStringLength = 102400) { // 100KB limit per string
+    if (typeof data === 'string') {
+        if (data.length > maxStringLength) {
+            console.warn(`[Storage] Truncating large string (${data.length} bytes). Original content likely an oversized base64 image.`);
+            return data.substring(0, 100) + '...[TRUNCATED_DUE_TO_STORAGE_LIMITS]...';
+        }
+        return data;
+    }
+
+    if (Array.isArray(data)) {
+        return data.map(item => sanitizeData(item, maxStringLength));
+    }
+
+    if (typeof data === 'object' && data !== null) {
+        const sanitized = {};
+        for (const key in data) {
+            if (Object.prototype.hasOwnProperty.call(data, key)) {
+                sanitized[key] = sanitizeData(data[key], maxStringLength);
+            }
+        }
+        return sanitized;
+    }
+
+    return data;
+}
+
+/**
  * Safe wrapper for LocalStorage operations
  */
 export const storage = {
@@ -11,7 +41,16 @@ export const storage = {
     get: (key, fallback = null) => {
         try {
             const item = localStorage.getItem(key);
-            return item ? JSON.parse(item) : fallback;
+            if (!item) return fallback;
+
+            try {
+                return JSON.parse(item);
+            } catch (parseError) {
+                // Data is corrupted, remove it and return fallback
+                console.error(`Storage Error: Corrupted data for key "${key}". Removing corrupted data.`, parseError);
+                localStorage.removeItem(key);
+                return fallback;
+            }
         } catch (e) {
             console.error(`Storage Error (GET ${key}):`, e);
             return fallback;
@@ -26,10 +65,15 @@ export const storage = {
      */
     set: (key, value) => {
         try {
-            localStorage.setItem(key, JSON.stringify(value));
+            // Sanitize value to prevent quota issues (truncate massive base64 strings)
+            const sanitizedValue = sanitizeData(value);
+            localStorage.setItem(key, JSON.stringify(sanitizedValue));
             return true;
         } catch (e) {
             console.error(`Storage Error (SET ${key}):`, e);
+            if (e.name === 'QuotaExceededError') {
+                console.warn(`Critical: LocalStorage Quota Exceeded while saving ${key}.`);
+            }
             return false;
         }
     },
@@ -80,5 +124,6 @@ export const STORAGE_KEYS = {
     PLANNING_MEETINGS: 'simr_planning_meetings',
     PLANNING_TASKS: 'simr_planning_tasks',
     ATTENDANCE: 'simr_attendance',
-    ATTENDANCE_TOKENS: 'simr_attendance_tokens'
+    ATTENDANCE_TOKENS: 'simr_attendance_tokens',
+    NOTIFICATIONS: 'simr_notifications'
 };

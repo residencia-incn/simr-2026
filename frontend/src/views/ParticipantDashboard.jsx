@@ -4,6 +4,7 @@ import html2pdf from 'html2pdf.js';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useApi } from '../hooks/useApi';
+import { storage } from '../services/storage';
 import { INITIAL_PROGRAM } from '../data/mockData';
 
 const ParticipantDashboard = ({ user, navigate }) => {
@@ -13,7 +14,7 @@ const ParticipantDashboard = ({ user, navigate }) => {
 
     // UI State
     const [activeTab, setActiveTab] = useState('modules'); // modules, notes, chat
-    const [notes, setNotes] = useState(() => localStorage.getItem(`simr_notes_${user.id}`) || '');
+    const [notes, setNotes] = useState(() => storage.get(`simr_notes_${user.id}`, ''));
     const [chatMessage, setChatMessage] = useState("");
     const [chatHistory, setChatHistory] = useState([
         { id: 1, user: 'Dr. Ruiz', text: '¡Excelente ponencia, saludos desde Arequipa!', time: '09:15' },
@@ -30,7 +31,7 @@ const ParticipantDashboard = ({ user, navigate }) => {
 
         // Simulate Session Enforcement
         const sessionId = Date.now().toString();
-        const existingSession = localStorage.getItem(`simr_session_${user.id}`);
+        const existingSession = storage.get(`simr_session_${user.id}`);
 
         // In a real app, this logic happens on the server via sockets or polling
         // Here we simulate checking if another "tab" updated the session recently (simple version)
@@ -38,16 +39,16 @@ const ParticipantDashboard = ({ user, navigate }) => {
             // For demo purposes, we'll overwrite it to allow refreshing, 
             // but in a strict demo we might show a warning if we could detect another active window.
             // Let's simplified: Set this as the active session.
-            localStorage.setItem(`simr_session_${user.id}`, sessionId);
+            storage.set(`simr_session_${user.id}`, sessionId);
         } else {
-            localStorage.setItem(`simr_session_${user.id}`, sessionId);
+            storage.set(`simr_session_${user.id}`, sessionId);
         }
 
     }, [user.id]);
 
     // Notes Persistence
     useEffect(() => {
-        localStorage.setItem(`simr_notes_${user.id}`, notes);
+        storage.set(`simr_notes_${user.id}`, notes);
     }, [notes, user.id]);
 
     const handleSendMessage = (e) => {

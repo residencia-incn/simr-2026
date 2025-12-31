@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
+import { storage } from '../services/storage';
 
 /**
  * Custom hook for localStorage with JSON serialization
+ * Refactored to use safe storage wrapper for sanitization and error handling.
  * @param {string} key - localStorage key
  * @param {*} initialValue - Initial value if key doesn't exist
  * @returns {Array} [value, setValue, removeValue]
@@ -9,17 +11,7 @@ import { useState, useEffect } from 'react';
 export const useLocalStorage = (key, initialValue) => {
     // State to store our value
     const [storedValue, setStoredValue] = useState(() => {
-        if (typeof window === 'undefined') {
-            return initialValue;
-        }
-
-        try {
-            const item = window.localStorage.getItem(key);
-            return item ? JSON.parse(item) : initialValue;
-        } catch (error) {
-            console.error(`Error reading localStorage key "${key}":`, error);
-            return initialValue;
-        }
+        return storage.get(key, initialValue);
     });
 
     // Return a wrapped version of useState's setter function that
@@ -30,10 +22,7 @@ export const useLocalStorage = (key, initialValue) => {
             const valueToStore = value instanceof Function ? value(storedValue) : value;
 
             setStoredValue(valueToStore);
-
-            if (typeof window !== 'undefined') {
-                window.localStorage.setItem(key, JSON.stringify(valueToStore));
-            }
+            storage.set(key, valueToStore);
         } catch (error) {
             console.error(`Error setting localStorage key "${key}":`, error);
         }
@@ -43,9 +32,7 @@ export const useLocalStorage = (key, initialValue) => {
     const removeValue = () => {
         try {
             setStoredValue(initialValue);
-            if (typeof window !== 'undefined') {
-                window.localStorage.removeItem(key);
-            }
+            storage.remove(key);
         } catch (error) {
             console.error(`Error removing localStorage key "${key}":`, error);
         }

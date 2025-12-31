@@ -27,17 +27,18 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
         // 1. Income from transactions (manual entries and other concepts)
         const incomeTransactions = transactions.filter(t => t.type === 'income');
         incomeTransactions.forEach(tx => {
-            const account = accounts.find(a => a.id === (tx.accountId || tx.cuenta_id));
+            const accId = (tx.accountId || tx.cuenta_id);
+            const account = accounts.find(a => a.id === accId);
 
             // Determine if this is an inscription or contribution based on category
             let type = 'other';
             let typeLabel = 'Otro Concepto';
 
-            const category = tx.category || tx.categoria || '';
-            if (category.toLowerCase().includes('inscri')) {
+            const category = (tx.category || tx.categoria || '').toLowerCase();
+            if (category.includes('inscri')) {
                 type = 'inscription';
                 typeLabel = 'Inscripción';
-            } else if (category.toLowerCase().includes('aporte')) {
+            } else if (category.includes('aporte')) {
                 type = 'contribution';
                 typeLabel = 'Aporte Mensual';
             }
@@ -48,8 +49,8 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                 concept: tx.description || tx.descripcion,
                 type,
                 typeLabel,
-                account: account?.name || account?.nombre || 'Sin cuenta',
-                accountId: tx.accountId || tx.cuenta_id,
+                account: account ? (account.name || account.nombre) : 'Sin cuenta asignada',
+                accountId: accId,
                 category: tx.category || tx.categoria || 'Sin categoría',
                 amount: tx.amount || tx.monto || 0,
                 participant: tx.participant || '-',

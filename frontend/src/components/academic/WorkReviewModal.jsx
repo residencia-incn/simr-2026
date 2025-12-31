@@ -20,6 +20,25 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
     });
     const [feedback, setFeedback] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [academicConfig, setAcademicConfig] = useState(null);
+
+    // Load config
+    useEffect(() => {
+        const loadConfig = async () => {
+            try {
+                const config = await api.academic.getConfig();
+                setAcademicConfig(config);
+            } catch (error) {
+                console.error("Error loading academic config:", error);
+            }
+        };
+        loadConfig();
+    }, []);
+
+    // Filter sections based on work type
+    const activeSections = academicConfig?.sections?.filter(s =>
+        s.active && (!s.workTypes || s.workTypes.includes(work?.type))
+    ) || [];
 
 
     // Draft persistence
@@ -156,22 +175,20 @@ const WorkReviewModal = ({ isOpen, onClose, work, onUpdate, readOnly = false, pr
                 <div className="space-y-2">
                     <h4 className="font-bold text-gray-800 border-b pb-1">Resumen Estructurado</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                        <div className="space-y-1">
-                            <span className="font-semibold block text-gray-700">Introducción:</span>
-                            <p className="text-gray-600">{work.abstract.intro}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="font-semibold block text-gray-700">Métodos:</span>
-                            <p className="text-gray-600">{work.abstract.methods}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="font-semibold block text-gray-700">Resultados:</span>
-                            <p className="text-gray-600">{work.abstract.results}</p>
-                        </div>
-                        <div className="space-y-1">
-                            <span className="font-semibold block text-gray-700">Conclusiones:</span>
-                            <p className="text-gray-600">{work.abstract.conclusions}</p>
-                        </div>
+                        {activeSections.length > 0 ? (
+                            activeSections.map(section => (
+                                <div key={section.id} className="space-y-1">
+                                    <span className="font-semibold block text-gray-700">{section.label}:</span>
+                                    <p className="text-gray-600 whitespace-pre-wrap">
+                                        {work.abstract?.[section.id] || <span className="italic text-gray-400">Sin contenido</span>}
+                                    </p>
+                                </div>
+                            ))
+                        ) : (
+                            <div className="col-span-full py-4 text-center text-gray-400 italic">
+                                Cargando estructura del abstract...
+                            </div>
+                        )}
                     </div>
                 </div>
 

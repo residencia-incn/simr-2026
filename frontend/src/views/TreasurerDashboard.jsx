@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet, ShieldCheck, Clock } from 'lucide-react';
-import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState } from '../components/ui';
+import React, { useState, useMemo, useEffect } from 'react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet, ShieldCheck, Clock, AlertCircle, RefreshCw, Search, Tag } from 'lucide-react';
+import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState, Modal } from '../components/ui';
 import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
 import { useApi, useForm, useTreasury } from '../hooks';
@@ -15,6 +15,33 @@ import { showSuccess, showError, showWarning } from '../utils/alerts';
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
+
+    // URL syncing for tabs
+    const handleTabChange = (tabId) => {
+        setActiveTab(tabId);
+
+        // Update URL
+        const params = new URLSearchParams(window.location.search);
+        params.set('tab', tabId);
+
+        // Remove organizerId when switching away from contributions to keep URL clean
+        if (tabId !== 'contributions') {
+            params.delete('organizerId');
+        }
+
+        const newQuery = params.toString();
+        const newUrl = window.location.pathname + (newQuery ? '?' + newQuery : '');
+        window.history.pushState({}, '', newUrl);
+    };
+
+    // Handle initial tab from URL
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab && ['summary', 'income', 'expenses', 'reports', 'settings', 'contributions', 'accounts', 'verification'].includes(tab)) {
+            setActiveTab(tab);
+        }
+    }, []);
 
     // New Treasury System Hook
     const {
@@ -37,17 +64,25 @@ const TreasurerDashboard = ({ user }) => {
         createTransaction,
         deleteTransaction,
         recordContribution,
+        validateContribution,
         initializeContributionPlan,
         updateBudgetCategory,
         updateConfig,
         reload: reloadTreasury,
-        setCategories
+        setCategories,
+        error: treasuryError
     } = useTreasury();
 
     // Category State (Legacy)
     const [editingCategory, setEditingCategory] = useState(null);
     const [newCategory, setNewCategory] = useState('');
     const [categoryType, setCategoryType] = useState('income');
+    const [showAllRegistrations, setShowAllRegistrations] = useState(false);
+    const [registrationSearch, setRegistrationSearch] = useState('');
+
+    // New Detail Modal States
+    const [detailModalOpen, setDetailModalOpen] = useState(false);
+    const [selectedDetail, setSelectedDetail] = useState(null);
 
     // Data Fetching (Legacy compatibility)
     const fetchDashboardData = React.useCallback(async () => {
@@ -67,7 +102,7 @@ const TreasurerDashboard = ({ user }) => {
         };
     }, []);
 
-    const { data, loading, execute: loadData } = useApi(fetchDashboardData);
+    const { data, loading, error, execute: loadData } = useApi(fetchDashboardData);
 
     const {
         transactions: dashboardTransactions = [],
@@ -187,6 +222,53 @@ const TreasurerDashboard = ({ user }) => {
     // Calculate automatic income from attendees
     const attendeeIncome = confirmedAttendees.reduce((acc, curr) => acc + parseFloat(curr.amount || 0), 0);
 
+    // Combined list of all registrations (Inscriptions + Contributions)
+    const allRegistrations = useMemo(() => {
+        const inscriptions = confirmedAttendees.map(a => ({
+            id: `INS-${a.id}`,
+            type: 'Inscripción',
+            name: a.name,
+            secondary: a.role,
+            details: a.institution,
+            date: a.registrationDate || a.date || new Date().toISOString(),
+            amount: parseFloat(a.amount || 0),
+            voucher: a.voucherData || a.voucher,
+            coupon: a.coupon || a.couponCode,
+            original: a,
+            isContribution: false
+        }));
+
+        // Valid contributions
+        const contribs = Array.isArray(contributionPlan)
+            ? contributionPlan
+                .filter(c => (c.estado === 'validado' || c.estado === 'pagado') && c.comprobante)
+                .map(c => ({
+                    id: `CTR-${c.id}`,
+                    type: 'Aporte',
+                    name: c.organizador_nombre || 'Organizador',
+                    secondary: c.mes_label,
+                    details: 'Cuota Mensual',
+                    date: c.fecha_pago || c.updated_at || new Date().toISOString(),
+                    amount: parseFloat(c.monto || 0),
+                    voucher: c.comprobante,
+                    original: c,
+                    isContribution: true
+                }))
+            : [];
+
+        return [...inscriptions, ...contribs].sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [confirmedAttendees, contributionPlan]);
+
+    const filteredRegistrations = useMemo(() => {
+        if (!registrationSearch.trim()) return allRegistrations;
+        const query = registrationSearch.toLowerCase();
+        return allRegistrations.filter(item =>
+            item.name.toLowerCase().includes(query) ||
+            (item.secondary && item.secondary.toLowerCase().includes(query)) ||
+            (item.details && item.details.toLowerCase().includes(query))
+        );
+    }, [allRegistrations, registrationSearch]);
+
     const handleAddCategory = async (e) => {
         e.preventDefault();
         if (!newCategory.trim()) return;
@@ -224,6 +306,115 @@ const TreasurerDashboard = ({ user }) => {
                     console.error(err);
                 }
             }
+        });
+    };
+
+    const handleViewDetail = (item) => {
+        setSelectedDetail(item);
+        setDetailModalOpen(true);
+        return;
+        setConfirmConfig({
+            isOpen: true,
+            title: 'Detalle de Registro',
+            message: (
+                <div className="space-y-4 text-left">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Nombre</p>
+                            <p className="font-semibold text-gray-900">{item.name}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Tipo</p>
+                            <span className={`px-2 py-1 rounded-full text-xs font-bold ${item.type === 'Aporte' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                {item.type || 'Inscripción'}
+                            </span>
+                        </div>
+                        <div className="col-span-2">
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Detalle / Email</p>
+                            <p className="font-semibold text-gray-900 truncate" title={item.secondary || item.email}>
+                                {item.secondary || item.details || item.email || '-'}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución / Concepto</p>
+                            <p className="font-semibold text-gray-900">{item.details || item.institution || '-'}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Monto Pagado</p>
+                            <p className={`font-bold text-lg ${item.amount === 0 ? 'text-gray-500' : 'text-blue-600'}`}>
+                                S/ {parseFloat(item.amount || 0).toFixed(2)}
+                            </p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Fecha</p>
+                            <p className="font-semibold text-gray-900">
+                                {new Date(item.date).toLocaleString('es-PE', {
+                                    day: '2-digit', month: '2-digit', year: 'numeric',
+                                    hour: '2-digit', minute: '2-digit'
+                                })}
+                            </p>
+                        </div>
+                    </div>
+
+                    {item.amount === 0 ? (
+                        <div className="pt-4 border-t">
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Método de Validación</p>
+                            <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-center gap-3">
+                                <div className="p-2 bg-green-100 rounded-full text-green-600">
+                                    <Tag size={24} />
+                                </div>
+                                <div className="text-center md:text-left">
+                                    <p className="text-sm text-green-800 font-bold">CUPÓN / BECA APLICADA</p>
+                                    <p className="text-xs text-green-600 mt-1">El monto es S/ 0.00 debido a un descuento.</p>
+                                    <p className="text-xs font-mono font-bold text-green-700 mt-1 bg-green-200 px-2 py-0.5 rounded inline-block">
+                                        {item.coupon || 'PROMOCIÓN'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="pt-4 border-t">
+                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Voucher de Pago</p>
+                            {item.voucher ? (
+                                <div className="bg-gray-100 rounded-lg p-4 flex items-center justify-center">
+                                    <img
+                                        src={item.voucher}
+                                        alt="Voucher"
+                                        className="max-w-full max-h-64 object-contain cursor-pointer hover:opacity-80 transition-opacity"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            const win = window.open("");
+                                            if (win) {
+                                                win.document.write(`
+                                                <html>
+                                                    <head>
+                                                        <title>Voucher - ${item.name}</title>
+                                                        <style>
+                                                            body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; }
+                                                            img { max-width: 95%; max-height: 95vh; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); border-radius: 8px; }
+                                                        </style>
+                                                    </head>
+                                                    <body>
+                                                        <img src="${item.voucher}" alt="Comprobante de Pago" />
+                                                    </body>
+                                                </html>
+                                            `);
+                                                win.document.close();
+                                            }
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 border border-dashed border-gray-300 rounded-lg p-8 text-center text-gray-500 text-sm">
+                                    No se ha adjuntado un voucher digital.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            ),
+            type: 'info',
+            onConfirm: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
         });
     };
 
@@ -366,34 +557,13 @@ const TreasurerDashboard = ({ user }) => {
                         return;
                     }
 
-                    // 1. Add to Attendees List
-                    const newAttendee = {
-                        id: Date.now(),
-                        name: reg.name,
-                        role: reg.role,
-                        specialty: reg.specialty,
-                        modality: reg.modalidad,
-                        date: new Date().toISOString().split('T')[0],
-                        status: 'Confirmado',
-                        amount: reg.amount,
-                        institution: reg.institution,
-                        grade: null,
-                        certificationApproved: false,
-                        dni: reg.dni,
-                        cmp: reg.cmp,
-                        email: reg.email,
-                        voucherData: reg.voucherData
-                    };
-                    await api.attendees.add(newAttendee);
+                    await api.registrations.approve(reg);
 
-                    // 2. Add to Treasury Income (New System)
-                    // Use first account as default (could be made configurable)
-                    await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
+                    await Promise.all([
+                        loadData(),
+                        reloadTreasury()
+                    ]);
 
-                    // 3. Remove from Pending
-                    await api.registrations.remove(reg.id);
-
-                    await loadData();
                     showSuccess('La inscripción ha sido procesada correctamente.', 'Inscripción aprobada');
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
@@ -487,6 +657,33 @@ const TreasurerDashboard = ({ user }) => {
 
     const balance = accountsBalance;
 
+    if (treasuryError || (error && !data && !loading)) {
+        return (
+            <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div className="p-4 bg-red-50 rounded-full text-red-500 mb-4">
+                    <AlertCircle size={32} />
+                </div>
+                <h3 className="text-xl font-bold text-gray-900 mb-2">Error de Almacenamiento</h3>
+                <p className="text-gray-600 max-w-md mx-auto mb-6">
+                    No se pudieron cargar todos los datos de tesorería. Esto suele ocurrir cuando el almacenamiento del navegador está lleno.
+                    {treasuryError || error}
+                </p>
+                <div className="flex gap-4">
+                    <Button variant="ghost" onClick={() => {
+                        localStorage.clear();
+                        window.location.reload();
+                    }} className="text-red-600 hover:bg-red-50">
+                        Limpiar Almacenamiento
+                    </Button>
+                    <Button onClick={() => window.location.reload()} className="flex items-center gap-2">
+                        <RefreshCw size={18} />
+                        Reintentar
+                    </Button>
+                </div>
+            </div>
+        );
+    }
+
     if (loading && !transactions.length) return <div className="p-8 flex justify-center"><LoadingSpinner text="Cargando tesorería..." /></div>;
 
     return (
@@ -499,7 +696,7 @@ const TreasurerDashboard = ({ user }) => {
 
                 <div className="flex p-1 bg-gray-100 rounded-lg gap-1">
                     <button
-                        onClick={() => setActiveTab('summary')}
+                        onClick={() => handleTabChange('summary')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'summary' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <PieChart size={20} />
@@ -509,7 +706,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('validation')}
+                        onClick={() => handleTabChange('validation')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <CheckSquare size={20} />
@@ -520,7 +717,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('income-details')}
+                        onClick={() => handleTabChange('income-details')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income-details' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <TrendingUp size={18} />
@@ -531,7 +728,7 @@ const TreasurerDashboard = ({ user }) => {
                     </button>
 
                     <button
-                        onClick={() => setActiveTab('expense')}
+                        onClick={() => handleTabChange('expense')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <TrendingDown size={20} />
@@ -541,7 +738,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('budget')}
+                        onClick={() => handleTabChange('budget')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <DollarSign size={20} />
@@ -551,7 +748,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('accounts')}
+                        onClick={() => handleTabChange('accounts')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Wallet size={20} />
@@ -561,7 +758,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('contributions')}
+                        onClick={() => handleTabChange('contributions')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'contributions' ? 'bg-white text-pink-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Users size={20} />
@@ -571,7 +768,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('reports')}
+                        onClick={() => handleTabChange('reports')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'reports' ? 'bg-white text-cyan-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <FileText size={20} />
@@ -581,7 +778,7 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
-                        onClick={() => setActiveTab('settings')}
+                        onClick={() => handleTabChange('settings')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'settings' ? 'bg-white text-purple-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <Settings size={20} />
@@ -706,124 +903,67 @@ const TreasurerDashboard = ({ user }) => {
 
                     {/* Right Column: Recent Registrations */}
                     <div className="space-y-4">
-                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                            <Users className="text-blue-600" /> Últimos Registrados
-                        </h3>
+                        <div className="flex justify-between items-center">
+                            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                <Users className="text-blue-600" /> Últimos Registrados
+                            </h3>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-600 hover:bg-blue-50"
+                                onClick={() => setShowAllRegistrations(true)}
+                            >
+                                Ver Todos
+                            </Button>
+                        </div>
                         <div className="space-y-3">
-                            {confirmedAttendees.slice(0, 4).map((attendee) => (
-                                <Card
-                                    key={attendee.id}
-                                    className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                                    onClick={() => {
-                                        // Find the original registration to show voucher
-                                        const regData = {
-                                            ...attendee,
-                                            name: attendee.name,
-                                            dni: attendee.dni,
-                                            email: attendee.email,
-                                            institution: attendee.institution,
-                                            occupation: attendee.role,
-                                            amount: attendee.amount,
-                                            ticketType: attendee.modality,
-                                            voucherData: attendee.voucherData || null,
-                                            timestamp: attendee.date
-                                        };
-                                        setConfirmConfig({
-                                            isOpen: true,
-                                            title: 'Detalle de Registro',
-                                            message: (
-                                                <div className="space-y-4 text-left">
-                                                    <div className="grid grid-cols-2 gap-4">
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Nombre</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.name}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">DNI</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.dni}</p>
-                                                        </div>
-                                                        <div className="col-span-2">
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Email</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.email}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.institution}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Rol</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.role}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Monto Pagado</p>
-                                                            <p className="font-bold text-blue-600 text-lg">S/ {parseFloat(attendee.amount || 0).toFixed(2)}</p>
-                                                        </div>
-                                                        <div>
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-1">Fecha de Registro</p>
-                                                            <p className="font-semibold text-gray-900">{attendee.date}</p>
-                                                        </div>
-                                                    </div>
-
-                                                    {attendee.voucherData && (
-                                                        <div className="pt-4 border-t">
-                                                            <p className="text-xs text-gray-500 font-bold uppercase mb-2">Voucher de Pago</p>
-                                                            <div className="bg-gray-100 rounded-lg p-4 flex items-center justify-center">
-                                                                <img
-                                                                    src={attendee.voucherData}
-                                                                    alt="Voucher"
-                                                                    className="max-w-full max-h-64 object-contain cursor-pointer hover:opacity-80 transition-opacity"
-                                                                    onClick={(e) => {
-                                                                        e.stopPropagation();
-                                                                        const win = window.open("");
-                                                                        if (win) {
-                                                                            win.document.write(`
-                                                                                <html>
-                                                                                    <head>
-                                                                                        <title>Voucher - ${attendee.name}</title>
-                                                                                        <style>
-                                                                                            body { margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; background: #f0f2f5; }
-                                                                                            img { max-width: 95%; max-height: 95vh; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); border-radius: 8px; }
-                                                                                        </style>
-                                                                                    </head>
-                                                                                    <body>
-                                                                                        <img src="${attendee.voucherData}" alt="Comprobante de Pago" />
-                                                                                    </body>
-                                                                                </html>
-                                                                            `);
-                                                                            win.document.close();
-                                                                        }
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    )}
+                            {[...confirmedAttendees]
+                                .sort((a, b) => new Date(b.registrationDate || b.date) - new Date(a.registrationDate || a.date))
+                                .slice(0, 4).map((attendee) => (
+                                    <Card
+                                        key={attendee.id}
+                                        className="p-4 hover:shadow-md transition-shadow cursor-pointer"
+                                        onClick={() => {
+                                            const item = {
+                                                name: attendee.name,
+                                                type: 'Inscripción',
+                                                secondary: attendee.role,
+                                                details: attendee.institution,
+                                                date: attendee.registrationDate || attendee.date,
+                                                amount: parseFloat(attendee.amount || 0),
+                                                voucher: attendee.voucherData || attendee.voucher,
+                                                coupon: attendee.coupon || attendee.couponCode,
+                                                email: attendee.email
+                                            };
+                                            handleViewDetail(item);
+                                        }}
+                                    >
+                                        <div className="flex items-start gap-3">
+                                            <div className="bg-blue-50 p-2 rounded-full">
+                                                <User className="text-blue-600" size={20} />
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-bold text-gray-900 truncate">{attendee.name}</h4>
+                                                <p className="text-sm text-gray-600 truncate">{attendee.email}</p>
+                                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
+                                                    <span className="flex items-center gap-1">
+                                                        <Calendar size={12} />
+                                                        {new Date(attendee.registrationDate || attendee.date).toLocaleString('es-PE', {
+                                                            day: '2-digit',
+                                                            month: '2-digit',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        })}
+                                                    </span>
+                                                    <span className="font-bold text-blue-600">
+                                                        S/ {parseFloat(attendee.amount || 0).toFixed(2)}
+                                                    </span>
                                                 </div>
-                                            ),
-                                            type: 'info',
-                                            onConfirm: () => setConfirmConfig(prev => ({ ...prev, isOpen: false }))
-                                        });
-                                    }}
-                                >
-                                    <div className="flex items-start gap-3">
-                                        <div className="bg-blue-50 p-2 rounded-full">
-                                            <User className="text-blue-600" size={20} />
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                            <h4 className="font-bold text-gray-900 truncate">{attendee.name}</h4>
-                                            <p className="text-sm text-gray-600 truncate">{attendee.email}</p>
-                                            <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                                <span className="flex items-center gap-1">
-                                                    <Calendar size={12} />
-                                                    {attendee.date}
-                                                </span>
-                                                <span className="font-bold text-blue-600">
-                                                    S/ {parseFloat(attendee.amount || 0).toFixed(2)}
-                                                </span>
                                             </div>
                                         </div>
-                                    </div>
-                                </Card>
-                            ))}
+                                    </Card>
+                                ))}
                             {confirmedAttendees.length === 0 && (
                                 <EmptyState
                                     icon={Users}
@@ -933,6 +1073,7 @@ const TreasurerDashboard = ({ user }) => {
             {activeTab === 'settings' && (
                 <TreasurySettings
                     config={config}
+                    accounts={accounts}
                     onUpdateConfig={updateConfig}
                     onInitializePlan={initializeContributionPlan}
                     categories={categories}
@@ -1029,7 +1170,9 @@ const TreasurerDashboard = ({ user }) => {
                         config={config}
                         accounts={accounts}
                         onRecordContribution={recordContribution}
+                        onApproveContribution={validateContribution}
                         onInitializePlan={initializeContributionPlan}
+                        onReload={reloadTreasury}
                     />
                 )
             }
@@ -1046,6 +1189,183 @@ const TreasurerDashboard = ({ user }) => {
                 )
             }
 
+
+            {/* All Registrations Modal */}
+            <Modal
+                isOpen={showAllRegistrations}
+                onClose={() => setShowAllRegistrations(false)}
+                title="Todos los Registros Confirmados"
+                size="3xl"
+            >
+                <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row gap-4 mb-4 justify-between items-center">
+                        <div className="flex gap-4">
+                            <div className="bg-blue-50 text-blue-700 px-3 py-1 rounded-lg text-sm font-medium">
+                                Total Registros: {filteredRegistrations.length}
+                            </div>
+                            <div className="bg-green-50 text-green-700 px-3 py-1 rounded-lg text-sm font-medium">
+                                <span className="font-bold">Total Recaudado: S/ {filteredRegistrations.reduce((acc, curr) => acc + curr.amount, 0).toFixed(2)}</span>
+                            </div>
+                        </div>
+                        <div className="relative w-full md:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Buscar..."
+                                autoFocus
+                                className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                                value={registrationSearch}
+                                onChange={(e) => setRegistrationSearch(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 max-h-[65vh] overflow-y-auto pr-2">
+                        {filteredRegistrations.map((item) => (
+                            <Card
+                                key={item.id}
+                                className="p-4 hover:shadow-md transition-all cursor-pointer border-l-4 border-l-transparent hover:border-l-blue-500 group"
+                                onClick={() => handleViewDetail(item)}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className={`p-3 rounded-full shrink-0 ${item.type === 'Aporte' ? 'bg-purple-100 group-hover:bg-purple-200' : 'bg-blue-50 group-hover:bg-blue-100'} transition-colors`}>
+                                        {item.type === 'Aporte' ? <DollarSign className="text-purple-600" size={24} /> : <User className="text-blue-600" size={24} />}
+                                    </div>
+
+                                    <div className="flex-1 min-w-0 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                                        {/* Name and Basic Info */}
+                                        <div className="md:col-span-5">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <h4 className="font-bold text-gray-900 text-base">{item.name}</h4>
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${item.type === 'Aporte' ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                                                    {item.type.toUpperCase()}
+                                                </span>
+                                            </div>
+                                            <p className="text-sm text-gray-600">{item.secondary}</p>
+                                        </div>
+
+                                        {/* Additional Details */}
+                                        <div className="md:col-span-4 text-sm text-gray-500">
+                                            <div className="flex items-center gap-1 mb-1">
+                                                <span className="font-medium text-gray-700 block md:hidden">Detalle:</span>
+                                                {item.details || '-'}
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                <Calendar size={14} />
+                                                {new Date(item.date).toLocaleDateString('es-PE', { day: '2-digit', month: 'long', year: 'numeric' })}
+                                            </div>
+                                        </div>
+
+                                        {/* Amount */}
+                                        <div className="md:col-span-3 text-right">
+                                            <span className="font-bold text-lg text-blue-700 block">S/ {item.amount.toFixed(2)}</span>
+                                            <span className="text-xs text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full inline-block mt-1">
+                                                Confirmado
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </Card>
+                        ))}
+
+                        {filteredRegistrations.length === 0 && (
+                            <div className="col-span-2 py-8 text-center text-gray-500">
+                                {registrationSearch.trim() ? 'No se encontraron resultados para tu búsqueda.' : 'No se encontraron registros confirmados.'}
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t">
+                        <Button variant="secondary" onClick={() => setShowAllRegistrations(false)}>
+                            Cerrar
+                        </Button>
+                    </div>
+                </div>
+            </Modal>
+
+            {/* Detail Modal */}
+            <Modal
+                isOpen={detailModalOpen}
+                onClose={() => setDetailModalOpen(false)}
+                title="Detalle de Registro"
+                size="3xl"
+            >
+                {selectedDetail && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        {/* Columna Izquierda: Voucher */}
+                        <div className="flex flex-col h-full md:order-2">
+                            <h4 className="font-bold text-gray-700 mb-2">Comprobante de Pago</h4>
+                            {selectedDetail.amount === 0 ? (
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-6 flex flex-col items-center justify-center gap-4 h-full min-h-[300px]">
+                                    <div className="p-4 bg-green-100 rounded-full text-green-600">
+                                        <Tag size={48} />
+                                    </div>
+                                    <div className="text-center">
+                                        <h4 className="text-lg font-bold text-green-800">CUPÓN APLICADO</h4>
+                                        <p className="text-green-600 mt-2">Descuento del 100%</p>
+                                        <div className="mt-4 px-4 py-2 bg-white rounded border border-green-200 font-mono font-bold text-lg text-green-700">
+                                            {selectedDetail.coupon || 'PROMOCIÓN'}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : selectedDetail.voucher ? (
+                                <div className="bg-gray-100 rounded-lg p-2 flex items-center justify-center h-full min-h-[300px] bg-opacity-50">
+                                    <img
+                                        src={selectedDetail.voucher}
+                                        alt="Voucher"
+                                        className="max-w-full max-h-[400px] object-contain rounded shadow-sm hover:scale-105 transition-transform cursor-zoom-in"
+                                        onClick={() => window.open(selectedDetail.voucher, '_blank')}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center p-8 h-full min-h-[300px] text-gray-400">
+                                    <FileText size={48} className="mb-4 opacity-50" />
+                                    <p>No hay voucher digital</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Columna Derecha: Datos */}
+                        <div className="space-y-6 md:order-1">
+                            <div>
+                                <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedDetail.name}</h4>
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${selectedDetail.type === 'Aporte' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    {selectedDetail.type}
+                                </span>
+                            </div>
+
+                            <div className="space-y-4">
+                                <div>
+                                    <p className="text-xs text-gray-500 font-bold uppercase mb-1">Detalle / Email</p>
+                                    <p className="font-semibold text-gray-900 break-all">{selectedDetail.secondary || selectedDetail.email || '-'}</p>
+                                </div>
+                                <div>
+                                    <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución / Concepto</p>
+                                    <p className="font-semibold text-gray-900">{selectedDetail.details || selectedDetail.institution || '-'}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4 pt-2">
+                                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
+                                        <p className="text-xs font-bold text-blue-600 uppercase mb-1">Monto Pagado</p>
+                                        <p className="text-xl font-bold text-blue-700">S/ {selectedDetail.amount.toFixed(2)}</p>
+                                    </div>
+                                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                                        <p className="text-xs font-bold text-gray-500 uppercase mb-1">Fecha</p>
+                                        <p className="text-sm font-semibold text-gray-900">
+                                            {new Date(selectedDetail.date).toLocaleDateString()}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="pt-8 flex justify-end">
+                                <Button variant="secondary" onClick={() => setDetailModalOpen(false)}>
+                                    Cerrar
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </Modal>
 
             <ConfirmDialog
                 isOpen={confirmConfig.isOpen}

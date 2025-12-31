@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { storage } from '../services/storage';
 
 // Define the User type
 export interface User {
@@ -106,104 +107,99 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Helper function to derive modules and permissions from user data
+const deriveModulesAndPermissions = (userData: User): { modules: string[], permissions: string[] } => {
+    let modules = new Set<string>();
+    let permissions = new Set<string>();
+
+    // Add explicit modules and permissions if they exist
+    if (userData.modules) {
+        userData.modules.forEach(m => modules.add(m));
+    }
+    if (userData.permissions) {
+        userData.permissions.forEach(p => permissions.add(p));
+    }
+
+    // Derive from eventRole
+    if (userData.eventRole) {
+        const roleMapping = ROLE_MODULE_MAPPING[userData.eventRole];
+
+        if (roleMapping) {
+            // Add base modules
+            roleMapping.base?.forEach((m: string) => modules.add(m));
+
+            // Add conditional modules (for asistente)
+            if (userData.eventRole === 'asistente' && userData.hasPaid) {
+                roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
+            }
+
+            // Add function-specific modules (for organizador)
+            if (userData.eventRole === 'organizador' && userData.organizerFunction) {
+                const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
+                funcModules?.forEach((m: string) => modules.add(m));
+            }
+        }
+    }
+
+    // Legacy support: derive from profiles/roles
+    if (userData.profiles && Array.isArray(userData.profiles)) {
+        userData.profiles.forEach(profile => {
+            modules.add(profile);
+            const perms = LEGACY_ROLE_PERMISSIONS[profile] || [];
+            perms.forEach(p => permissions.add(p));
+        });
+    }
+
+    if (userData.roles && Array.isArray(userData.roles)) {
+        userData.roles.forEach(role => {
+            const perms = LEGACY_ROLE_PERMISSIONS[role] || [];
+            perms.forEach(p => permissions.add(p));
+        });
+    }
+
+    if (userData.role) {
+        // Add legacy role as a module if it makes sense (or map it)
+        // Most legacy roles map directly to module names (e.g., 'contabilidad', 'organizacion')
+        // Special case for 'admin' -> 'organizacion'
+        if (userData.role === 'admin') {
+            modules.add('organizacion');
+        } else {
+            modules.add(userData.role);
+        }
+
+        const perms = LEGACY_ROLE_PERMISSIONS[userData.role] || [];
+        perms.forEach(p => permissions.add(p));
+    }
+
+    // Convert modules to permissions
+    Array.from(modules).forEach(module => {
+        const modulePerms = MODULE_PERMISSIONS[module] || [];
+        modulePerms.forEach(p => permissions.add(p));
+    });
+
+    return {
+        modules: Array.from(modules),
+        permissions: Array.from(permissions)
+    };
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
 
     // Load from local storage on mount
     useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const storedUser = localStorage.getItem('simr_user');
-            if (storedUser) {
-                try {
-                    const parsedUser = JSON.parse(storedUser);
-                    // Hydrate modules and permissions if missing
-                    if (!parsedUser.modules || !parsedUser.permissions) {
-                        const { modules, permissions } = deriveModulesAndPermissions(parsedUser);
-                        parsedUser.modules = modules;
-                        parsedUser.permissions = permissions;
-                    }
-                    setUser(parsedUser);
-                } catch (e) {
-                    console.error("Failed to parse stored user", e);
-                }
+        const storedUser = storage.get('simr_user');
+        if (storedUser) {
+            // Hydrate modules and permissions if missing
+            if (!storedUser.modules || !storedUser.permissions) {
+                const { modules, permissions } = deriveModulesAndPermissions(storedUser);
+                const hydratedUser = { ...storedUser, modules, permissions };
+                setUser(hydratedUser);
+            } else {
+                setUser(storedUser);
             }
         }
     }, []);
-
-    const deriveModulesAndPermissions = (userData: User): { modules: string[], permissions: string[] } => {
-        let modules = new Set<string>();
-        let permissions = new Set<string>();
-
-        // Add explicit modules and permissions if they exist
-        if (userData.modules) {
-            userData.modules.forEach(m => modules.add(m));
-        }
-        if (userData.permissions) {
-            userData.permissions.forEach(p => permissions.add(p));
-        }
-
-        // Derive from eventRole
-        if (userData.eventRole) {
-            const roleMapping = ROLE_MODULE_MAPPING[userData.eventRole];
-
-            if (roleMapping) {
-                // Add base modules
-                roleMapping.base?.forEach((m: string) => modules.add(m));
-
-                // Add conditional modules (for asistente)
-                if (userData.eventRole === 'asistente' && userData.hasPaid) {
-                    roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
-                }
-
-                // Add function-specific modules (for organizador)
-                if (userData.eventRole === 'organizador' && userData.organizerFunction) {
-                    const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
-                    funcModules?.forEach((m: string) => modules.add(m));
-                }
-            }
-        }
-
-        // Legacy support: derive from profiles/roles
-        if (userData.profiles && Array.isArray(userData.profiles)) {
-            userData.profiles.forEach(profile => {
-                modules.add(profile);
-                const perms = LEGACY_ROLE_PERMISSIONS[profile] || [];
-                perms.forEach(p => permissions.add(p));
-            });
-        }
-
-        if (userData.roles && Array.isArray(userData.roles)) {
-            userData.roles.forEach(role => {
-                const perms = LEGACY_ROLE_PERMISSIONS[role] || [];
-                perms.forEach(p => permissions.add(p));
-            });
-        }
-
-        if (userData.role) {
-            // Add legacy role as a module if it makes sense (or map it)
-            // Most legacy roles map directly to module names (e.g., 'contabilidad', 'organizacion')
-            // Special case for 'admin' -> 'organizacion'
-            if (userData.role === 'admin') {
-                modules.add('organizacion');
-            } else {
-                modules.add(userData.role);
-            }
-
-            const perms = LEGACY_ROLE_PERMISSIONS[userData.role] || [];
-            perms.forEach(p => permissions.add(p));
-        }
-
-        // Convert modules to permissions
-        Array.from(modules).forEach(module => {
-            const modulePerms = MODULE_PERMISSIONS[module] || [];
-            modulePerms.forEach(p => permissions.add(p));
-        });
-
-        return {
-            modules: Array.from(modules),
-            permissions: Array.from(permissions)
-        };
-    };
 
     const login = (userData: User) => {
         // Calculate modules and permissions on login
@@ -211,20 +207,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const fullUser = { ...userData, modules, permissions };
 
         setUser(fullUser);
-        localStorage.setItem('simr_user', JSON.stringify(fullUser));
+        storage.set('simr_user', fullUser);
     };
 
     const logout = () => {
         setUser(null);
-        localStorage.removeItem('simr_user');
-        localStorage.removeItem('simr_active_role');
+        storage.remove('simr_user');
+        storage.remove('simr_active_role');
     };
 
     const updateUserPermissions = async (newPermissions: string[]) => {
         if (!user) return;
         const updatedUser = { ...user, permissions: newPermissions };
         setUser(updatedUser);
-        localStorage.setItem('simr_user', JSON.stringify(updatedUser));
+        storage.set('simr_user', updatedUser);
 
         // Persist to backend
         if (user.id) {

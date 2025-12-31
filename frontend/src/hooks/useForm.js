@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
+import { storage } from '../services/storage';
 
 /**
  * Custom hook for form handling with validation and optional persistence
+ * Refactored to use safe storage wrapper for sanitization.
  * @param {Object} initialValues - Initial form values
  * @param {Function} validate - Validation function (optional)
  * @param {string} persistKey - Key for localStorage persistence (optional)
@@ -10,14 +12,8 @@ import { useState, useEffect, useCallback } from 'react';
 export const useForm = (initialValues = {}, validate = null, persistKey = null) => {
     // Initialize with stored value if persistKey exists and storage has data
     const [values, setValues] = useState(() => {
-        if (persistKey && typeof window !== 'undefined') {
-            try {
-                const item = window.localStorage.getItem(persistKey);
-                return item ? JSON.parse(item) : initialValues;
-            } catch (error) {
-                console.error(`Error loading persistent form state for key "${persistKey}":`, error);
-                return initialValues;
-            }
+        if (persistKey) {
+            return storage.get(persistKey, initialValues);
         }
         return initialValues;
     });
@@ -26,14 +22,10 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
     const [touched, setTouched] = useState({});
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Persist to localStorage whenever values change
+    // Persist to storage whenever values change
     useEffect(() => {
-        if (persistKey && typeof window !== 'undefined') {
-            try {
-                window.localStorage.setItem(persistKey, JSON.stringify(values));
-            } catch (error) {
-                console.error(`Error persisting form state for key "${persistKey}":`, error);
-            }
+        if (persistKey) {
+            storage.set(persistKey, values);
         }
     }, [values, persistKey]);
 
@@ -113,8 +105,8 @@ export const useForm = (initialValues = {}, validate = null, persistKey = null) 
         setErrors({});
         setTouched({});
         setIsSubmitting(false);
-        if (persistKey && typeof window !== 'undefined') {
-            window.localStorage.removeItem(persistKey);
+        if (persistKey) {
+            storage.remove(persistKey);
         }
     }, [initialValues, persistKey]);
 

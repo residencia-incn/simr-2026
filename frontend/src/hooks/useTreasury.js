@@ -280,52 +280,41 @@ export const useTreasury = () => {
     /**
      * Registrar aporte de organizador
      */
-    const recordContribution = useCallback(async (organizadorId, mes, accountId, comprobante = null) => {
+    const recordContribution = useCallback(async (organizadorId, meses, accountId, totalAmount, comprobante = null, isValidationRequest = false) => {
         try {
             if (!config) throw new Error('Treasury config not loaded');
 
             const result = await api.treasury.recordContribution(
                 organizadorId,
-                mes,
+                meses,
                 accountId,
-                config.contribution.monthlyAmount,
-                comprobante
+                totalAmount,
+                comprobante,
+                isValidationRequest
             );
 
-            // Actualizar plan de aportes
-            setContributionPlan(prev => prev.map(contrib =>
-                contrib.organizador_id === organizadorId && contrib.mes === mes
-                    ? { ...contrib, estado: 'pagado', transaccion_id: result.transaction.id }
-                    : contrib
-            ));
-
-            // Actualizar transacciones
-            // Actualizar transacciones con normalización
-            const normalizedTx = {
-                id: result.transaction.id,
-                date: result.transaction.fecha,
-                description: result.transaction.descripcion,
-                amount: parseFloat(result.transaction.monto),
-                category: result.transaction.categoria,
-                accountId: result.transaction.cuenta_id,
-                type: 'income', // Contributions are always income
-                ...result.transaction
-            };
-            setTransactions(prev => [normalizedTx, ...prev]);
-
-            // Actualizar saldo de cuenta
-            setAccounts(prev => prev.map(acc =>
-                acc.id === accountId
-                    ? { ...acc, saldo_actual: acc.saldo_actual + result.transaction.monto }
-                    : acc
-            ));
-
+            // Re-cargar todo para asegurar sincronía perfecta
+            await loadTreasuryData();
             return result;
         } catch (err) {
             console.error('Error recording contribution:', err);
             throw err;
         }
-    }, [config]);
+    }, [config, loadTreasuryData]);
+
+    /**
+     * Validar/Aprobar aporte pendiente
+     */
+    const approveContribution = useCallback(async (organizadorId, meses, accountId) => {
+        try {
+            const result = await api.treasury.validateContribution(organizadorId, meses, accountId);
+            await loadTreasuryData();
+            return result;
+        } catch (err) {
+            console.error('Error approving contribution:', err);
+            throw err;
+        }
+    }, [loadTreasuryData]);
 
     /**
      * Inicializar plan de aportes
@@ -408,6 +397,7 @@ export const useTreasury = () => {
 
         // Contribution Operations
         recordContribution,
+        validateContribution: api.treasury.validateContribution,
         initializeContributionPlan,
 
         // Budget Operations

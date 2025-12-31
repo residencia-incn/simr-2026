@@ -1,5 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard } from 'lucide-react';
+import { useTreasury } from '../../hooks/useTreasury';
+import { showError, showSuccess } from '../../utils/alerts';
 import { Modal, Button, Card, LoadingSpinner } from '../ui';
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
@@ -13,6 +15,60 @@ const TasksQuickAccess = ({ user }) => {
     const [newComment, setNewComment] = useState('');
     const [activeMeetings, setActiveMeetings] = useState([]);
     const [loadingMeetings, setLoadingMeetings] = useState(false);
+    const [activeModalTab, setActiveModalTab] = useState('tasks'); // 'tasks' or 'payments'
+    const [selectedMonths, setSelectedMonths] = useState([]);
+    const [voucherUrl, setVoucherUrl] = useState('');
+    const [voucherFile, setVoucherFile] = useState(null);
+    const [voucherPreview, setVoucherPreview] = useState(null);
+    const [isSubmittingVoucher, setIsSubmittingVoucher] = useState(false);
+
+    const {
+        contributionPlan: allContributionPlan, // Renamed to indicate it contains all data
+        config: treasuryConfig,
+        recordContribution,
+        reload
+    } = useTreasury();
+
+    // SECURITY: Filter to show only current user's contributions
+    // TODO: When connecting to backend, the API should ONLY return the current user's data
+    // Backend endpoint should be: GET /api/contributions/my-plan (with authentication)
+    // This frontend filter is a temporary measure for development
+    const contributionPlan = useMemo(() => {
+        if (!user?.id || !allContributionPlan) return [];
+        return allContributionPlan.filter(c => c.organizador_id === user.id);
+    }, [allContributionPlan, user?.id]);
+
+    // Simulate cloud upload - Same as in ContributionsManager
+    const uploadToCloud = async (file) => {
+        await new Promise(resolve => setTimeout(resolve, 1500));
+        const simulatedCloudUrl = `https://storage.simr2026.com/vouchers/${Date.now()}_${file.name}`;
+        console.log('📤 Uploading voucher to cloud:', file.name);
+        console.log('✅ Simulated cloud URL:', simulatedCloudUrl);
+        return simulatedCloudUrl;
+    };
+
+    const handleFileChange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            showError('Por favor selecciona un archivo de imagen válido.', 'Tipo de archivo inválido');
+            return;
+        }
+
+        if (file.size > 5 * 1024 * 1024) {
+            showError('El archivo es demasiado grande. Máximo 5MB.', 'Archivo muy grande');
+            return;
+        }
+
+        setVoucherFile(file);
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setVoucherPreview(reader.result);
+        };
+        reader.readAsDataURL(file);
+    };
 
     // Check if user is an organizer (Staff) - RBAC
     const isOrganizer = user?.eventRole === 'organizador' ||
@@ -151,176 +207,388 @@ const TasksQuickAccess = ({ user }) => {
             <Modal
                 isOpen={isOpen}
                 onClose={() => setIsOpen(false)}
-                title="Mis Tareas Asignadas"
+                title={
+                    <div className="flex items-center gap-6">
+                        <button
+                            onClick={() => setActiveModalTab('tasks')}
+                            className={`pb-1 border-b-2 transition-all ${activeModalTab === 'tasks' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Mis Tareas
+                        </button>
+                        <button
+                            onClick={() => setActiveModalTab('payments')}
+                            className={`pb-1 border-b-2 transition-all ${activeModalTab === 'payments' ? 'border-blue-600 text-blue-600 font-bold' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Mis Pagos
+                        </button>
+                    </div>
+                }
                 size="xl"
             >
-                <div className="space-y-6">
-                    {/* Active Meetings Section */}
-                    <div>
-                        <div className="flex items-center gap-2 mb-3">
-                            <Calendar size={20} className="text-blue-600" />
-                            <h3 className="font-bold text-gray-800">Reuniones Activas</h3>
-                        </div>
-
-                        {loadingMeetings ? (
-                            <div className="py-4"><LoadingSpinner text="Cargando reuniones..." /></div>
-                        ) : activeMeetings.length === 0 ? (
-                            <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
-                                <Users size={32} className="mx-auto mb-2 text-gray-300" />
-                                <p className="text-sm text-gray-500">No hay reuniones activas</p>
+                {activeModalTab === 'tasks' ? (
+                    <div className="space-y-6">
+                        {/* Active Meetings Section */}
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <Calendar size={20} className="text-blue-600" />
+                                <h3 className="font-bold text-gray-800">Reuniones Activas</h3>
                             </div>
-                        ) : (
-                            <div className="space-y-2">
-                                {activeMeetings.map(meeting => {
-                                    const attendance = getAttendanceStatus(meeting);
-                                    const hasMarked = !!attendance;
 
-                                    return (
-                                        <Card key={meeting.id} className="border-l-4 border-l-blue-500">
-                                            <div className="flex items-start justify-between gap-3">
-                                                <div className="flex-1">
-                                                    <h4 className="font-bold text-gray-800 text-sm mb-1">{meeting.title}</h4>
-                                                    <div className="flex items-center gap-3 text-xs text-gray-600">
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar size={12} />
-                                                            {new Date(meeting.date).toLocaleDateString('es-PE')}
-                                                        </span>
-                                                        <span className="flex items-center gap-1">
-                                                            <Clock size={12} />
-                                                            {meeting.time}
-                                                        </span>
-                                                    </div>
-                                                </div>
+                            {loadingMeetings ? (
+                                <div className="py-4"><LoadingSpinner text="Cargando reuniones..." /></div>
+                            ) : activeMeetings.length === 0 ? (
+                                <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                                    <Users size={32} className="mx-auto mb-2 text-gray-300" />
+                                    <p className="text-sm text-gray-500">No hay reuniones activas</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {activeMeetings.map(meeting => {
+                                        const attendance = getAttendanceStatus(meeting);
+                                        const hasMarked = !!attendance;
 
-                                                <div className="flex flex-col items-end gap-2">
-                                                    {hasMarked ? (
-                                                        <span className={`text-xs px-2 py-1 rounded-full font-medium ${attendance.status === 'confirmed'
-                                                            ? 'bg-green-100 text-green-700 border border-green-200'
-                                                            : attendance.status === 'rejected'
-                                                                ? 'bg-red-100 text-red-700 border border-red-200'
-                                                                : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                                                            }`}>
-                                                            {attendance.status === 'confirmed' ? '✅ Confirmada' :
-                                                                attendance.status === 'rejected' ? '❌ Rechazada' :
-                                                                    '⏳ Pendiente'}
-                                                        </span>
-                                                    ) : (
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => handleMarkAttendance(meeting)}
-                                                            className="text-xs"
-                                                        >
-                                                            <UserCheck size={14} className="mr-1" />
-                                                            Marcar Asistencia
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Tasks Section */}
-                    <div className="border-t pt-4">
-                        <div className="flex items-center gap-2 mb-3">
-                            <ListTodo size={20} className="text-blue-600" />
-                            <h3 className="font-bold text-gray-800">Tareas Asignadas</h3>
-                        </div>
-
-                        {loading ? (
-                            <div className="py-4"><LoadingSpinner text="Cargando tareas..." /></div>
-                        ) : tasks.length === 0 ? (
-                            <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
-                                <ListTodo size={32} className="mx-auto mb-2 text-gray-300" />
-                                <p className="text-sm text-gray-500">No tienes tareas asignadas</p>
-                            </div>
-                        ) : (
-                            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                                {tasks.map(task => {
-                                    const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'completed';
-
-                                    return (
-                                        <Card
-                                            key={task.id}
-                                            className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
-                                                ? 'border-l-green-500'
-                                                : task.status === 'in_progress'
-                                                    ? 'border-l-blue-500'
-                                                    : isOverdue
-                                                        ? 'border-l-red-500'
-                                                        : 'border-l-gray-300'
-                                                }`}
-                                            onClick={() => handleOpenTask(task)}
-                                        >
-                                            <div className="flex items-start gap-3">
-                                                <div className="mt-1">
-                                                    {getStatusIcon(task.status)}
-                                                </div>
-
-                                                <div className="flex-1 min-w-0">
-                                                    <div className="flex items-start justify-between gap-2 mb-2">
-                                                        <h4 className="font-bold text-gray-800 text-sm">{task.title}</h4>
-                                                        <div className="flex gap-1 flex-shrink-0">
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getPriorityColor(task.priority)}`}>
-                                                                {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                                        return (
+                                            <Card key={meeting.id} className="border-l-4 border-l-blue-500">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div className="flex-1">
+                                                        <h4 className="font-bold text-gray-800 text-sm mb-1">{meeting.title}</h4>
+                                                        <div className="flex items-center gap-3 text-xs text-gray-600">
+                                                            <span className="flex items-center gap-1">
+                                                                <Calendar size={12} />
+                                                                {new Date(meeting.date).toLocaleDateString('es-PE')}
                                                             </span>
-                                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(task.status)}`}>
-                                                                {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En Progreso' : 'Pendiente'}
+                                                            <span className="flex items-center gap-1">
+                                                                <Clock size={12} />
+                                                                {meeting.time}
                                                             </span>
                                                         </div>
                                                     </div>
 
-                                                    {task.description && (
-                                                        <p className="text-xs text-gray-600 mb-2 line-clamp-2">{task.description}</p>
-                                                    )}
-
-                                                    <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
-                                                        <span className="flex items-center gap-1">
-                                                            <Calendar size={12} />
-                                                            {new Date(task.dueDate).toLocaleDateString('es-PE')}
-                                                            {isOverdue && <span className="text-red-600 font-bold">(Vencida)</span>}
-                                                        </span>
-                                                        {task.comments && task.comments.length > 0 && (
-                                                            <span className="flex items-center gap-1">
-                                                                <MessageSquare size={12} />
-                                                                {task.comments.length}
+                                                    <div className="flex flex-col items-end gap-2">
+                                                        {hasMarked ? (
+                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${attendance.status === 'confirmed'
+                                                                ? 'bg-green-100 text-green-700 border border-green-200'
+                                                                : attendance.status === 'rejected'
+                                                                    ? 'bg-red-100 text-red-700 border border-red-200'
+                                                                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                                                }`}>
+                                                                {attendance.status === 'confirmed' ? '✅ Confirmada' :
+                                                                    attendance.status === 'rejected' ? '❌ Rechazada' :
+                                                                        '⏳ Pendiente'}
                                                             </span>
+                                                        ) : (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={() => handleMarkAttendance(meeting)}
+                                                                className="text-xs"
+                                                            >
+                                                                <UserCheck size={14} className="mr-1" />
+                                                                Marcar Asistencia
+                                                            </Button>
                                                         )}
                                                     </div>
+                                                </div>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
 
-                                                    {/* Progress Bar */}
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                                            <div
-                                                                className={`h-2 rounded-full transition-all ${task.progress === 100
-                                                                    ? 'bg-green-600'
-                                                                    : task.progress > 0
-                                                                        ? 'bg-blue-600'
-                                                                        : 'bg-gray-400'
-                                                                    }`}
-                                                                style={{ width: `${task.progress}%` }}
-                                                            />
+                        {/* Tasks Section */}
+                        <div className="border-t pt-4">
+                            <div className="flex items-center gap-2 mb-3">
+                                <ListTodo size={20} className="text-blue-600" />
+                                <h3 className="font-bold text-gray-800">Tareas Asignadas</h3>
+                            </div>
+
+                            {loading ? (
+                                <div className="py-4"><LoadingSpinner text="Cargando tareas..." /></div>
+                            ) : tasks.length === 0 ? (
+                                <div className="text-center py-6 bg-gray-50 rounded-lg border border-gray-200">
+                                    <ListTodo size={32} className="mx-auto mb-2 text-gray-300" />
+                                    <p className="text-sm text-gray-500">No tienes tareas asignadas</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                                    {tasks.map(task => {
+                                        const isOverdue = new Date(task.dueDate) < new Date() && task.status !== 'completed';
+
+                                        return (
+                                            <Card
+                                                key={task.id}
+                                                className={`border-l-4 cursor-pointer hover:shadow-md transition-shadow ${task.status === 'completed'
+                                                    ? 'border-l-green-500'
+                                                    : task.status === 'in_progress'
+                                                        ? 'border-l-blue-500'
+                                                        : isOverdue
+                                                            ? 'border-l-red-500'
+                                                            : 'border-l-gray-300'
+                                                    }`}
+                                                onClick={() => handleOpenTask(task)}
+                                            >
+                                                <div className="flex items-start gap-3">
+                                                    <div className="mt-1">
+                                                        {getStatusIcon(task.status)}
+                                                    </div>
+
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                                            <h4 className="font-bold text-gray-800 text-sm">{task.title}</h4>
+                                                            <div className="flex gap-1 flex-shrink-0">
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full border font-medium ${getPriorityColor(task.priority)}`}>
+                                                                    {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Media' : 'Baja'}
+                                                                </span>
+                                                                <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStatusColor(task.status)}`}>
+                                                                    {task.status === 'completed' ? 'Completada' : task.status === 'in_progress' ? 'En Progreso' : 'Pendiente'}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                        <span className="text-xs font-bold text-gray-700 min-w-[40px] text-right">
-                                                            {task.progress}%
-                                                        </span>
+
+                                                        {task.description && (
+                                                            <p className="text-xs text-gray-600 mb-2 line-clamp-2">{task.description}</p>
+                                                        )}
+
+                                                        <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
+                                                            <span className="flex items-center gap-1">
+                                                                <Calendar size={12} />
+                                                                {new Date(task.dueDate).toLocaleDateString('es-PE')}
+                                                                {isOverdue && <span className="text-red-600 font-bold">(Vencida)</span>}
+                                                            </span>
+                                                            {task.comments && task.comments.length > 0 && (
+                                                                <span className="flex items-center gap-1">
+                                                                    <MessageSquare size={12} />
+                                                                    {task.comments.length}
+                                                                </span>
+                                                            )}
+                                                        </div>
+
+                                                        {/* Progress Bar */}
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                                                <div
+                                                                    className={`h-2 rounded-full transition-all ${task.progress === 100
+                                                                        ? 'bg-green-600'
+                                                                        : task.progress > 0
+                                                                            ? 'bg-blue-600'
+                                                                            : 'bg-gray-400'
+                                                                        }`}
+                                                                    style={{ width: `${task.progress}%` }}
+                                                                />
+                                                            </div>
+                                                            <span className="text-xs font-bold text-gray-700 min-w-[40px] text-right">
+                                                                {task.progress}%
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                 </div>
+                                            </Card>
+                                        );
+                                    })}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                ) : (
+                    /* Payments Section */
+                    <div className="space-y-6">
+                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
+                            <h4 className="text-blue-900 font-bold flex items-center gap-2 mb-1">
+                                <CreditCard size={18} />
+                                Aportes Mensuales
+                            </h4>
+                            <p className="text-blue-700 text-xs">
+                                Selecciona los meses pendientes de forma secuencial para registrar tu pago adjuntando un comprobante.
+                            </p>
+                        </div>
+
+                        {/* Contribution Calendar Grid */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                            {treasuryConfig?.contribution?.months?.map(month => {
+                                const contrib = contributionPlan.find(c => c.organizador_id === user.id && c.mes === month.id);
+                                const status = contrib?.estado || 'pendiente';
+                                const isSelected = selectedMonths.includes(month.id);
+
+                                const getStatusStyle = () => {
+                                    if (isSelected) return 'bg-blue-600 border-blue-600 text-white shadow-md transform scale-105 z-10';
+                                    switch (status) {
+                                        case 'pagado': return 'bg-green-50 border-green-200 text-green-700 opacity-80';
+                                        case 'validando': return 'bg-yellow-50 border-yellow-300 text-yellow-700 animate-pulse';
+                                        case 'pendiente': return 'bg-white border-dashed border-red-200 text-red-600 hover:border-red-400 hover:bg-red-50';
+                                        default: return 'bg-gray-50 border-gray-100 text-gray-400';
+                                    }
+                                };
+
+                                const handleMonthToggle = () => {
+                                    if (status !== 'pendiente') return;
+
+                                    if (isSelected) {
+                                        // Deselecting: must deselect future months in selection
+                                        const monthIdx = treasuryConfig.contribution.months.findIndex(m => m.id === month.id);
+                                        setSelectedMonths(prev => prev.filter(id => {
+                                            const idx = treasuryConfig.contribution.months.findIndex(m => m.id === id);
+                                            return idx < monthIdx;
+                                        }));
+                                    } else {
+                                        // Selecting: must ensure sequence
+                                        const monthIdx = treasuryConfig.contribution.months.findIndex(m => m.id === month.id);
+                                        const pendingPrevious = treasuryConfig.contribution.months.slice(0, monthIdx).filter(m => {
+                                            const c = contributionPlan.find(curr => curr.organizador_id === user.id && curr.mes === m.id);
+                                            return (!c || c.estado === 'pendiente') && !selectedMonths.includes(m.id);
+                                        });
+
+                                        if (pendingPrevious.length > 0) {
+                                            showError('Debes seleccionar los meses en orden secuencial.', 'Orden de Pago');
+                                            return;
+                                        }
+                                        setSelectedMonths(prev => [...prev, month.id]);
+                                    }
+                                };
+
+                                return (
+                                    <button
+                                        key={month.id}
+                                        onClick={handleMonthToggle}
+                                        disabled={status === 'pagado' || status === 'validando'}
+                                        className={`p-4 rounded-xl border-2 text-left transition-all relative ${getStatusStyle()}`}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className="font-bold text-sm tracking-tight">{month.label}</span>
+                                            {status === 'pagado' && <CheckCircle size={14} />}
+                                            {status === 'validando' && <Clock size={14} />}
+                                        </div>
+                                        <div className="text-[10px] font-bold uppercase opacity-80">
+                                            {status === 'pagado' ? 'Pagado' : status === 'validando' ? 'Pendiente Val.' : `S/ ${treasuryConfig.contribution.monthlyAmount}`}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        {/* Voucher Form */}
+                        {selectedMonths.length > 0 && (
+                            <Card className="bg-gray-50 border-blue-100 mt-6 p-4 animate-in fade-in slide-in-from-bottom-2">
+                                <h5 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
+                                    <Upload size={16} className="text-blue-600" />
+                                    Registrar Pago ({selectedMonths.length} {selectedMonths.length === 1 ? 'Periodo' : 'Periodos'})
+                                </h5>
+
+
+                                <div className="space-y-4">
+                                    <div className="flex justify-between text-xs mb-3">
+                                        <span className="text-gray-500">Monto Final:</span>
+                                        <span className="font-black text-gray-900 text-sm">S/ {selectedMonths.length * treasuryConfig.contribution.monthlyAmount}</span>
+                                    </div>
+
+                                    {/* File Upload */}
+                                    <div className="flex items-center gap-3">
+                                        <label className="flex-1 cursor-pointer">
+                                            <div className={`border-2 border-dashed rounded-xl p-4 text-center transition-all ${voucherFile
+                                                ? 'border-green-300 bg-green-50'
+                                                : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
+                                                }`}>
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={handleFileChange}
+                                                    className="hidden"
+                                                    required
+                                                />
+                                                <div className="flex flex-col items-center gap-2">
+                                                    {voucherFile ? (
+                                                        <>
+                                                            <CheckCircle className="text-green-600" size={24} />
+                                                            <p className="text-xs font-medium text-green-700">{voucherFile.name}</p>
+                                                            <p className="text-[10px] text-green-600">
+                                                                {(voucherFile.size / 1024).toFixed(1)} KB
+                                                            </p>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Upload className="text-gray-400" size={24} />
+                                                            <p className="text-xs text-gray-600">
+                                                                <span className="font-semibold text-blue-600">Subir comprobante</span>
+                                                            </p>
+                                                            <p className="text-[10px] text-gray-500">PNG, JPG (máx 5MB)</p>
+                                                        </>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </Card>
-                                    );
-                                })}
-                            </div>
+                                        </label>
+
+                                        {voucherPreview && (
+                                            <div className="w-20 h-20 border-2 border-gray-200 rounded-lg overflow-hidden flex-shrink-0">
+                                                <img
+                                                    src={voucherPreview}
+                                                    alt="Preview"
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="ghost"
+                                        className="flex-1"
+                                        onClick={() => {
+                                            setSelectedMonths([]);
+                                            setVoucherUrl('');
+                                            setVoucherFile(null);
+                                            setVoucherPreview(null);
+                                        }}
+                                    >
+                                        Cancelar
+                                    </Button>
+                                    <Button
+                                        className="flex-3 bg-blue-600 hover:bg-blue-700"
+                                        loading={isSubmittingVoucher}
+                                        disabled={!voucherFile}
+                                        onClick={async () => {
+                                            if (!voucherFile) {
+                                                showError('Debes subir el comprobante de pago.', 'Campo Obligatorio');
+                                                return;
+                                            }
+
+                                            try {
+                                                setIsSubmittingVoucher(true);
+
+                                                // Upload file to cloud
+                                                const uploadedUrl = await uploadToCloud(voucherFile);
+
+                                                await recordContribution(
+                                                    user.id,
+                                                    selectedMonths,
+                                                    null, // No account selection for organizer
+                                                    selectedMonths.length * treasuryConfig.contribution.monthlyAmount,
+                                                    uploadedUrl,
+                                                    true // isValidationRequest
+                                                );
+                                                await reload();
+                                                setSelectedMonths([]);
+                                                setVoucherUrl('');
+                                                setVoucherFile(null);
+                                                setVoucherPreview(null);
+                                                await showSuccess('✅ Comprobante enviado para validación.');
+                                            } catch (err) {
+                                                showError(err.message, 'Error al enviar comprobante');
+                                            } finally {
+                                                setIsSubmittingVoucher(false);
+                                            }
+                                        }}
+                                    >
+                                        Enviar para Validación
+                                    </Button>
+                                </div>
+                            </Card>
                         )}
                     </div>
-                </div>
-            </Modal>
+                )}
+            </Modal >
 
             {/* Update Task Modal */}
-            <Modal
+            < Modal
                 isOpen={isUpdating}
                 onClose={() => setIsUpdating(false)}
                 title="Actualizar Tarea"
@@ -411,7 +679,7 @@ const TasksQuickAccess = ({ user }) => {
                         </div>
                     </div>
                 )}
-            </Modal>
+            </Modal >
         </>
     );
 };
