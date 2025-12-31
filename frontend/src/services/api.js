@@ -60,7 +60,7 @@ const DEFAULT_DAYS = [
 ];
 
 const DEFAULT_CATEGORIES = {
-    income: ['Inscripciones', 'Patrocinio', 'Subvención', 'Donación', 'Otro'],
+    income: ['Inscripciones', 'Aporte Mensual', 'Patrocinio', 'Subvención', 'Donación', 'Otro'],
     expense: ['Logística', 'Honorarios', 'Alimentación', 'Transporte', 'Publicidad', 'Materiales', 'Otro']
 };
 
@@ -1401,7 +1401,7 @@ export const api = {
             const totalExpected = organizers.length * (config.contribution.months?.length || 0) * config.contribution.monthlyAmount;
             const budgetPlan = storage.get(STORAGE_KEYS.TREASURY_BUDGET_PLAN, INITIAL_BUDGET_PLAN);
             const updatedBudget = budgetPlan.map(item =>
-                item.categoria === 'Aportes' ? { ...item, presupuestado: totalExpected } : item
+                item.categoria === 'Aporte Mensual' ? { ...item, presupuestado: totalExpected } : item
             );
             storage.set(STORAGE_KEYS.TREASURY_BUDGET_PLAN, updatedBudget);
 
@@ -1478,7 +1478,7 @@ export const api = {
                 fecha: new Date().toISOString().split('T')[0],
                 descripcion: `Aporte ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
                 monto: totalAmount,
-                categoria: 'Aportes',
+                categoria: 'Aporte Mensual',
                 cuenta_id: targetAccountId,
                 url_comprobante: comprobante,
                 estado: 'validado',
@@ -1527,7 +1527,7 @@ export const api = {
                 fecha: new Date().toISOString().split('T')[0],
                 descripcion: `Aporte Validado ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
                 monto: totalAmount,
-                categoria: 'Aportes',
+                categoria: 'Aporte Mensual',
                 cuenta_id: targetAccountId,
                 url_comprobante: targetContribs[0].comprobante, // Use the first one (they should be grouped)
                 estado: 'validado',
@@ -1548,6 +1548,40 @@ export const api = {
                 transaction: newTx,
                 updatedPlan
             };
+        },
+
+        rejectContribution: async (organizadorId, mesIds, reason) => {
+            await delay();
+            const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
+            const mesArray = Array.isArray(mesIds) ? mesIds : [mesIds];
+
+            // Revert status to 'pendiente'
+            const updatedPlan = plan.map(c => {
+                if (c.organizador_id === organizadorId && mesArray.includes(c.mes) && c.estado === 'validando') {
+                    return {
+                        ...c,
+                        estado: 'pendiente',
+                        comprobante: null,
+                        voucheredAt: null
+                    };
+                }
+                return c;
+            });
+            storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
+
+            // Notify Organizer
+            const organizerName = plan.find(c => c.organizador_id === organizadorId)?.organizador_nombre || 'Organizador';
+            const mesLabels = plan.filter(c => mesArray.includes(c.mes)).map(c => c.mes_label).join(', ');
+
+            await api.notifications.add({
+                type: 'contribution_rejection',
+                title: 'Comprobante Rechazado',
+                message: `Tu comprobante para ${mesLabels} fue rechazado. ${reason ? `Motivo: ${reason}` : ''}`,
+                link: `?view=tasks-dashboard&tab=payments`, // Adjust link as needed
+                userId: organizadorId
+            });
+
+            return updatedPlan;
         },
 
         // Budget Plan
@@ -1754,6 +1788,8 @@ export const api = {
             if (index !== -1) {
                 categories[type][index] = newName;
                 storage.set(STORAGE_KEYS.TREASURY_CATEGORIES, categories);
+            } else {
+                throw new Error('Categoría no encontrada para renombrar');
             }
             return categories;
         },

@@ -397,7 +397,17 @@ export const useTreasury = () => {
 
         // Contribution Operations
         recordContribution,
-        validateContribution: api.treasury.validateContribution,
+        validateContribution: approveContribution, // Use internal wrapper to ensure reload
+        rejectContribution: async (organizadorId, meses, reason) => {
+            try {
+                const result = await api.treasury.rejectContribution(organizadorId, meses, reason);
+                await loadTreasuryData();
+                return result;
+            } catch (err) {
+                console.error('Error rejecting contribution:', err);
+                throw err;
+            }
+        },
         initializeContributionPlan,
 
         // Budget Operations

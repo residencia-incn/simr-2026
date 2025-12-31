@@ -65,6 +65,7 @@ const TreasurerDashboard = ({ user }) => {
         deleteTransaction,
         recordContribution,
         validateContribution,
+        rejectContribution,
         initializeContributionPlan,
         updateBudgetCategory,
         updateConfig,
@@ -111,6 +112,48 @@ const TreasurerDashboard = ({ user }) => {
         confirmedAttendees = [],
         budgets = []
     } = data || {};
+
+    // --- Validation Logic: Merge Registrations + Contributions ---
+    const pendingContributions = useMemo(() => {
+        if (!contributionPlan) return [];
+        // Group by organizer and voucher timestamp (or ID)
+        const groups = {};
+        contributionPlan.filter(c => c.estado === 'validando').forEach(c => {
+            const key = `${c.organizador_id}-${c.voucheredAt || 'novoucher'}`;
+            if (!groups[key]) {
+                groups[key] = {
+                    id: key,
+                    type: 'Contribution', // Marker
+                    organizerId: c.organizador_id,
+                    name: c.organizador_nombre,
+                    voucheredAt: c.voucheredAt,
+                    voucherData: c.comprobante,
+                    months: [],
+                    amount: 0,
+                    mes_labels: [],
+
+                    // Fields for VerificationList compatibility
+                    dni: 'Organizador',
+                    occupation: 'Comité Organizador',
+                    institution: 'SIMR 2026',
+                    modalidad: 'Aporte Mensual',
+                    ticketType: null, // Use modalidad
+                    email: '-'
+                };
+            }
+            groups[key].months.push(c.mes);
+            groups[key].mes_labels.push(c.mes_label);
+            groups[key].amount += c.monto_esperado;
+        });
+
+        return Object.values(groups).map(g => ({
+            ...g,
+            details: `Meses: ${g.mes_labels.join(', ')}`
+        }));
+    }, [contributionPlan]);
+
+    // Combine for display (Contributions first)
+    const allPendingValidations = [...pendingContributions, ...pendingRegistrations];
 
     // Budget Update Handler
     const handleBudgetUpdate = async (category, amount) => {
@@ -533,8 +576,8 @@ const TreasurerDashboard = ({ user }) => {
 
     const handleRenameCategoryWrapper = async (type, oldName, newName) => {
         try {
-            const updatedCategories = await api.treasury.renameCategory(type, oldName, newName);
-            setCategories(updatedCategories);
+            await api.treasury.renameCategory(type, oldName, newName);
+            await reloadTreasury(); // Force reload to ensure synchronization
             showSuccess(`Categoría renombrada a "${newName}".`, 'Éxito');
         } catch (err) {
             console.error(err);
@@ -550,44 +593,61 @@ const TreasurerDashboard = ({ user }) => {
             type: 'warning',
             onConfirm: async () => {
                 try {
-                    // Validate that we have at least one account
-                    if (accounts.length === 0) {
-                        showError('Por favor crea una cuenta primero.', 'No hay cuentas disponibles');
-                        setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-                        return;
+                    if (reg.type === 'Contribution') {
+                        await validateContribution(reg.organizerId, reg.months, null); // Default account
+                        showSuccess(`Aporte validado por S/ ${reg.amount.toFixed(2)}`, 'Aporte Validado');
+                    } else {
+                        // Validate that we have at least one account
+                        if (accounts.length === 0) {
+                            showError('Por favor crea una cuenta primero.', 'No hay cuentas disponibles');
+                            setConfirmConfig(prev => ({ ...prev, isOpen: false }));
+                            return;
+                        }
+                        await api.registrations.approve(reg);
                     }
-
-                    await api.registrations.approve(reg);
 
                     await Promise.all([
                         loadData(),
                         reloadTreasury()
                     ]);
 
-                    showSuccess('La inscripción ha sido procesada correctamente.', 'Inscripción aprobada');
+                    if (reg.type !== 'Contribution') {
+                        showSuccess('La inscripción ha sido procesada correctamente.', 'Inscripción aprobada');
+                    }
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
 
                 } catch (err) {
-                    console.error("Error approving registration", err);
-                    showError('No se pudo procesar la inscripción.', 'Error al aprobar');
+                    console.error("Error approving:", err);
+                    showError('No se pudo procesar la solicitud.', 'Error');
                 }
             }
         });
     };
 
     const handleRejectRegistration = async (id) => {
+        const item = allPendingValidations.find(i => i.id === id);
+
         setConfirmConfig({
             isOpen: true,
-            title: 'Rechazar Inscripción',
-            message: '¿Rechazar esta inscripción? Se eliminará de la lista de pendientes.',
+            title: item?.type === 'Contribution' ? 'Rechazar Aporte' : 'Rechazar Inscripción',
+            message: item?.type === 'Contribution'
+                ? '¿Rechazar este comprobante? El estado volverá a pendiente.'
+                : '¿Rechazar esta inscripción? Se eliminará de la lista de pendientes.',
             type: 'danger',
             onConfirm: async () => {
                 try {
-                    await api.registrations.remove(id);
-                    await loadData();
+                    if (item?.type === 'Contribution') {
+                        await rejectContribution(item.organizerId, item.months, 'Comprobante rechazado por tesorería');
+                        showSuccess('El aporte ha sido rechazado.', 'Rechazado');
+                    } else {
+                        await api.registrations.remove(id);
+                    }
+
+                    await Promise.all([loadData(), reloadTreasury()]);
                     setConfirmConfig(prev => ({ ...prev, isOpen: false }));
                 } catch (err) {
                     console.error(err);
+                    showError('Error al rechazar.', 'Error');
                 }
             }
         });
@@ -710,7 +770,7 @@ const TreasurerDashboard = ({ user }) => {
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'validation' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <CheckSquare size={20} />
-                        {pendingRegistrations.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{pendingRegistrations.length}</span>}
+                        {allPendingValidations.length > 0 && <span className="absolute -top-1 -right-1 bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{allPendingValidations.length}</span>}
                         <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
                             <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
                             Validación
@@ -737,16 +797,7 @@ const TreasurerDashboard = ({ user }) => {
                             Egresos
                         </span>
                     </button>
-                    <button
-                        onClick={() => handleTabChange('budget')}
-                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'budget' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                        <DollarSign size={20} />
-                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
-                            Presupuesto
-                        </span>
-                    </button>
+
                     <button
                         onClick={() => handleTabChange('accounts')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'accounts' ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
@@ -891,11 +942,11 @@ const TreasurerDashboard = ({ user }) => {
                                 <CheckSquare className="text-orange-600" /> Validación de Pagos
                             </h3>
                             <div className="text-sm text-gray-500">
-                                Pendientes: <span className="font-bold text-gray-900">{pendingRegistrations.length}</span>
+                                Pendientes: <span className="font-bold text-gray-900">{allPendingValidations.length}</span>
                             </div>
                         </div>
                         <VerificationList
-                            pendingRegistrations={pendingRegistrations}
+                            pendingRegistrations={allPendingValidations}
                             onApprove={handleApproveRegistration}
                             onReject={handleRejectRegistration}
                         />
@@ -1083,71 +1134,7 @@ const TreasurerDashboard = ({ user }) => {
                 />
             )}
 
-            {activeTab === 'budget' && (
-                <div className="space-y-6">
-                    <Card className="p-6">
-                        <h3 className="text-lg font-bold mb-6 flex items-center gap-2">
-                            <PieChart className="text-teal-600" /> Control Presupuestal (Previsto vs Ejecutado)
-                        </h3>
-                        <div className="space-y-8">
-                            {budgetExecution.map(item => {
-                                const progress = item.porcentaje;
-                                const isOver = item.estado === 'excedido';
-                                const isAlert = item.estado === 'alerta';
 
-                                return (
-                                    <div key={item.categoria} className="space-y-2">
-                                        <div className="flex justify-between items-end">
-                                            <div>
-                                                <p className="font-bold text-gray-900">{item.categoria}</p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <span className="text-xs text-gray-500">Presupuesto: S/</span>
-                                                    <input
-                                                        type="number"
-                                                        className="border rounded px-2 py-0.5 w-24 text-sm font-medium bg-gray-50 focus:bg-white focus:ring-1 ring-teal-500 outline-none transition-all"
-                                                        value={item.presupuestado}
-                                                        onChange={(e) => {
-                                                            const newAmount = parseFloat(e.target.value) || 0;
-                                                            updateBudgetCategory(item.categoria, newAmount);
-                                                        }}
-                                                        placeholder="0.00"
-                                                        min="0"
-                                                        step="0.01"
-                                                    />
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={`font-bold ${isOver ? 'text-red-600' : isAlert ? 'text-yellow-600' : 'text-gray-900'}`}>
-                                                    S/ {item.ejecutado.toFixed(2)}
-                                                </p>
-                                                <p className="text-xs text-gray-500">Ejecutado</p>
-                                            </div>
-                                        </div>
-
-                                        <div className="relative h-4 bg-gray-100 rounded-full overflow-hidden">
-                                            <div
-                                                className={`absolute left-0 top-0 h-full transition-all duration-500 ${isOver ? 'bg-red-500' : isAlert ? 'bg-yellow-500' : 'bg-teal-500'
-                                                    }`}
-                                                style={{ width: `${Math.min(progress, 100)}%` }}
-                                            ></div>
-                                        </div>
-
-                                        <div className="flex justify-between text-xs">
-                                            <span className="text-gray-400">0%</span>
-                                            <span className={`font-medium ${isOver ? 'text-red-600' : isAlert ? 'text-yellow-600' : 'text-teal-600'}`}>
-                                                {progress.toFixed(1)}% {isOver && '(Excedido)'} {isAlert && '(Alerta)'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                );
-                            })}
-                            {budgetExecution.length === 0 && (
-                                <p className="text-gray-500 italic text-center">No hay categorías presupuestales definidas.</p>
-                            )}
-                        </div>
-                    </Card>
-                </div>
-            )}
 
             {/* Accounts Tab */}
             {
@@ -1185,6 +1172,8 @@ const TreasurerDashboard = ({ user }) => {
                         accounts={accounts}
                         budgetExecution={budgetExecution}
                         user={user}
+                        organizers={contributionStatus}
+                        config={config}
                     />
                 )
             }

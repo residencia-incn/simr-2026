@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { Filter, Download, TrendingUp, TrendingDown, TriangleAlert, CheckCircle, Printer } from 'lucide-react';
 import { Button, Card, FormField, Table } from '../ui';
+import PaymentPunctualityReport from './PaymentPunctualityReport';
 
-const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
+const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers, config }) => {
     const [activeTab, setActiveTab] = useState('cashflow');
     const [filters, setFilters] = useState({
         startDate: '',
@@ -157,14 +158,15 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
                     >
                         Flujo de Caja
                     </button>
+
                     <button
-                        onClick={() => setActiveTab('budget')}
-                        className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'budget'
+                        onClick={() => setActiveTab('punctuality')}
+                        className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'punctuality'
                             ? 'border-blue-600 text-blue-600'
                             : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                             }`}
                     >
-                        Ejecución Presupuestal
+                        Puntualidad de Pagos
                     </button>
                 </nav>
             </div>
@@ -307,83 +309,10 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user }) => {
             )}
 
             {/* Budget Execution Tab */}
-            {activeTab === 'budget' && (
-                <div className="space-y-4">
-                    <Card className="overflow-x-auto print:shadow-none print:border-none">
-                        <table className="w-full">
-                            <thead className="bg-gray-50 border-b border-gray-200">
-                                <tr>
-                                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase">Categoría</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Presupuestado</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Ejecutado</th>
-                                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase">Diferencia</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">% Ejecución</th>
-                                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase">Estado</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {(budgetExecution || []).map((item, idx) => (
-                                    <tr key={item.categoria} className={idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                        <td className="px-4 py-3 text-sm font-medium text-gray-900">{item.categoria}</td>
-                                        <td className="px-4 py-3 text-sm text-right text-gray-900">
-                                            S/ {(item.presupuestado || 0).toFixed(2)}
-                                        </td>
-                                        <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
-                                            S/ {(item.ejecutado || 0).toFixed(2)}
-                                        </td>
-                                        <td className={`px-4 py-3 text-sm text-right font-semibold ${item.diferencia >= 0 ? 'text-green-600' : 'text-red-600'
-                                            }`}>
-                                            S/ {(item.diferencia || 0).toFixed(2)}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <div className="flex flex-col items-center gap-1">
-                                                <span className="text-sm font-semibold text-gray-900">
-                                                    {(item.porcentaje || 0).toFixed(1)}%
-                                                </span>
-                                                <div className="w-full bg-gray-200 rounded-full h-2">
-                                                    <div
-                                                        className={`h-2 rounded-full transition-all ${item.estado === 'excedido'
-                                                            ? 'bg-red-600'
-                                                            : item.estado === 'alerta'
-                                                                ? 'bg-yellow-500'
-                                                                : 'bg-green-600'
-                                                            }`}
-                                                        style={{ width: `${Math.min(item.porcentaje || 0, 100)}%` }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-3 text-center">
-                                            {getStatusBadge(item.estado)}
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </Card>
 
-                    {/* Summary */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 print:grid-cols-3">
-                        <Card className="p-4 bg-blue-50 border-blue-200 print:shadow-none print:border">
-                            <p className="text-sm text-blue-600 font-medium mb-1">Total Presupuestado</p>
-                            <p className="text-2xl font-bold text-blue-900">
-                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.presupuestado || 0), 0).toFixed(2)}
-                            </p>
-                        </Card>
-                        <Card className="p-4 bg-purple-50 border-purple-200 print:shadow-none print:border">
-                            <p className="text-sm text-purple-600 font-medium mb-1">Total Ejecutado</p>
-                            <p className="text-2xl font-bold text-purple-900">
-                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.ejecutado || 0), 0).toFixed(2)}
-                            </p>
-                        </Card>
-                        <Card className="p-4 bg-green-50 border-green-200 print:shadow-none print:border">
-                            <p className="text-sm text-green-600 font-medium mb-1">Disponible</p>
-                            <p className="text-2xl font-bold text-green-900">
-                                S/ {(budgetExecution || []).reduce((sum, item) => sum + (item.diferencia || 0), 0).toFixed(2)}
-                            </p>
-                        </Card>
-                    </div>
-                </div>
+            {/* Punctuality Tab */}
+            {activeTab === 'punctuality' && (
+                <PaymentPunctualityReport organizers={organizers} config={config} />
             )}
         </div>
     );

@@ -25,6 +25,91 @@ const ContributionsManager = ({
     const organizers = contributionStatus || [];
     const months = config?.contribution?.months || [];
 
+    // --- Helper Functions ---
+    const getCellStatus = (organizadorId, mes) => {
+        const contrib = contributionPlan.find(
+            c => (c.organizador_id === organizadorId) && c.mes === mes
+        );
+        return contrib?.estado || 'pendiente';
+    };
+
+    const getStatusStyles = (estado, isSelected) => {
+        if (isSelected) return 'bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300 transform scale-105 z-10';
+
+        switch (estado) {
+            case 'pagado':
+                return 'bg-green-50 border-green-200 text-green-800 opacity-90';
+            case 'validando':
+                return 'bg-yellow-50 border-yellow-300 text-yellow-800 animate-pulse';
+            case 'pendiente':
+                return 'bg-white border-dashed border-red-200 text-red-800 hover:border-red-400 hover:bg-red-50 cursor-pointer';
+            default:
+                return 'bg-gray-50 border-gray-200 text-gray-500';
+        }
+    };
+
+    // --- Debt Calculation Logic ---
+    const calculateDebtStatus = () => {
+        if (!selectedOrganizer || !months.length || !config) return null;
+
+        const pendingMonths = months.filter(m => {
+            const status = getCellStatus(selectedOrganizer.organizador_id, m.id);
+            return status !== 'pagado' && status !== 'validando'; // 'pendiente' basically
+        });
+
+        if (pendingMonths.length === 0) {
+            return { status: 'ok', label: 'Al Día', color: 'green', message: 'No tiene cuotas pendientes.' };
+        }
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        let isLate = false;
+        let totalDebt = pendingMonths.length * (config.contribution.monthlyAmount || 0);
+
+        // Check if any pending month is past deadline
+        pendingMonths.forEach(m => {
+            if (m.deadline) {
+                // Parse "YYYY-MM-DD" safely (assuming local deadline or UTC, usually safer to treat as string comparison if format matches)
+                // But let's use Date comparison
+                const deadlineDate = new Date(m.deadline);
+                // fix timezone offset issue by treating string as YYYY/MM/DD or just comparing timestamps
+                // Simplest: comparison of strings YYYY-MM-DD works if ISO.
+                // today.toISOString().split('T')[0] > m.deadline
+
+                // Using Date object for safety:
+                // Adjust deadline to end of day? No, usually end of day.
+                deadlineDate.setHours(23, 59, 59, 999);
+                // Actually parse properly to avoid timezone shifts (Date("2026-01-31") might vary).
+                // Let's use string comparison for robustness with YYYY-MM-DD
+                const todayStr = new Date().toISOString().split('T')[0];
+                if (todayStr > m.deadline) {
+                    isLate = true;
+                }
+            }
+        });
+
+        if (isLate) {
+            return {
+                status: 'late',
+                label: 'Fuera de Fecha',
+                color: 'red',
+                message: `Tiene ${pendingMonths.length} cuotas pendientes (S/ ${totalDebt})`,
+                amount: totalDebt
+            };
+        } else {
+            return {
+                status: 'debt',
+                label: 'Por Pagar',
+                color: 'blue',
+                message: `Tiene ${pendingMonths.length} cuotas pendientes (S/ ${totalDebt})`,
+                amount: totalDebt
+            };
+        }
+    };
+
+    const debtStatus = calculateDebtStatus();
+
     // Auto-select organizer from URL params (Notification link)
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
@@ -252,27 +337,7 @@ const ContributionsManager = ({
         }
     };
 
-    const getCellStatus = (organizadorId, mes) => {
-        const contrib = contributionPlan.find(
-            c => (c.organizador_id === organizadorId) && c.mes === mes
-        );
-        return contrib?.estado || 'pendiente';
-    };
 
-    const getStatusStyles = (estado, isSelected) => {
-        if (isSelected) return 'bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300 transform scale-105 z-10';
-
-        switch (estado) {
-            case 'pagado':
-                return 'bg-green-50 border-green-200 text-green-800 opacity-90';
-            case 'validando':
-                return 'bg-yellow-50 border-yellow-300 text-yellow-800 animate-pulse';
-            case 'pendiente':
-                return 'bg-white border-dashed border-red-200 text-red-800 hover:border-red-400 hover:bg-red-50 cursor-pointer';
-            default:
-                return 'bg-gray-50 border-gray-200 text-gray-500';
-        }
-    };
 
     // Calcular totales
     const totalExpected = organizers.reduce((sum, org) => sum + org.total_esperado, 0);
@@ -470,6 +535,25 @@ const ContributionsManager = ({
                                             );
                                         })}
                                     </div>
+
+                                    {/* Status Banner */}
+                                    {debtStatus && debtStatus.status !== 'ok' && (
+                                        <div className={`px-4 py-2 rounded-xl text-sm font-bold flex flex-col items-end ${debtStatus.status === 'late' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
+                                            }`}>
+                                            <span className="uppercase text-[10px] opacity-80">{debtStatus.status === 'late' ? 'Estado Crítico' : 'Estado de Cuenta'}</span>
+                                            <span className="flex items-center gap-1">
+                                                {debtStatus.status === 'late' ? <XCircle size={16} /> : <DollarSign size={16} />}
+                                                {debtStatus.label}
+                                            </span>
+                                            <span className="text-xs font-normal mt-0.5">{debtStatus.message}</span>
+                                        </div>
+                                    )}
+                                    {debtStatus && debtStatus.status === 'ok' && (
+                                        <div className="px-4 py-2 rounded-xl text-sm font-bold bg-green-50 text-green-600 flex flex-col items-end">
+                                            <span className="uppercase text-[10px] opacity-80">Estado de Cuenta</span>
+                                            <span className="flex items-center gap-1"><CheckCircle size={16} /> {debtStatus.label}</span>
+                                        </div>
+                                    )}
                                 </div>
                             </Card>
                         ) : (

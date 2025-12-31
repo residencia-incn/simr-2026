@@ -9,6 +9,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
 
     // Contribution Config State
     const [monthlyAmount, setMonthlyAmount] = useState(config?.contribution?.monthlyAmount || 50);
+    const [monthlyDeadlineDay, setMonthlyDeadlineDay] = useState(config?.contribution?.monthlyDeadlineDay || 5);
     const [startMonth, setStartMonth] = useState(config?.contribution?.startMonth || '2026-01');
     const [endMonth, setEndMonth] = useState(config?.contribution?.endMonth || '2026-06');
     const [defaultContributionAccount, setDefaultContributionAccount] = useState(config?.contribution?.defaultContributionAccount || '');
@@ -21,6 +22,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     useEffect(() => {
         if (config) {
             setMonthlyAmount(config.contribution.monthlyAmount);
+            setMonthlyDeadlineDay(config.contribution.monthlyDeadlineDay || 5);
             setStartMonth(config.contribution.startMonth);
             setEndMonth(config.contribution.endMonth);
             setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
@@ -28,7 +30,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
         }
     }, [config]);
 
-    const generateMonthsArray = (start, end) => {
+    const generateMonthsArray = (start, end, deadlineDay) => {
         const months = [];
         const startDate = new Date(start + '-02'); // Use 02 to avoid timezone issues
         const endDate = new Date(end + '-02');
@@ -45,8 +47,12 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
             const id = `${year}-${String(month + 1).padStart(2, '0')}`;
 
             // Last day of month
-            const lastDay = new Date(year, month + 1, 0).getDate();
-            const deadline = `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}`;
+            // Calculate deadline (Day X of the month)
+            // If day is invalid (e.g. Feb 30), Date object auto-corrects to next month, which is fine, or we clamp it.
+            // Better to clamp to last day of month.
+            const lastDayOfMonth = new Date(year, month + 1, 0).getDate();
+            const dayToUse = Math.min(deadlineDay, lastDayOfMonth);
+            const deadline = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayToUse).padStart(2, '0')}`;
 
             months.push({
                 id,
@@ -63,10 +69,11 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
         e.preventDefault();
         setSaving(true);
         try {
-            const months = generateMonthsArray(startMonth, endMonth);
+            const months = generateMonthsArray(startMonth, endMonth, parseInt(monthlyDeadlineDay));
             await onUpdateConfig({
                 contribution: {
                     monthlyAmount: parseFloat(monthlyAmount),
+                    monthlyDeadlineDay: parseInt(monthlyDeadlineDay),
                     startMonth,
                     endMonth,
                     months,
@@ -123,6 +130,17 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                                     placeholder="0.00"
                                     step="0.01"
                                     required
+                                />
+                                <FormField
+                                    label="Día Límite Mensual de Pago"
+                                    type="number"
+                                    value={monthlyDeadlineDay}
+                                    onChange={(e) => setMonthlyDeadlineDay(e.target.value)}
+                                    placeholder="Ej. 5"
+                                    min="1"
+                                    max="31"
+                                    required
+                                    helpText="Día del mes hasta el cual se considera puntual."
                                 />
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField
@@ -293,7 +311,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     );
 };
 
-const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes'];
+const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes', 'Aporte Mensual'];
 
 const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
     const [newCat, setNewCat] = useState('');
@@ -317,12 +335,12 @@ const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
         setEditValue('');
     };
 
-    const saveEditing = (oldName) => {
+    const saveEditing = async (oldName) => {
         if (!editValue.trim() || editValue === oldName) {
             cancelEditing();
             return;
         }
-        onRename(oldName, editValue.trim());
+        await onRename(oldName, editValue.trim());
         cancelEditing();
     };
 
@@ -351,13 +369,17 @@ const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
                                         type="text"
                                         value={editValue}
                                         onChange={(e) => setEditValue(e.target.value)}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') saveEditing(cat);
+                                            if (e.key === 'Escape') cancelEditing();
+                                        }}
                                         className="flex-1 px-2 py-1 text-sm border rounded shadow-sm outline-none focus:ring-1 focus:ring-blue-500"
                                         autoFocus
                                     />
-                                    <button onClick={() => saveEditing(cat)} className="text-green-600 hover:text-green-700">
+                                    <button type="button" onClick={() => saveEditing(cat)} className="text-green-600 hover:text-green-700">
                                         <Save size={16} />
                                     </button>
-                                    <button onClick={cancelEditing} className="text-gray-400 hover:text-gray-600">
+                                    <button type="button" onClick={cancelEditing} className="text-gray-400 hover:text-gray-600">
                                         <X size={16} />
                                     </button>
                                 </div>

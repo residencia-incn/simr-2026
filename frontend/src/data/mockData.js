@@ -820,6 +820,7 @@ export const INITIAL_ACCOUNTS = [
 export const TREASURY_CONFIG = {
     contribution: {
         monthlyAmount: 50,
+        monthlyDeadlineDay: 5, // Default to 5th of next month? Or current? Let's assume current.
         startMonth: '2026-01',
         endMonth: '2026-06',
         months: [
