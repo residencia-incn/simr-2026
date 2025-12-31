@@ -507,6 +507,37 @@ export const MOCK_USERS = [
         cmp: '33333',
         image: null
     },
+    {
+        id: 'user-karen',
+        email: 'karen.calsin@incn.gob.pe',
+        password: '123456',
+        name: 'Dra. Karen Calsin',
+        firstName: 'Karen',
+        lastName: 'Calsin',
+        dni: '40404040',
+
+        // Nuevos campos RBAC
+        eventRole: 'organizador',
+        organizerFunction: 'tesorero',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'contabilidad', 'aula_virtual', 'trabajos'],
+        isSuperAdmin: false,
+
+        // Legacy (mantener por compatibilidad)
+        eventRoles: ['organizador'],
+        profiles: ['contabilidad', 'aula_virtual', 'trabajos', 'perfil_basico'],
+
+        occupation: 'Residente R2',
+        institution: 'INCN',
+        modality: 'Presencial',
+        registrationType: 'presencial_certificado',
+        registrationDate: '2024-01-01',
+        status: 'Confirmado',
+        amount: 0,
+        cmp: '40404',
+        image: null
+    },
     // Nuevos Autores con Trabajos PENDIENTES (Rol: Asistente/Residente)
     {
         id: 'user-20',
