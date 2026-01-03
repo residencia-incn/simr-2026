@@ -4,6 +4,8 @@ import { Button, Card, Modal, FormField, LoadingSpinner, EmptyState, ConfirmDial
 import { api } from '../../services/api';
 import { useApi } from '../../hooks';
 import { showWarning, showError } from '../../utils/alerts';
+import AgreementEditor from './AgreementEditor';
+import { flattenAgreements } from '../../utils/agreementUtils';
 
 const PlanningManager = ({ currentUser }) => {
     const [meetings, setMeetings] = useState([]);
@@ -21,6 +23,9 @@ const PlanningManager = ({ currentUser }) => {
     const [dateFilter, setDateFilter] = useState({ startDate: '', endDate: '' });
     const [viewingTaskDetails, setViewingTaskDetails] = useState(null);
     const [openedFromPreviousMeetings, setOpenedFromPreviousMeetings] = useState(false);
+    const [showParticipantsModal, setShowParticipantsModal] = useState(false);
+    const [showNextMeetingModal, setShowNextMeetingModal] = useState(false);
+    const [nextMeeting, setNextMeeting] = useState({ title: '', date: '', startTime: '', agreements: [] });
     const ITEMS_PER_PAGE = 5;
 
     // Load data
@@ -45,20 +50,33 @@ const PlanningManager = ({ currentUser }) => {
         }
     }, [data]);
 
-    // Calculate overall progress
-    const overallProgress = tasks.length > 0
-        ? Math.round(tasks.reduce((sum, task) => sum + task.progress, 0) / tasks.length)
-        : 0;
-
-    const taskStats = {
-        total: tasks.length,
-        completed: tasks.filter(t => t.status === 'completed').length,
-        inProgress: tasks.filter(t => t.status === 'in_progress').length,
-        pending: tasks.filter(t => t.status === 'pending').length
+    // Calculate meeting progress for each meeting
+    const getMeetingProgress = (meeting) => {
+        const meetingTasks = tasks.filter(t => t.meetingId === meeting.id);
+        return meetingTasks.length > 0
+            ? Math.round(meetingTasks.reduce((sum, t) => sum + t.progress, 0) / meetingTasks.length)
+            : meeting.status === 'closed' ? 100 : 0;
     };
 
-    // Sort meetings by date descending
-    const sortedMeetings = [...meetings].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // Calculate overall progress based on meetings
+    const overallProgress = meetings.length > 0
+        ? Math.round(meetings.reduce((sum, meeting) => sum + getMeetingProgress(meeting), 0) / meetings.length)
+        : 0;
+
+    // Meeting statistics
+    const meetingStats = {
+        total: meetings.length,
+        completed: meetings.filter(m => m.status === 'closed').length,
+        inProgress: meetings.filter(m => m.status === 'open' && new Date(m.date) <= new Date()).length,
+        pending: meetings.filter(m => m.status === 'open' && new Date(m.date) > new Date()).length
+    };
+
+    // Sort meetings by date and time descending (most recent first)
+    const sortedMeetings = [...meetings].sort((a, b) => {
+        const dateA = new Date(`${a.date}T${a.startTime || '00:00'}`);
+        const dateB = new Date(`${b.date}T${b.startTime || '00:00'}`);
+        return dateB - dateA;
+    });
     const recentMeetings = sortedMeetings.slice(0, 4);
 
     // Filter previous meetings by date range
@@ -144,14 +162,42 @@ const PlanningManager = ({ currentUser }) => {
     const handlePrintMeeting = (meeting) => {
         const meetingTasks = tasks.filter(t => t.meetingId === meeting.id);
 
-        // Get confirmed attendees
-        const confirmedAttendees = meeting.attendance
-            ? meeting.attendance
-                .filter(a => a.status === 'confirmed')
-                .map(a => {
-                    const user = users.find(u => u.id === a.userId);
-                    return user ? user.name : a.userName;
-                })
+        // Get next meeting for agenda
+        let nextMeetingPrint = null;
+        if (meeting.plannedNextMeeting) {
+            nextMeetingPrint = meeting.plannedNextMeeting;
+        } else {
+            // Legacy fallback
+            const meetingEnd = new Date(`${meeting.date}T${meeting.startTime || '00:00'}`);
+            const upcomingMeetings = meetings.filter(m => {
+                if (m.status !== 'open') return false;
+                const mStart = new Date(`${m.date}T${m.startTime || '00:00'}`);
+                return mStart > meetingEnd;
+            }).sort((a, b) => new Date(`${a.date}T${a.startTime || '00:00'}`) - new Date(`${b.date}T${b.startTime || '00:00'}`));
+            nextMeetingPrint = upcomingMeetings.length > 0 ? upcomingMeetings[0] : null;
+        }
+
+        // Get attendees with status
+        const attendeesList = meeting.attendance
+            ? meeting.attendance.map(a => {
+                const user = users.find(u => u.id === a.userId);
+                const name = user ? user.name : a.userName;
+                let status = '';
+                let statusColor = '#374151'; // Default gray
+
+                if (a.isJustified) {
+                    status = 'Justificado';
+                    statusColor = '#d97706'; // Amber
+                } else if (a.signedAt) {
+                    status = 'Presente (Firmado)';
+                    statusColor = '#059669'; // Emerald
+                } else {
+                    status = 'Falta / No Firmado';
+                    statusColor = '#dc2626'; // Red
+                }
+
+                return { name, status, statusColor };
+            })
             : [];
 
         const meetingContent = `
@@ -168,8 +214,7 @@ const PlanningManager = ({ currentUser }) => {
                     li { margin-bottom: 5px; }
                     .participants { margin-top: 15px; }
                     .participants ul { list-style-type: none; padding-left: 0; }
-                    .participants li { padding: 5px 0; border-bottom: 1px solid #f3f4f6; }
-                    .participants li:before { content: "✓ "; color: #10b981; font-weight: bold; margin-right: 5px; }
+                    .participants li { padding: 5px 0; border-bottom: 1px solid #f3f4f6; display: flex; justify-content: space-between; }
                     table { width: 100%; border-collapse: collapse; margin-top: 10px; }
                     th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
                     th { background-color: #f3f4f6; color: #374151; }
@@ -188,16 +233,53 @@ const PlanningManager = ({ currentUser }) => {
 
                 <h2>Participantes</h2>
                 <div class="participants">
-                    ${confirmedAttendees.length > 0
-                ? `<ul>${confirmedAttendees.map(name => `<li>${name}</li>`).join('')}</ul>`
-                : '<p>No se registraron participantes confirmados.</p>'
+                    ${attendeesList.length > 0
+                ? `<ul>${attendeesList.map(item => `
+                        <li>
+                            <span>${item.name}</span>
+                            <span style="color: ${item.statusColor}; font-weight: bold; font-size: 0.9em;">${item.status}</span>
+                        </li>`).join('')}</ul>`
+                : '<p>No se registraron participantes.</p>'
             }
                 </div>
 
                 <h2>Acuerdos</h2>
                 ${meeting.agreements && meeting.agreements.length > 0
-                ? `<ul>${meeting.agreements.map(a => `<li>${a}</li>`).join('')}</ul>`
+                ? (() => {
+                    const flattened = flattenAgreements(meeting.agreements);
+                    return flattened.length > 0
+                        ? `<ul style="list-style: none; padding-left: 0;">${flattened.map(item => `
+                            <li style="margin-bottom: 8px; padding-left: ${(item.level - 1) * 30}px;">
+                                <strong>${item.numbering}</strong> ${item.text}
+                            </li>`).join('')}</ul>`
+                        : '<p>No se registraron acuerdos específicos.</p>';
+                })()
                 : '<p>No se registraron acuerdos específicos.</p>'
+            }
+
+                <h2>Agenda de la Próxima Reunión</h2>
+                ${nextMeetingPrint
+                ? (() => {
+                    const flattened = flattenAgreements(nextMeetingPrint.agreements || []);
+                    return `
+                        <div style="margin-bottom: 20px; padding: 15px; background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+                            <p style="font-weight: bold; color: #1e3a8a; margin-bottom: 5px; font-size: 1.1em;">${nextMeetingPrint.title}</p>
+                            <p style="font-size: 0.9em; color: #64748b; margin-bottom: 15px;">
+                                <strong>Fecha:</strong> ${new Date(nextMeetingPrint.date).toLocaleDateString('es-PE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                ${nextMeetingPrint.startTime ? ` | <strong>Hora:</strong> ${nextMeetingPrint.startTime}` : ''}
+                            </p>
+                            
+                            <h3 style="font-size: 1em; color: #334155; margin-bottom: 10px; border-bottom: none;">Puntos de Agenda:</h3>
+                            ${flattened.length > 0
+                            ? `<ul style="list-style: none; padding-left: 0;">${flattened.map(item => `
+                                    <li style="margin-bottom: 8px; padding-left: ${(item.level - 1) * 20}px;">
+                                        <strong>${item.numbering}</strong> ${item.text}
+                                    </li>`).join('')}</ul>`
+                            : '<p style="font-style: italic; color: #94a3b8;">No hay puntos de agenda definidos.</p>'
+                        }
+                        </div>`;
+                })()
+                : '<p style="font-style: italic; color: #94a3b8;">No hay próxima reunión programada.</p>'
             }
 
                 <h2>Tareas Asignadas</h2>
@@ -223,6 +305,45 @@ const PlanningManager = ({ currentUser }) => {
                             </tbody>
                        </table>`
                 : '<p>No se asignaron tareas en esta reunión.</p>'
+            }
+
+                <h2>Firmas</h2>
+                ${meeting.attendance && meeting.attendance.some(a => a.signedAt)
+                ? `<div class="signatures">
+                        <p style="margin-bottom: 20px; color: #666; font-size: 0.9em;">
+                            Las siguientes personas firmaron el acta de esta reunión:
+                        </p>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Nombre</th>
+                                    <th>Fecha y Hora de Firma</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${meeting.attendance
+                    .filter(a => a.signedAt)
+                    .map(a => {
+                        const user = users.find(u => u.id === a.userId);
+                        const name = user ? user.name : a.userName;
+                        const signedDate = new Date(a.signedAt).toLocaleString('es-PE', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        return `
+                                            <tr>
+                                                <td>${name}</td>
+                                                <td>${signedDate}</td>
+                                            </tr>
+                                        `;
+                    }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`
+                : '<p style="color: #dc2626; font-style: italic;">Esta acta no ha sido firmada por ningún participante.</p>'
             }
 
                 <div class="footer">
@@ -322,12 +443,29 @@ const PlanningManager = ({ currentUser }) => {
         const meetingTasks = tasks.filter(t => t.meetingId === meeting.id);
         const meetingProgress = meetingTasks.length > 0
             ? Math.round(meetingTasks.reduce((sum, t) => sum + t.progress, 0) / meetingTasks.length)
-            : 0;
+            : meeting.status === 'closed' ? 100 : 0;
+
+        // Check if meeting is in the future
+        const meetingDateTime = new Date(`${meeting.date}T${meeting.startTime || '00:00'}`);
+        const isFuture = meeting.status === 'open' && meetingDateTime > new Date();
 
         return (
             <div
-                className={`bg-white rounded-xl border border-gray-100 hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group ${!isRecent ? 'opacity-80 hover:opacity-100' : ''}`}
+                className={`bg-white rounded-xl border border-gray-100 transition-all group 
+                    ${isFuture
+                        ? 'opacity-70 cursor-not-allowed bg-gray-50'
+                        : 'hover:border-blue-300 hover:shadow-md cursor-pointer'
+                    } 
+                    ${!isRecent && !isFuture ? 'opacity-80 hover:opacity-100' : ''}`}
                 onClick={() => {
+                    if (isFuture) {
+                        showWarning(
+                            `Esta reunión está programada para el ${new Date(`${meeting.date}T12:00:00`).toLocaleDateString('es-PE')}`,
+                            'Reunión Programada'
+                        );
+                        return;
+                    }
+
                     setViewingMeetingDetails(meeting);
                     if (!isRecent) {
                         setOpenedFromPreviousMeetings(true);
@@ -341,22 +479,27 @@ const PlanningManager = ({ currentUser }) => {
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex-1">
                         <div className="flex items-center gap-3">
-                            <div className="bg-blue-50 p-2 rounded-lg text-blue-600 group-hover:bg-blue-100 transition-colors">
+                            <div className={`p-2 rounded-lg transition-colors ${isFuture ? 'bg-gray-100 text-gray-400' : 'bg-blue-50 text-blue-600 group-hover:bg-blue-100'}`}>
                                 <Calendar size={20} />
                             </div>
                             <div>
                                 <div className="flex items-center gap-2">
-                                    <h4 className="font-bold text-gray-800">{meeting.title}</h4>
+                                    <h4 className={`font-bold ${isFuture ? 'text-gray-500' : 'text-gray-800'}`}>{meeting.title}</h4>
                                     {meeting.status === 'closed' && (
                                         <span className="bg-red-100 text-red-600 text-[10px] px-2 py-0.5 rounded-full font-bold">
                                             FINALIZADA
+                                        </span>
+                                    )}
+                                    {isFuture && (
+                                        <span className="bg-blue-100 text-blue-600 text-[10px] px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
+                                            <Clock size={10} /> PROGRAMADA
                                         </span>
                                     )}
                                 </div>
                                 <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
                                     <span className="flex items-center gap-1">
                                         <Calendar size={12} />
-                                        {new Date(meeting.date).toLocaleDateString('es-PE', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                        {new Date(`${meeting.date}T12:00:00`).toLocaleDateString('es-PE', { year: 'numeric', month: 'long', day: 'numeric' })}
                                     </span>
                                     {meeting.startTime && (
                                         <span className="flex items-center gap-1">
@@ -445,7 +588,7 @@ const PlanningManager = ({ currentUser }) => {
                             <CheckCircle size={24} className="text-green-600" />
                             <div>
                                 <p className="text-xs text-green-600 font-medium">Completadas</p>
-                                <p className="text-2xl font-bold text-green-700">{taskStats.completed}</p>
+                                <p className="text-2xl font-bold text-green-700">{meetingStats.completed}</p>
                             </div>
                         </div>
                     </Card>
@@ -455,7 +598,7 @@ const PlanningManager = ({ currentUser }) => {
                             <Clock size={24} className="text-blue-600" />
                             <div>
                                 <p className="text-xs text-blue-600 font-medium">En Progreso</p>
-                                <p className="text-2xl font-bold text-blue-700">{taskStats.inProgress}</p>
+                                <p className="text-2xl font-bold text-blue-700">{meetingStats.inProgress}</p>
                             </div>
                         </div>
                     </Card>
@@ -465,7 +608,7 @@ const PlanningManager = ({ currentUser }) => {
                             <AlertCircle size={24} className="text-gray-600" />
                             <div>
                                 <p className="text-xs text-gray-600 font-medium">Pendientes</p>
-                                <p className="text-2xl font-bold text-gray-700">{taskStats.pending}</p>
+                                <p className="text-2xl font-bold text-gray-700">{meetingStats.pending}</p>
                             </div>
                         </div>
                     </Card>
@@ -551,42 +694,11 @@ const PlanningManager = ({ currentUser }) => {
 
                         <div>
                             <label className="block text-sm font-bold text-gray-700 mb-2">Acuerdos Tomados</label>
-                            {currentMeeting.agreements.map((agreement, idx) => (
-                                <div key={idx} className="flex gap-2 mb-2">
-                                    <input
-                                        type="text"
-                                        value={agreement}
-                                        onChange={e => {
-                                            const newAgreements = [...currentMeeting.agreements];
-                                            newAgreements[idx] = e.target.value;
-                                            setCurrentMeeting({ ...currentMeeting, agreements: newAgreements });
-                                        }}
-                                        className="flex-1 p-2 border rounded-lg text-sm"
-                                        placeholder={`Acuerdo ${idx + 1}`}
-                                    />
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() => {
-                                            const newAgreements = currentMeeting.agreements.filter((_, i) => i !== idx);
-                                            setCurrentMeeting({ ...currentMeeting, agreements: newAgreements });
-                                        }}
-                                    >
-                                        <Trash2 size={16} className="text-red-500" />
-                                    </Button>
-                                </div>
-                            ))}
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => setCurrentMeeting({
-                                    ...currentMeeting,
-                                    agreements: [...currentMeeting.agreements, '']
-                                })}
-                            >
-                                <Plus size={14} className="mr-1" />
-                                Agregar Acuerdo
-                            </Button>
+                            <AgreementEditor
+                                agreements={currentMeeting.agreements}
+                                onChange={(newAgreements) => setCurrentMeeting({ ...currentMeeting, agreements: newAgreements })}
+                                readOnly={false}
+                            />
                         </div>
 
                         <div className="flex gap-3 justify-end pt-4 border-t">
@@ -729,7 +841,7 @@ const PlanningManager = ({ currentUser }) => {
                     const meetingTasks = tasks.filter(t => t.meetingId === viewingMeetingDetails.id);
                     const meetingProgress = meetingTasks.length > 0
                         ? Math.round(meetingTasks.reduce((sum, t) => sum + t.progress, 0) / meetingTasks.length)
-                        : 0;
+                        : viewingMeetingDetails.status === 'closed' ? 100 : 0;
 
                     // Ensure status exists (default to 'open' if undefined)
                     const isClosed = viewingMeetingDetails.status === 'closed';
@@ -741,8 +853,7 @@ const PlanningManager = ({ currentUser }) => {
                             message: '¿Está seguro de terminar la reunión? No podrá realizar más modificaciones.',
                             type: 'warning',
                             onConfirm: async () => {
-                                const updatedMeeting = { ...viewingMeetingDetails, status: 'closed' };
-                                await api.planning.saveMeeting(updatedMeeting);
+                                const updatedMeeting = await api.planning.closeMeeting(viewingMeetingDetails.id);
                                 await loadData();
                                 setViewingMeetingDetails(updatedMeeting);
                                 setConfirmDialog({ isOpen: false });
@@ -821,6 +932,14 @@ const PlanningManager = ({ currentUser }) => {
                                     )}
                                     <Button
                                         variant="outline"
+                                        onClick={() => setShowParticipantsModal(true)}
+                                        className="gap-2"
+                                    >
+                                        <Users size={16} />
+                                        Participantes
+                                    </Button>
+                                    <Button
+                                        variant="outline"
                                         onClick={() => handlePrintMeeting(viewingMeetingDetails)}
                                         className="gap-2"
                                     >
@@ -831,9 +950,9 @@ const PlanningManager = ({ currentUser }) => {
                             </div>
 
                             {/* Main Grid: Agreements & Participants */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                 {/* Agreements Column */}
-                                <div className="bg-blue-50/50 rounded-xl p-5 border border-blue-100">
+                                <div className="bg-blue-50/50 rounded-xl p-5 border border-blue-100 md:col-span-2">
                                     <div className="flex items-center gap-2 mb-4 text-blue-800">
                                         <MessageSquare size={18} />
                                         <h4 className="font-bold">Acuerdos Tomados</h4>
@@ -845,7 +964,7 @@ const PlanningManager = ({ currentUser }) => {
                                                 {viewingMeetingDetails.agreements.map((agreement, idx) => (
                                                     <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
                                                         <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-blue-400 shrink-0" />
-                                                        <span>{agreement}</span>
+                                                        <span>{typeof agreement === 'object' ? agreement.text : agreement}</span>
                                                     </li>
                                                 ))}
                                             </ul>
@@ -855,152 +974,142 @@ const PlanningManager = ({ currentUser }) => {
                                             </div>
                                         )
                                     ) : (
-                                        <div className="space-y-3">
-                                            {viewingMeetingDetails.agreements && viewingMeetingDetails.agreements.map((agreement, idx) => (
-                                                <div key={idx} className="flex gap-2">
-                                                    <input
-                                                        type="text"
-                                                        value={agreement}
-                                                        onChange={async (e) => {
-                                                            const newAgreements = [...viewingMeetingDetails.agreements];
-                                                            newAgreements[idx] = e.target.value;
-                                                            // We update local state immediately for responsiveness
-                                                            // But usually we should wait for a save button or debounce.
-                                                            // Given the requirement "allows to edit", let's update local state and implement a mini-save or auto-save.
-                                                            // Ideally, we just update the specific meeting object in state and let user save?
-                                                            // Wait, the requirement implies real-time or direct interaction.
-                                                            // Let's defer strict saving to 'onBlur' or a specific 'save' action if possible, 
-                                                            // but simplest UX is updating the viewingMeetingDetails state and persisting it.
-
-                                                            const updatedMeeting = { ...viewingMeetingDetails, agreements: newAgreements };
-                                                            setViewingMeetingDetails(updatedMeeting);
-                                                            // Debounced or direct save? Direct save for now for simplicity as they are strings.
-                                                            await api.planning.saveMeeting(updatedMeeting);
-                                                            loadData(); // To keep sync
-                                                        }}
-                                                        className="flex-1 p-2 border border-blue-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 outline-none"
-                                                        placeholder="Descripción del acuerdo..."
-                                                    />
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-red-400 hover:text-red-600 hover:bg-red-50"
-                                                        onClick={async () => {
-                                                            const newAgreements = viewingMeetingDetails.agreements.filter((_, i) => i !== idx);
-                                                            const updatedMeeting = { ...viewingMeetingDetails, agreements: newAgreements };
-                                                            setViewingMeetingDetails(updatedMeeting);
-                                                            await api.planning.saveMeeting(updatedMeeting);
-                                                            loadData();
-                                                        }}
-                                                    >
-                                                        <Trash2 size={16} />
-                                                    </Button>
-                                                </div>
-                                            ))}
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="w-full border-dashed border-blue-300 text-blue-600 hover:bg-blue-50 mt-2"
-                                                onClick={async () => {
-                                                    const currentAgreements = viewingMeetingDetails.agreements || [];
-                                                    const updatedMeeting = { ...viewingMeetingDetails, agreements: [...currentAgreements, ''] };
-                                                    setViewingMeetingDetails(updatedMeeting);
-                                                    await api.planning.saveMeeting(updatedMeeting);
-                                                    loadData();
-                                                }}
-                                            >
-                                                <Plus size={14} className="mr-1" />
-                                                Agregar Acuerdo
-                                            </Button>
-                                        </div>
+                                        <AgreementEditor
+                                            agreements={viewingMeetingDetails.agreements}
+                                            onChange={async (newAgreements) => {
+                                                const updatedMeeting = { ...viewingMeetingDetails, agreements: newAgreements };
+                                                setViewingMeetingDetails(updatedMeeting);
+                                                await api.planning.saveMeeting(updatedMeeting);
+                                                loadData();
+                                            }}
+                                            readOnly={false}
+                                        />
                                     )}
                                 </div>
 
-                                {/* Participants Column */}
+                                {/* Next Meeting Agenda Column */}
                                 <div className="bg-gray-50 rounded-xl p-5 border border-gray-100">
                                     <div className="flex items-center gap-2 mb-4 text-gray-800">
-                                        <Users size={18} />
-                                        <h4 className="font-bold">Participantes</h4>
-                                        <span className="text-xs text-gray-500">({meetingAttendance.length})</span>
+                                        <Calendar size={18} />
+                                        <h4 className="font-bold">Agenda de Siguiente Reunión</h4>
                                     </div>
 
-                                    <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                                        {meetingAttendance.length === 0 ? (
-                                            <div className="text-center py-8 text-gray-400 text-sm italic">
-                                                No hay usuarios disponibles
-                                            </div>
-                                        ) : (
-                                            meetingAttendance.map(attendance => {
-                                                const user = organizerUsers.find(u => u.id === attendance.userId);
-                                                if (!user) return null;
-
-                                                const isPending = attendance.status === 'pending';
-                                                const isConfirmed = attendance.status === 'confirmed';
-                                                const isRejected = attendance.status === 'rejected';
-
-                                                return (
-                                                    <div key={user.id} className="flex items-center justify-between text-sm bg-white p-3 rounded border border-gray-200">
-                                                        <div className="flex-1">
-                                                            <span className="text-gray-700 font-medium block" title={user.name}>
-                                                                {user.name}
-                                                            </span>
-                                                            <span className="text-xs text-gray-500">
-                                                                {new Date(attendance.markedAt).toLocaleString('es-PE', {
-                                                                    day: '2-digit',
-                                                                    month: 'short',
-                                                                    hour: '2-digit',
-                                                                    minute: '2-digit'
-                                                                })}
-                                                            </span>
+                                    {/* Next Meeting Form - Conditional Render based on Meeting Status */}
+                                    {viewingMeetingDetails.status === 'closed' ? (
+                                        <div className="space-y-4">
+                                            {viewingMeetingDetails.plannedNextMeeting ? (
+                                                <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <h5 className="font-bold text-gray-800">{viewingMeetingDetails.plannedNextMeeting.title}</h5>
+                                                        <span className="bg-gray-100 text-gray-500 text-xs px-2 py-1 rounded-full font-medium">
+                                                            Histórico
+                                                        </span>
+                                                    </div>
+                                                    <div className="text-sm text-gray-600 mb-3 flex flex-col gap-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <Calendar size={14} />
+                                                            {new Date(`${viewingMeetingDetails.plannedNextMeeting.date}T12:00:00`).toLocaleDateString('es-PE')}
                                                         </div>
-
-                                                        {isClosed ? (
-                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${isConfirmed ? 'bg-green-100 text-green-700' :
-                                                                isRejected ? 'bg-red-100 text-red-700' :
-                                                                    'bg-yellow-100 text-yellow-700'
-                                                                }`}>
-                                                                {isConfirmed ? '✅ Confirmada' :
-                                                                    isRejected ? '❌ Rechazada' :
-                                                                        '⏳ Pendiente'}
-                                                            </span>
+                                                        <div className="flex items-center gap-2">
+                                                            <Clock size={14} />
+                                                            {viewingMeetingDetails.plannedNextMeeting.startTime || 'No definida'}
+                                                        </div>
+                                                    </div>
+                                                    <div className="mt-3 pt-3 border-t border-gray-100">
+                                                        <h6 className="text-xs font-bold text-gray-500 uppercase mb-2">Agenda Planificada</h6>
+                                                        {viewingMeetingDetails.plannedNextMeeting.agreements && viewingMeetingDetails.plannedNextMeeting.agreements.length > 0 ? (
+                                                            <ul className="space-y-2">
+                                                                {viewingMeetingDetails.plannedNextMeeting.agreements.map((item, idx) => (
+                                                                    <li key={idx} className="text-sm text-gray-700 flex items-start gap-2">
+                                                                        <span className="text-blue-500 mt-1">•</span>
+                                                                        {item.text}
+                                                                    </li>
+                                                                ))}
+                                                            </ul>
                                                         ) : (
-                                                            <div className="flex items-center gap-2">
-                                                                {isPending ? (
-                                                                    <>
-                                                                        <button
-                                                                            onClick={() => handleConfirmAttendance(user.id, 'confirmed')}
-                                                                            className="px-2 py-1 bg-green-100 text-green-700 hover:bg-green-200 rounded text-xs font-medium transition-colors"
-                                                                            title="Confirmar asistencia"
-                                                                        >
-                                                                            ✅ Confirmar
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={() => handleConfirmAttendance(user.id, 'rejected')}
-                                                                            className="px-2 py-1 bg-red-100 text-red-700 hover:bg-red-200 rounded text-xs font-medium transition-colors"
-                                                                            title="Rechazar asistencia"
-                                                                        >
-                                                                            ❌ Rechazar
-                                                                        </button>
-                                                                    </>
-                                                                ) : (
-                                                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${isConfirmed ? 'bg-green-100 text-green-700' :
-                                                                        'bg-red-100 text-red-700'
-                                                                        }`}>
-                                                                        {isConfirmed ? '✅ Confirmada' : '❌ Rechazada'}
-                                                                    </span>
-                                                                )}
-                                                            </div>
+                                                            <p className="text-sm text-gray-400 italic">No se registró agenda detallada.</p>
                                                         )}
                                                     </div>
-                                                );
-                                            })
-                                        )}
-                                    </div>
-                                    <p className="text-[10px] text-gray-400 mt-3 italic text-center">
-                                        {isClosed
-                                            ? 'La asistencia fue validada manualmente por la secretaria.'
-                                            : 'La secretaria debe validar manualmente la asistencia de cada miembro.'}
-                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="text-center py-6 text-gray-400 italic bg-white rounded-lg border border-dashed border-gray-300">
+                                                    No se guardó agenda para la siguiente reunión en esta acta.
+                                                </div>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <div className="space-y-3 mb-4">
+                                                <p className="text-sm text-gray-600 mb-4">
+                                                    Establece la agenda y detalles de la próxima reunión para dar continuidad a los acuerdos y temas pendientes.
+                                                </p>
+
+                                                <Button
+                                                    variant="primary"
+
+                                                    className="w-full py-6 flex flex-col items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 shadow-md transition-all hover:scale-[1.02]"
+                                                    onClick={() => {
+                                                        if (viewingMeetingDetails.plannedNextMeeting) {
+                                                            const planned = viewingMeetingDetails.plannedNextMeeting;
+
+                                                            // Find if the actual meeting exists to get ID
+                                                            const currentEnd = new Date(`${viewingMeetingDetails.date}T${viewingMeetingDetails.startTime || '00:00'}`);
+                                                            const upcomingMeetings = meetings.filter(m => {
+                                                                if (m.status !== 'open') return false;
+                                                                const mStart = new Date(`${m.date}T${m.startTime || '00:00'}`);
+                                                                return mStart > currentEnd;
+                                                            }).sort((a, b) => new Date(`${a.date}T${a.startTime || '00:00'}`) - new Date(`${b.date}T${b.startTime || '00:00'}`));
+
+                                                            const nextRealId = upcomingMeetings.length > 0 ? upcomingMeetings[0].id : null;
+
+                                                            setNextMeeting({
+                                                                id: nextRealId, // Link to real ID if exists
+                                                                title: planned.title,
+                                                                date: planned.date,
+                                                                startTime: planned.startTime || '',
+                                                                agreements: planned.agreements || []
+                                                            });
+                                                        } else {
+                                                            // Legacy fallback: Load from live meeting
+                                                            const currentEnd = new Date(`${viewingMeetingDetails.date}T${viewingMeetingDetails.startTime || '00:00'}`);
+                                                            const upcomingMeetings = meetings.filter(m => {
+                                                                if (m.status !== 'open') return false;
+                                                                const mStart = new Date(`${m.date}T${m.startTime || '00:00'}`);
+                                                                return mStart > currentEnd;
+                                                            }).sort((a, b) => new Date(`${a.date}T${a.startTime || '00:00'}`) - new Date(`${b.date}T${b.startTime || '00:00'}`));
+
+                                                            if (upcomingMeetings.length > 0) {
+                                                                const next = upcomingMeetings[0];
+                                                                setNextMeeting({
+                                                                    id: next.id,
+                                                                    title: next.title,
+                                                                    date: next.date,
+                                                                    startTime: next.startTime || '',
+                                                                    agreements: next.agreements || []
+                                                                });
+                                                            } else {
+                                                                setNextMeeting({ title: '', date: '', startTime: '', agreements: [] });
+                                                            }
+                                                        }
+                                                        setShowNextMeetingModal(true);
+                                                    }}
+
+
+
+                                                >
+                                                    <div className="flex items-center gap-2 text-lg font-bold">
+                                                        <Plus size={20} />
+                                                        Programar Reunión
+                                                    </div>
+                                                    <span className="text-xs font-normal opacity-90">Definir fecha, hora y agenda</span>
+                                                </Button>
+                                            </div>
+
+                                            <p className="text-[10px] text-gray-400 mt-3 italic text-center">
+                                                También puedes programar reuniones desde el botón "Nueva Reunión"
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
@@ -1117,10 +1226,10 @@ const PlanningManager = ({ currentUser }) => {
                         </div>
                     );
                 })()}
-            </Modal>
+            </Modal >
 
             {/* Task Details Modal */}
-            <Modal
+            < Modal
                 isOpen={!!viewingTaskDetails}
                 onClose={() => setViewingTaskDetails(null)}
                 title="Detalles de la Tarea"
@@ -1221,10 +1330,10 @@ const PlanningManager = ({ currentUser }) => {
                         </div>
                     );
                 })()}
-            </Modal>
+            </Modal >
 
             {/* Previous Meetings Modal */}
-            <Modal
+            < Modal
                 isOpen={viewingPreviousMeetings}
                 onClose={() => setViewingPreviousMeetings(false)}
                 title="Reuniones Anteriores"
@@ -1325,10 +1434,390 @@ const PlanningManager = ({ currentUser }) => {
                         </div>
                     );
                 })()}
-            </Modal>
+            </Modal >
+
+            {/* Participants Modal */}
+            < Modal
+                isOpen={showParticipantsModal}
+                onClose={() => setShowParticipantsModal(false)}
+                title="Lista de Participantes"
+                size="xl"
+            >
+                {viewingMeetingDetails && (() => {
+                    // 1. Get all organizers
+                    const organizerUsersList = users.filter(u => {
+                        const role = (u.role || '').toLowerCase();
+                        const eventRole = (u.eventRole || '').toLowerCase();
+                        const roles = (u.roles || []).map(r => r.toLowerCase());
+                        const eventRoles = (u.eventRoles || []).map(r => r.toLowerCase());
+
+                        return role === 'organizador' ||
+                            role === 'admin' ||
+                            eventRole === 'organizador' ||
+                            eventRole === 'admin' ||
+                            roles.includes('organizador') ||
+                            roles.includes('admin') ||
+                            eventRoles.includes('organizador') ||
+                            eventRoles.includes('admin');
+                    });
+                    const currentAttendees = viewingMeetingDetails.attendance || [];
+                    const isClosed = viewingMeetingDetails.status === 'closed';
+
+                    // Allow SuperAdmin, Admin, or Secretary to manage attendance
+                    const isSecretary = currentUser?.isSuperAdmin ||
+                        currentUser?.role === 'admin' ||
+                        currentUser?.eventRole === 'secretaria' ||
+                        currentUser?.organizerFunction === 'secretaria' ||
+                        (currentUser?.roles && (currentUser.roles.includes('admin') || currentUser.roles.includes('secretaria')));
+
+                    // 2. Helper to calculate status and fine
+                    const getAttendanceInfo = (user) => {
+                        const attendance = currentAttendees.find(a => a.userId === user.id);
+                        let status = 'falta'; // Default to Absent
+                        let fine = 20.00; // Default Fine for Absence
+                        let statusLabel = 'Falta';
+                        let statusColor = 'bg-red-100 text-red-700';
+                        let timeLabel = '-';
+
+                        // If manually justified
+                        if (attendance?.justified) {
+                            return {
+                                status: 'justified',
+                                label: 'Justificado',
+                                color: 'bg-blue-100 text-blue-700',
+                                fine: 0,
+                                time: attendance.markedAt ? new Date(attendance.markedAt).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' }) : 'Justificado',
+                                attendanceRecord: attendance
+                            };
+                        }
+
+                        // If Emergency Exit
+                        if (attendance?.emergencyExit) {
+                            return {
+                                status: 'emergency',
+                                label: 'Salida Emergencia',
+                                color: 'bg-orange-100 text-orange-700',
+                                fine: 0, // No fine if authorized emergency
+                                time: `Salió: ${new Date(attendance.emergencyExitAt || Date.now()).toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' })}`,
+                                attendanceRecord: attendance
+                            };
+                        }
+
+                        if (attendance) {
+                            const markedTime = new Date(attendance.markedAt);
+                            const meetingTime = new Date(`${viewingMeetingDetails.date}T${viewingMeetingDetails.startTime || '00:00'}`);
+
+                            // Tolerance Check (10 mins)
+                            // Use absolute difference to handle slight pre-starts, but usually late is positive
+                            const diffMinutes = (markedTime - meetingTime) / 60000;
+
+                            if (diffMinutes <= 10) {
+                                status = 'presente';
+                                fine = 0;
+                                statusLabel = 'Presente';
+                                statusColor = 'bg-green-100 text-green-700';
+                            } else {
+                                status = 'tardanza';
+                                fine = 10.00;
+                                statusLabel = `Tardanza (+${Math.round(diffMinutes)}m)`;
+                                statusColor = 'bg-yellow-100 text-yellow-700';
+                            }
+                            timeLabel = markedTime.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+
+                            // Signing Check (Only if meeting is closed)
+                            if (isClosed) {
+                                if (!attendance.signedAt) {
+                                    status = 'falta_firma';
+                                    fine = 20.00; // Treated as Falta
+                                    statusLabel = 'Falta (No Firmó)';
+                                    statusColor = 'bg-red-100 text-red-700 border-red-200';
+                                } else {
+                                    // Check signing time tolerance (15 mins from close)
+                                    // Assuming viewingMeetingDetails.closedAt exists
+                                    if (viewingMeetingDetails.closedAt) {
+                                        const signedTime = new Date(attendance.signedAt);
+                                        const closedTime = new Date(viewingMeetingDetails.closedAt);
+                                        const signDiff = (signedTime - closedTime) / 60000;
+
+                                        if (signDiff > 15) {
+                                            // Late signing = Falta? Per requirement: "Si no se firmo en ese tiempo, contara como falta"
+                                            // Assuming "signing late" is equivalent to not signing in time window.
+                                            status = 'falta_firma_tarde';
+                                            fine = 20.00;
+                                            statusLabel = 'Falta (Firma Tarde)';
+                                            statusColor = 'bg-red-100 text-red-700';
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        return { status, label: statusLabel, color: statusColor, fine, time: timeLabel, attendanceRecord: attendance };
+                    };
+
+                    const handleUpdateParticipant = async (userId, updates) => {
+                        const currentAttendees = viewingMeetingDetails.attendance || [];
+                        const attendeeIndex = currentAttendees.findIndex(a => a.userId === userId);
+                        let updatedAttendees = [...currentAttendees];
+
+                        if (attendeeIndex >= 0) {
+                            updatedAttendees[attendeeIndex] = { ...updatedAttendees[attendeeIndex], ...updates };
+                        } else {
+                            // Create new record if justifying someone who wasn't there
+                            updatedAttendees.push({
+                                userId,
+                                name: organizerUsersList.find(u => u.id === userId)?.name,
+                                status: 'confirmed', // Assume confirmed if interacting
+                                markedAt: new Date().toISOString(), // stamp now
+                                ...updates
+                            });
+                        }
+
+                        const updatedMeeting = { ...viewingMeetingDetails, attendance: updatedAttendees };
+                        setViewingMeetingDetails(updatedMeeting);
+                        await api.planning.saveMeeting(updatedMeeting);
+                        loadData();
+                    };
+
+                    const handleRemoveParticipant = async (userId) => {
+                        if (!confirm('¿Rechazar asistencia? El usuario quedará como si nunca hubiera marcado.')) return;
+
+                        const currentAttendance = viewingMeetingDetails.attendance || [];
+                        const updatedAttendance = currentAttendance.filter(a => a.userId !== userId);
+
+                        const updatedMeeting = { ...viewingMeetingDetails, attendance: updatedAttendance };
+                        setViewingMeetingDetails(updatedMeeting);
+                        await api.planning.saveMeeting(updatedMeeting);
+                        loadData();
+                    };
+
+                    return (
+                        <div className="space-y-4">
+                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 text-xs text-gray-500 mb-2">
+                                <p><strong>Reglas de Asistencia:</strong></p>
+                                <ul className="list-disc pl-4 mt-1 space-y-1">
+                                    <li>Tolerancia: 10 min (Tardanza: S/ 10.00)</li>
+                                    <li>Firma de Acta: 15 min tras cierre (Falta: S/ 20.00)</li>
+                                </ul>
+                            </div>
+
+                            <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
+                                {organizerUsersList.map(user => {
+                                    const info = getAttendanceInfo(user);
+
+                                    return (
+                                        <div key={user.id} className="flex items-center justify-between text-sm bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="flex-1 min-w-0 mr-4">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-gray-900 font-bold truncate" title={user.name}>
+                                                        {user.name}
+                                                    </span>
+                                                    {info.fine > 0 && (
+                                                        <span className="text-xs font-bold text-red-600 bg-red-50 px-1.5 py-0.5 rounded border border-red-100">
+                                                            -S/ {info.fine.toFixed(2)}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${info.color}`}>
+                                                        {info.label}
+                                                    </span>
+                                                    <span className="text-xs text-gray-400 flex items-center gap-1">
+                                                        <Clock size={10} />
+                                                        {info.time}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Actions for Secretary */}
+                                            {isSecretary && (
+                                                <div className="flex flex-col gap-1 items-end">
+                                                    {/* MARK ATTENDANCE (If Marked but not Confirmed) */}
+                                                    {info.attendanceRecord && info.attendanceRecord.status === 'pending' && !info.attendanceRecord.justified && (
+                                                        <div className="flex gap-1 mb-1">
+                                                            <button
+                                                                onClick={() => handleUpdateParticipant(user.id, { status: 'confirmed' })}
+                                                                className="text-[10px] bg-green-50 text-green-600 hover:bg-green-100 px-2 py-1 rounded border border-green-200 transition-colors"
+                                                            >
+                                                                Validar
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleRemoveParticipant(user.id)}
+                                                                className="text-[10px] bg-red-50 text-red-600 hover:bg-red-100 px-2 py-1 rounded border border-red-200 transition-colors"
+                                                            >
+                                                                Rechazar
+                                                            </button>
+                                                        </div>
+
+                                                    )}
+
+
+
+                                                    {/* SIGNED INDICATOR */}
+                                                    {info.attendanceRecord?.signedAt && (
+                                                        <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-1 rounded border border-gray-200 font-bold mb-1 cursor-default">
+                                                            FIRMADO
+                                                        </span>
+                                                    )}
+
+                                                    {/* JUSTIFY / EMERGENCY */}
+                                                    {!info.attendanceRecord?.justified && !info.attendanceRecord?.emergencyExit && !info.attendanceRecord?.signedAt && (
+                                                        <div className="flex gap-1">
+                                                            <button
+                                                                onClick={() => {
+                                                                    const reason = prompt('Motivo de justificación:');
+                                                                    if (reason) handleUpdateParticipant(user.id, { justified: true, justificationReason: reason });
+                                                                }}
+                                                                className="text-[10px] bg-blue-50 text-blue-600 hover:bg-blue-100 px-2 py-1 rounded border border-blue-200 transition-colors"
+                                                            >
+                                                                Justificar
+                                                            </button>
+                                                            {(info.status === 'presente' || info.status === 'tardanza') && (
+                                                                <button
+                                                                    onClick={() => {
+                                                                        if (confirm('¿Registrar salida de emergencia? Esto exonerará de multa de firma.')) {
+                                                                            handleUpdateParticipant(user.id, { emergencyExit: true, emergencyExitAt: new Date().toISOString() });
+                                                                        }
+                                                                    }}
+                                                                    className="text-[10px] bg-orange-50 text-orange-600 hover:bg-orange-100 px-2 py-1 rounded border border-orange-200 transition-colors"
+                                                                >
+                                                                    Emergencia
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
+
+                                                    {/* UNDO */}
+                                                    {(info.attendanceRecord?.justified || info.attendanceRecord?.emergencyExit) && (
+                                                        <button
+                                                            onClick={() => {
+                                                                if (confirm('¿Remover justificación/excepción?')) {
+                                                                    handleUpdateParticipant(user.id, { justified: false, emergencyExit: false, justificationReason: null });
+                                                                }
+                                                            }}
+                                                            className="text-[10px] text-gray-400 hover:text-red-500 underline"
+                                                        >
+                                                            Deshacer Justificación
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })()}
+            </Modal >
+
+            {/* Next Meeting Modal */}
+            < Modal
+                isOpen={showNextMeetingModal}
+                onClose={() => setShowNextMeetingModal(false)}
+                title="Programar Siguiente Reunión"
+                size="lg"
+            >
+                <div className="space-y-6">
+                    <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 mb-4">
+                        <p className="text-sm text-blue-800">
+                            Configure los detalles y la agenda preliminar para la próxima reunión.
+                            Los puntos agregados aquí aparecerán como acuerdos iniciales/agenda en la nueva reunión.
+                        </p>
+                    </div>
+
+                    <FormField
+                        label="Título de la Reunión"
+                        value={nextMeeting.title}
+                        onChange={(e) => setNextMeeting({ ...nextMeeting, title: e.target.value })}
+                        placeholder="Ej: Reunión de Seguimiento Semanal"
+                    />
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            label="Fecha"
+                            type="date"
+                            value={nextMeeting.date}
+                            onChange={(e) => setNextMeeting({ ...nextMeeting, date: e.target.value })}
+                        />
+                        <FormField
+                            label="Hora"
+                            type="time"
+                            value={nextMeeting.startTime}
+                            onChange={(e) => setNextMeeting({ ...nextMeeting, startTime: e.target.value })}
+                        />
+                    </div>
+
+                    <div className="border-t pt-4">
+                        <h4 className="font-bold text-gray-800 mb-2">Agenda a tratar y responsables</h4>
+                        <p className="text-xs text-gray-500 mb-3">
+                            Agregue los puntos a tratar en la siguiente reunión. Puede usar jerarquías (1, 1.a, 1.a.i) para detallar temas.
+                        </p>
+
+                        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                            <AgreementEditor
+                                agreements={nextMeeting.agreements}
+                                onChange={(newAgreements) => setNextMeeting({ ...nextMeeting, agreements: newAgreements })}
+                                readOnly={false}
+                                addButtonText="Agregar Agenda"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end pt-4 border-t">
+                        <Button
+                            variant="primary"
+                            className="w-full bg-blue-600 hover:bg-blue-700"
+                            onClick={async () => {
+                                if (!nextMeeting.title || !nextMeeting.date) {
+                                    showWarning('Complete título y fecha de la reunión', 'Campos requeridos');
+                                    return;
+                                }
+
+                                // 1. Save Snapshot to Current Meeting (Meeting A)
+                                const plannedData = {
+                                    title: nextMeeting.title,
+                                    date: nextMeeting.date,
+                                    startTime: nextMeeting.startTime,
+                                    agreements: nextMeeting.agreements || []
+                                };
+
+                                const updatedCurrentMeeting = {
+                                    ...viewingMeetingDetails,
+                                    plannedNextMeeting: plannedData
+                                };
+                                await api.planning.saveMeeting(updatedCurrentMeeting);
+                                setViewingMeetingDetails(updatedCurrentMeeting); // Keep UI in sync
+
+                                // 2. Create/Update Actual Next Meeting (Meeting B)
+                                const newMeeting = {
+                                    id: nextMeeting.id || null,
+                                    title: nextMeeting.title,
+                                    date: nextMeeting.date,
+                                    startTime: nextMeeting.startTime,
+                                    status: 'open',
+                                    agreements: nextMeeting.agreements || [], // Initial sync
+                                    attendees: [],
+                                    createdBy: currentUser.id,
+                                    createdAt: Date.now()
+                                };
+
+                                await api.planning.saveMeeting(newMeeting);
+                                await loadData();
+                                setNextMeeting({ title: '', date: '', startTime: '', agreements: [] });
+                                setShowNextMeetingModal(false);
+                                showWarning('Reunión programada exitosamente', 'Éxito');
+                            }}
+                        >
+                            <Calendar size={18} className="mr-2" />
+                            Programar Reunión
+                        </Button>
+                    </div>
+                </div>
+            </Modal >
 
             {/* Confirm Dialog - Placed last to ensure it renders on top */}
-            <ConfirmDialog
+            < ConfirmDialog
                 isOpen={confirmDialog.isOpen}
                 onClose={() => setConfirmDialog({ isOpen: false })}
                 onConfirm={confirmDialog.onConfirm}
@@ -1336,7 +1825,7 @@ const PlanningManager = ({ currentUser }) => {
                 message={confirmDialog.message}
                 type={confirmDialog.type}
             />
-        </div>
+        </div >
 
     );
 };

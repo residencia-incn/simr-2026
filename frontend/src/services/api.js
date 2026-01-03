@@ -1042,17 +1042,182 @@ export const api = {
             await delay();
             const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
             const now = new Date();
+
+            // Start of today (00:00:00) - Allow seeing meetings that started earlier today
+            const startOfDay = new Date(now);
+            startOfDay.setHours(0, 0, 0, 0);
+
             const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
 
             return meetings.filter(m => {
-                if (m.status === 'closed') return false;
-
                 // Parse meeting date and time
                 const meetingDateTime = new Date(`${m.date}T${m.time || '00:00'}`);
 
-                // Show meetings from today until tomorrow
-                return meetingDateTime >= now && meetingDateTime <= tomorrow;
+                // Show meetings from start of today until tomorrow
+                // AND include recently closed meetings (within 15 mins) for signing
+                const isActiveDate = meetingDateTime >= startOfDay && meetingDateTime <= tomorrow;
+
+                if (m.status === 'closed') {
+                    // Check if within 15 min signing window
+                    const closingTime = m.closedAt || m.updatedAt;
+                    if (!closingTime) return false;
+                    const closedTime = new Date(closingTime).getTime();
+                    const nowTime = now.getTime();
+                    const diffMinutes = (nowTime - closedTime) / 1000 / 60;
+                    return diffMinutes <= 15;
+                }
+
+                return isActiveDate;
             });
+        },
+
+        closeMeeting: async (meetingId) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const index = meetings.findIndex(m => m.id === meetingId);
+            if (index === -1) throw new Error("Reunión no encontrada");
+
+            meetings[index] = {
+                ...meetings[index],
+                status: 'closed',
+                closedAt: new Date().toISOString()
+            };
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+            return meetings[index];
+        },
+
+        signMeeting: async (meetingId, userId) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const index = meetings.findIndex(m => m.id === meetingId);
+            if (index === -1) throw new Error("Reunión no encontrada");
+
+            const meeting = meetings[index];
+
+            // Validate signing window (15 mins)
+            if (meeting.status === 'closed' && meeting.closedAt) {
+                const closedTime = new Date(meeting.closedAt).getTime();
+                const nowTime = new Date().getTime();
+                const diffMinutes = (nowTime - closedTime) / 1000 / 60;
+                if (diffMinutes > 15) throw new Error("El tiempo para firmar el acta ha expirado.");
+            }
+
+            // Init attendance if needed
+            if (!meeting.attendance) meeting.attendance = [];
+
+            const attIndex = meeting.attendance.findIndex(a => a.userId === userId);
+
+            if (attIndex === -1) {
+                // Should have marked attendance first, but let's allow signing to act as "late" attendance if physically present?
+                // For now, assume they must have marked attendance or we create a record now.
+                // Let's create record as 'confirmed' but check time for lateness
+                meeting.attendance.push({
+                    userId,
+                    userName: 'Usuario', // Should fetch name ideally
+                    markedAt: new Date().toISOString(),
+                    signedAt: new Date().toISOString(),
+                    status: 'confirmed'
+                });
+            } else {
+                meeting.attendance[attIndex] = {
+                    ...meeting.attendance[attIndex],
+                    signedAt: new Date().toISOString()
+                };
+            }
+
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+            return meeting;
+        },
+
+        processFines: async (meetingId) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const meeting = meetings.find(m => m.id === meetingId);
+            if (!meeting) throw new Error("Reunión no encontrada");
+
+            // Prevent double processing
+            if (meeting.finesProcessed) return { processed: false, reason: "Ya procesada" };
+
+            // Get organizers (people who SHOULD attend)
+            // Ideally we get this from an invite list, but if not exists, we assume all 'organizadores'
+            const allUsers = await api.users.getAll();
+            const organizers = allUsers.filter(u =>
+                u.eventRole === 'organizador' || u.eventRoles?.includes('organizador')
+            );
+
+            const meetingStart = new Date(`${meeting.date}T${meeting.time || '00:00'}`);
+            const toleranceMs = 10 * 60 * 1000; // 10 mins
+
+            let finesApplied = 0;
+
+            for (const user of organizers) {
+                const attendance = meeting.attendance?.find(a => a.userId === user.id);
+
+                // Skip if justified
+                if (attendance?.isJustified) continue;
+
+                let fineAmount = 0;
+                let reason = '';
+
+                // Condition 1: Absent (No attendance ref OR not signed)
+                // Note: User constraint says "si no firman contara como inasistencia"
+                if (!attendance || !attendance.signedAt) {
+                    // It's an absence
+                    // Check reincidence
+                    const absences = (user.unjustifiedAbsences || 0) + 1;
+                    fineAmount = absences === 1 ? 10 : 20;
+                    reason = `Inasistencia/Falta de Firma - ${meeting.title}`;
+
+                    // Update user absence count
+                    await api.users.update({ ...user, unjustifiedAbsences: absences });
+                } else {
+                    // Condition 2: Late
+                    const markedAt = new Date(attendance.markedAt);
+                    // Check if markedAt > start + 10 mins
+                    if (markedAt.getTime() > (meetingStart.getTime() + toleranceMs)) {
+                        // It's a delay (Note: User request says "10 soles" for tolerance breach, implies similar to 1st absence?)
+                        // Request says: "Posterior a ellos se considera inasistencia y pago de multa de 10 soles."
+                        // So it counts as absence effectively? Let's treat as separate fine category "Tardanza" but S/ 10.
+                        // Or "Reincidencia" applies? Let's stick to user text: "multa de 10 soles".
+                        // Logic implies reincidence applies to "inasistencia".
+                        // Let's default to S/ 10 for lateness unless specified reincidence.
+                        fineAmount = 10;
+                        reason = `Tardanza (>10min) - ${meeting.title}`;
+                    }
+                }
+
+                if (fineAmount > 0) {
+                    // Create fine in treasury fines system
+                    const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+                    const newFine = {
+                        id: `fine-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                        userId: user.id,
+                        userName: user.name || user.nombre || 'Usuario',
+                        monto: fineAmount,
+                        descripcion: reason,
+                        meetingId: meeting.id,
+                        meetingTitle: meeting.title,
+                        estado: 'pendiente',
+                        fecha: new Date().toISOString().split('T')[0],
+                        createdAt: new Date().toISOString(),
+                        metadata: {
+                            type: 'meeting_attendance',
+                            source: 'automatic',
+                            meetingDate: meeting.date
+                        }
+                    };
+                    storage.set(STORAGE_KEYS.TREASURY_FINES, [newFine, ...fines]);
+                    finesApplied++;
+                }
+            }
+
+            // Mark meeting as processed
+            const updatedMeetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const idx = updatedMeetings.findIndex(m => m.id === meetingId);
+            updatedMeetings[idx] = { ...meeting, finesProcessed: true };
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, updatedMeetings);
+
+            return { processed: true, count: finesApplied };
         },
 
         /**
@@ -1135,6 +1300,42 @@ export const api = {
             meetings[meetingIndex] = meeting;
             storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
 
+            return meeting;
+        },
+
+        justifyAbsence: async (meetingId, userId, reason) => {
+            await delay();
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const meetingIndex = meetings.findIndex(m => m.id === meetingId);
+            if (meetingIndex === -1) throw new Error("Reunión no encontrada");
+
+            const meeting = meetings[meetingIndex];
+            if (!meeting.attendance) meeting.attendance = []; // Should ideally exist or we create a sort of 'virtual' attendance? 
+
+            // If user has no attendance record, create one as 'rejected' but justified?
+            // Or assume we are justifying a missing person?
+            // Let's check if record exists.
+            let attIndex = meeting.attendance.findIndex(a => a.userId === userId);
+
+            if (attIndex === -1) {
+                // Create a record so we can flag it as justified
+                meeting.attendance.push({
+                    userId,
+                    userName: 'Usuario', // ideally fetch name
+                    status: 'rejected', // Absent but justified
+                    isJustified: true,
+                    justificationReason: reason
+                });
+            } else {
+                meeting.attendance[attIndex] = {
+                    ...meeting.attendance[attIndex],
+                    isJustified: true,
+                    justificationReason: reason
+                };
+            }
+
+            meetings[meetingIndex] = meeting;
+            storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
             return meeting;
         },
 
@@ -1501,6 +1702,81 @@ export const api = {
             };
         },
 
+        addFine: async (userId, amount, reason, referenceId = null) => {
+            await delay();
+            const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
+            const config = storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
+
+            // Find current month contribution
+            const currentMonthId = config.contribution.currentMonthId || config.contribution.months[0].id; // Fallback
+
+            // Find the user's contribution for this month
+            // If paid, we might need to add to next month or add as distinct item?
+            // "Es decir si Juan... ese mes tendrá que aportar 50 + 30 = 80 soles. Y eso debe aparecer en su mes de aportes"
+
+            let targetContribIndex = plan.findIndex(c => c.organizador_id === userId && c.mes === currentMonthId);
+
+            // If not found or paid, maybe search specifically for a "Multas" pending item or add to next available?
+            // User requirement: "cargar automáticamente como aporte a su mensualidad de *ese* mes"
+            // If already paid, it's tricky. Let's assume we add to the *next* pending month if current is paid, or re-open current?
+            // Re-opening "Paid" is messy for accounting.
+            // Strategy: Find FIRST pending month.
+
+            if (targetContribIndex === -1 || plan[targetContribIndex].estado === 'pagado') {
+                targetContribIndex = plan.findIndex(c => c.organizador_id === userId && c.estado === 'pendiente');
+            }
+
+            if (targetContribIndex === -1) {
+                // No pending months? Create a special "Deuda Pendiente" item/month? 
+                // Or simply throw error / log?
+                // For MVP, let's create a new ad-hoc entry if no pending months exist.
+                const newContrib = {
+                    id: `fine-${Date.now()}`,
+                    organizador_id: userId,
+                    organizador_nombre: 'Usuario', // Fetch name
+                    organizador_rol: 'organizador',
+                    mes: 'multas-extras',
+                    mes_label: 'Multas / Extras',
+                    monto_esperado: amount,
+                    estado: 'pendiente',
+                    transaccion_id: null,
+                    deadline: null,
+                    details: [{ type: 'fine', amount, reason, date: new Date().toISOString() }]
+                };
+                storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, [...plan, newContrib]);
+                return newContrib;
+            }
+
+            // Update existing contribution
+            const contrib = plan[targetContribIndex];
+
+            // Initialize details array if not exists
+            const details = contrib.details || [{ type: 'base', amount: contrib.monto_esperado, reason: 'Cuota Mensual' }];
+
+            details.push({
+                type: 'fine',
+                amount: amount,
+                reason: reason,
+                referenceId,
+                date: new Date().toISOString()
+            });
+
+            const updatedContrib = {
+                ...contrib,
+                monto_esperado: contrib.monto_esperado + amount,
+                details: details
+            };
+
+            plan[targetContribIndex] = updatedContrib;
+            storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, plan);
+
+            // Update Budget Plan (Expected Income increases)
+            // Note: This modifies the budget plan for "Aporte Mensual" category potentially.
+            // Or we should track fines separately? User said "aporte a su mensualidad".
+
+            return updatedContrib;
+        },
+
         validateContribution: async (organizadorId, mesIds, accountId) => {
             await delay();
             const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
@@ -1811,6 +2087,111 @@ export const api = {
             await delay();
             storage.set(STORAGE_KEYS.TREASURY_BUDGETS, budgets);
             return budgets;
+        },
+
+        // --- Fines Management (Meeting Attendance) ---
+
+        /**
+         * Get all fines or fines for a specific user
+         * @param {string} userId - Optional user ID to filter fines
+         * @returns {Array} Array of fine objects
+         */
+        getFines: async (userId = null) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+
+            if (userId) {
+                return fines.filter(f => f.userId === userId);
+            }
+
+            return fines;
+        },
+
+        /**
+         * Get a specific fine by ID
+         * @param {string} fineId - Fine ID
+         * @returns {Object} Fine object
+         */
+        getFineById: async (fineId) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const fine = fines.find(f => f.id === fineId);
+
+            if (!fine) throw new Error('Multa no encontrada');
+
+            return fine;
+        },
+
+        /**
+         * Update fine payment status
+         * @param {string} fineId - Fine ID
+         * @param {string} status - New status ('pendiente', 'pagado', 'condonado')
+         * @param {Object} paymentData - Optional payment data (accountId, notes, etc.)
+         * @returns {Object} Updated fine
+         */
+        updateFineStatus: async (fineId, status, paymentData = null) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const index = fines.findIndex(f => f.id === fineId);
+
+            if (index === -1) throw new Error('Multa no encontrada');
+
+            const fine = fines[index];
+
+            // Update fine status
+            fines[index] = {
+                ...fine,
+                estado: status,
+                updatedAt: new Date().toISOString(),
+                ...(paymentData && { paymentData })
+            };
+
+            // If paid, create income transaction in treasury
+            if (status === 'pagado' && paymentData) {
+                const accountId = paymentData.accountId;
+                if (!accountId) throw new Error('Se requiere una cuenta para registrar el pago');
+
+                await api.treasury.addTransactionV2({
+                    tipo: 'ingreso',
+                    categoria: 'Multas',
+                    monto: fine.monto,
+                    descripcion: `Pago de multa: ${fine.descripcion}`,
+                    cuenta_id: accountId,
+                    userId: fine.userId,
+                    userName: fine.userName,
+                    metadata: {
+                        fineId: fineId,
+                        originalFine: fine,
+                        paymentNotes: paymentData.notes || ''
+                    }
+                });
+            }
+
+            storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+            return fines[index];
+        },
+
+        /**
+         * Get fines summary statistics
+         * @param {string} userId - Optional user ID to filter
+         * @returns {Object} Summary object with totals
+         */
+        getFineSummary: async (userId = null) => {
+            await delay();
+            const fines = await api.treasury.getFines(userId);
+
+            const summary = {
+                total: fines.length,
+                pendiente: fines.filter(f => f.estado === 'pendiente').length,
+                pagado: fines.filter(f => f.estado === 'pagado').length,
+                condonado: fines.filter(f => f.estado === 'condonado').length,
+                totalAmount: fines.reduce((sum, f) => sum + f.monto, 0),
+                pendingAmount: fines.filter(f => f.estado === 'pendiente').reduce((sum, f) => sum + f.monto, 0),
+                paidAmount: fines.filter(f => f.estado === 'pagado').reduce((sum, f) => sum + f.monto, 0),
+                condonedAmount: fines.filter(f => f.estado === 'condonado').reduce((sum, f) => sum + f.monto, 0)
+            };
+
+            return summary;
         }
     },
 

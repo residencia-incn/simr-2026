@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard, Edit3 } from 'lucide-react';
 import { useTreasury } from '../../hooks/useTreasury';
 import { showError, showSuccess } from '../../utils/alerts';
 import { Modal, Button, Card, LoadingSpinner } from '../ui';
@@ -118,6 +118,18 @@ const TasksQuickAccess = ({ user }) => {
             await loadActiveMeetings(); // Reload to show updated status
         } catch (error) {
             alert(error.message || 'Error al marcar asistencia');
+        }
+    };
+
+    const handleSignMeeting = async (meeting) => {
+        try {
+            if (!confirm(`¿Estás seguro de firmar el acta de la reunión "${meeting.title}"? Esta acción confirmará tu asistencia y salida.`)) return;
+
+            await api.planning.signMeeting(meeting.id, user.id);
+            await showSuccess('✅ Acta firmada exitosamente');
+            await loadActiveMeetings();
+        } catch (error) {
+            showError(error.message || 'Error al firmar acta', 'Error');
         }
     };
 
@@ -243,9 +255,18 @@ const TasksQuickAccess = ({ user }) => {
                                 </div>
                             ) : (
                                 <div className="space-y-2">
-                                    {activeMeetings.map(meeting => {
+                                    {(activeMeetings || []).map(meeting => {
                                         const attendance = getAttendanceStatus(meeting);
                                         const hasMarked = !!attendance;
+
+                                        // Condition 4: Post-Meeting Visibility
+                                        // If a meeting has ended and the user did not mark attendance, they should not see the meeting
+                                        if (meeting.status === 'closed' && !hasMarked) return null;
+
+                                        // Condition 3: Meeting Start Time Restriction
+                                        const meetingDateTime = new Date(`${meeting.date}T${meeting.time}`);
+                                        const now = new Date();
+                                        const hasStarted = now >= meetingDateTime;
 
                                         return (
                                             <Card key={meeting.id} className="border-l-4 border-l-blue-500">
@@ -255,7 +276,7 @@ const TasksQuickAccess = ({ user }) => {
                                                         <div className="flex items-center gap-3 text-xs text-gray-600">
                                                             <span className="flex items-center gap-1">
                                                                 <Calendar size={12} />
-                                                                {new Date(meeting.date).toLocaleDateString('es-PE')}
+                                                                {new Date(`${meeting.date}T12:00:00`).toLocaleDateString('es-PE')}
                                                             </span>
                                                             <span className="flex items-center gap-1">
                                                                 <Clock size={12} />
@@ -265,26 +286,54 @@ const TasksQuickAccess = ({ user }) => {
                                                     </div>
 
                                                     <div className="flex flex-col items-end gap-2">
-                                                        {hasMarked ? (
-                                                            <span className={`text-xs px-2 py-1 rounded-full font-medium ${attendance.status === 'confirmed'
-                                                                ? 'bg-green-100 text-green-700 border border-green-200'
-                                                                : attendance.status === 'rejected'
-                                                                    ? 'bg-red-100 text-red-700 border border-red-200'
-                                                                    : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
-                                                                }`}>
-                                                                {attendance.status === 'confirmed' ? '✅ Confirmada' :
-                                                                    attendance.status === 'rejected' ? '❌ Rechazada' :
-                                                                        '⏳ Pendiente'}
-                                                            </span>
+                                                        {meeting.status === 'closed' ? (
+                                                            // Logic for Closed Meetings (Signing)
+                                                            attendance?.signedAt ? (
+                                                                <span className="text-xs px-2 py-1 rounded-full font-medium bg-blue-100 text-blue-700 border border-blue-200 flex items-center gap-1">
+                                                                    <CheckCircle size={12} />
+                                                                    Acta Firmada
+                                                                </span>
+                                                            ) : (
+                                                                <Button
+                                                                    size="sm"
+                                                                    onClick={() => handleSignMeeting(meeting)}
+                                                                    className="text-xs bg-indigo-600 hover:bg-indigo-700"
+                                                                >
+                                                                    <Edit3 size={14} className="mr-1" />
+                                                                    Firmar Acta
+                                                                </Button>
+                                                            )
                                                         ) : (
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={() => handleMarkAttendance(meeting)}
-                                                                className="text-xs"
-                                                            >
-                                                                <UserCheck size={14} className="mr-1" />
-                                                                Marcar Asistencia
-                                                            </Button>
+                                                            // Logic for Open Meetings (Attendance)
+                                                            hasMarked ? (
+                                                                <span className={`text-xs px-2 py-1 rounded-full font-medium ${attendance.status === 'confirmed'
+                                                                    ? 'bg-green-100 text-green-700 border border-green-200'
+                                                                    : attendance.status === 'rejected'
+                                                                        ? 'bg-red-100 text-red-700 border border-red-200'
+                                                                        : 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                                                                    }`}>
+                                                                    {attendance.status === 'confirmed' ? '✅ Confirmada' :
+                                                                        attendance.status === 'rejected' ? '❌ Rechazada' :
+                                                                            '⏳ Pendiente'}
+                                                                </span>
+                                                            ) : (
+                                                                // Condition 3: Only allow marking attendance if meeting has started
+                                                                hasStarted ? (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => handleMarkAttendance(meeting)}
+                                                                        className="text-xs"
+                                                                    >
+                                                                        <UserCheck size={14} className="mr-1" />
+                                                                        Marcar Asistencia
+                                                                    </Button>
+                                                                ) : (
+                                                                    <span className="text-xs text-gray-400 italic flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100">
+                                                                        <Clock size={12} />
+                                                                        Inicia a las {meeting.time}
+                                                                    </span>
+                                                                )
+                                                            )
                                                         )}
                                                     </div>
                                                 </div>
@@ -352,7 +401,7 @@ const TasksQuickAccess = ({ user }) => {
                                                         <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
                                                             <span className="flex items-center gap-1">
                                                                 <Calendar size={12} />
-                                                                {new Date(task.dueDate).toLocaleDateString('es-PE')}
+                                                                {new Date(`${task.dueDate}T12:00:00`).toLocaleDateString('es-PE')}
                                                                 {isOverdue && <span className="text-red-600 font-bold">(Vencida)</span>}
                                                             </span>
                                                             {task.comments && task.comments.length > 0 && (

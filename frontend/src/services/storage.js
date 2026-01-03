@@ -103,6 +103,7 @@ export const STORAGE_KEYS = {
     TREASURY_CONTRIBUTION_PLAN: 'treasury_contribution_plan',
     TREASURY_BUDGET_PLAN: 'treasury_budget_plan',
     TREASURY_CONFIG: 'treasury_config',
+    TREASURY_FINES: 'treasury_fines_v1',
     // End Treasury Keys
     PRINT_CONFIG: 'simr_print_config',
     PROGRAM: 'event_program',
