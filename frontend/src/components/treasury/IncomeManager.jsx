@@ -37,16 +37,27 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
             const category = (tx.category || tx.categoria || '').toLowerCase();
             if (category.includes('inscri')) {
                 type = 'inscription';
-                typeLabel = 'Inscripción';
+                typeLabel = 'Inscripciones';
             } else if (category.includes('aporte')) {
                 type = 'contribution';
                 typeLabel = 'Aporte Mensual';
+            } else if (category.includes('penalidades') || category.includes('multas')) {
+                type = 'penalty';
+                typeLabel = 'Penalidades';
+            }
+
+            // Append user name if available
+            let concept = tx.description || tx.descripcion;
+            if (tx.userName) {
+                concept = `${concept} - ${tx.userName}`;
+            } else if (tx.metadata?.originalFine?.userName) {
+                concept = `${concept} - ${tx.metadata.originalFine.userName}`;
             }
 
             incomes.push({
                 id: tx.id,
                 date: tx.date || tx.fecha,
-                concept: tx.description || tx.descripcion,
+                concept: concept,
                 type,
                 typeLabel,
                 account: account ? (account.name || account.nombre) : 'Sin cuenta asignada',
@@ -119,6 +130,8 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                 return 'bg-blue-100 text-blue-700 border-blue-200';
             case 'contribution':
                 return 'bg-purple-100 text-purple-700 border-purple-200';
+            case 'penalty':
+                return 'bg-red-100 text-red-700 border-red-200';
             case 'other':
                 return 'bg-gray-100 text-gray-700 border-gray-200';
             default:
@@ -296,6 +309,15 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                                 Aportes Mensuales ({allIncomes.filter(i => i.type === 'contribution').length})
                             </button>
                             <button
+                                onClick={() => setFilterType('penalty')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'penalty'
+                                    ? 'bg-blue-600 text-white shadow-md'
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                    }`}
+                            >
+                                Penalidades ({allIncomes.filter(i => i.type === 'penalty').length})
+                            </button>
+                            <button
                                 onClick={() => setFilterType('other')}
                                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'other'
                                     ? 'bg-blue-600 text-white shadow-md'
@@ -367,7 +389,7 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                             searchTerm
                                 ? "Intenta con otros términos de búsqueda"
                                 : filterType !== 'all'
-                                    ? `No hay ingresos de tipo "${filterType === 'inscription' ? 'Inscripciones' : filterType === 'contribution' ? 'Aportes Mensuales' : 'Otros Conceptos'}"`
+                                    ? `No hay ingresos de tipo "${filterType === 'inscription' ? 'Inscripciones' : filterType === 'contribution' ? 'Aportes Mensuales' : filterType === 'penalty' ? 'Penalidades' : 'Otros Conceptos'}"`
                                     : "Aún no hay ingresos registrados"
                         }
                     />
@@ -484,7 +506,7 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                                 options={[
                                     { value: "", label: "Seleccionar..." },
                                     ...(categories.income || [])
-                                        .filter(cat => !['Inscripciones', 'Aportes'].includes(cat))
+                                        .filter(cat => !['Inscripciones', 'Aportes', 'Aporte Mensual', 'Penalidades'].includes(cat))
                                         .map(cat => ({ value: cat, label: cat }))
                                 ]}
                                 required

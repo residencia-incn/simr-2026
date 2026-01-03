@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon } from 'lucide-react';
+import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon, AlertTriangle } from 'lucide-react';
 import { Button, Card, FormField, Modal } from '../ui';
 import { showError, showSuccess } from '../../utils/alerts';
+import { api } from '../../services/api';
 
 const ContributionsManager = ({
     contributionPlan,
@@ -11,16 +12,20 @@ const ContributionsManager = ({
     onRecordContribution,
     onApproveContribution,
     onInitializePlan,
-    onReload
+    onReload,
+    onRecordFine
 }) => {
     const [selectedMonths, setSelectedMonths] = useState([]); // Array of month IDs
     const [selectedOrganizer, setSelectedOrganizer] = useState(null);
+    const [selectedFine, setSelectedFine] = useState(null); // New State for selected fine
     const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
     const [isValidatingModalOpen, setIsValidatingModalOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const [voucherUrl, setVoucherUrl] = useState('');
     const [voucherFile, setVoucherFile] = useState(null);
     const [voucherPreview, setVoucherPreview] = useState(null);
+    const [fines, setFines] = useState([]);
+    const [loadingFines, setLoadingFines] = useState(false);
 
     const organizers = contributionStatus || [];
     const months = config?.contribution?.months || [];
@@ -148,6 +153,27 @@ const ContributionsManager = ({
         }
     }, [organizers, selectedOrganizer, contributionPlan]);
 
+    // Fetch Fines when Organizer is selected
+    useEffect(() => {
+        const fetchOrganizerFines = async () => {
+            if (!selectedOrganizer) {
+                setFines([]);
+                return;
+            }
+            try {
+                setLoadingFines(true);
+                const results = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                setFines(results);
+            } catch (error) {
+                console.error("Error fetching fines:", error);
+            } finally {
+                setLoadingFines(false);
+            }
+        };
+
+        fetchOrganizerFines();
+    }, [selectedOrganizer]);
+
     // Simulate cloud upload - Replace this with your actual cloud storage service
     const uploadToCloud = async (file) => {
         // Simulate upload delay
@@ -192,6 +218,13 @@ const ContributionsManager = ({
     const handleOrganizerSelect = (org) => {
         setSelectedOrganizer(org);
         setSelectedMonths([]);
+        setSelectedFine(null); // Reset fine selection
+    };
+
+    const handleFineClick = (fine) => {
+        setSelectedFine(fine);
+        setSelectedMonths([]); // Clear month selection
+        setIsRecordModalOpen(true);
     };
 
     const handleCellClick = (monthId) => {
@@ -262,14 +295,16 @@ const ContributionsManager = ({
 
     const handleStartPayment = () => {
         if (selectedMonths.length === 0) return;
+        setSelectedFine(null); // Ensure no fine is selected
         setIsRecordModalOpen(true);
     };
 
     const handleRecordSubmit = async (e) => {
         e.preventDefault();
 
-        // Validate voucher file is provided
-        if (!voucherFile) {
+        // Validate voucher file is provided (unless approving validation)
+        const isApproving = selectedFine?.estado === 'validando';
+        if (!voucherFile && !isApproving) {
             showError('Debes subir el comprobante de pago (imagen).', 'Campo Obligatorio');
             return;
         }
@@ -277,24 +312,46 @@ const ContributionsManager = ({
         try {
             setIsUploading(true);
 
-            // Upload file to cloud and get URL
-            const uploadedUrl = await uploadToCloud(voucherFile);
+            // Upload file to cloud and get URL (or use existing if approving)
+            let uploadedUrl = selectedFine?.voucher || '';
+            if (voucherFile) {
+                uploadedUrl = await uploadToCloud(voucherFile);
+            }
 
             const totalAmount = selectedMonths.length * (config?.contribution?.monthlyAmount || 0);
 
-            // Use default account from config if available
-            const defaultAccountId = config?.contribution?.defaultContributionAccount || (accounts[0]?.id);
+            // Get accountId from form or default
+            const formData = new FormData(e.target);
+            const formAccountId = formData.get('accountId');
+            const defaultAccountId = formAccountId || config?.contribution?.defaultContributionAccount || (accounts[0]?.id);
 
-            await onRecordContribution(
-                selectedOrganizer.organizador_id,
-                selectedMonths,
-                defaultAccountId,
-                totalAmount,
-                uploadedUrl
-            );
+            if (!defaultAccountId) {
+                showError('Debes seleccionar una cuenta de destino.', 'Cuenta Requerida');
+                return;
+            }
+
+            const notes = selectedFine ? `Pago de penalidad: ${selectedFine.descripcion}` : null;
+
+            if (selectedFine) {
+                await onRecordFine(
+                    selectedFine.id,
+                    defaultAccountId,
+                    uploadedUrl,
+                    notes
+                );
+            } else {
+                await onRecordContribution(
+                    selectedOrganizer.organizador_id,
+                    selectedMonths,
+                    defaultAccountId,
+                    totalAmount,
+                    uploadedUrl
+                );
+            }
 
             setIsRecordModalOpen(false);
             setSelectedMonths([]);
+            setSelectedFine(null);
             setVoucherUrl('');
             setVoucherFile(null);
             setVoucherPreview(null);
@@ -340,9 +397,28 @@ const ContributionsManager = ({
 
 
     // Calcular totales
+    const [totalPaidFines, setTotalPaidFines] = useState(0);
+
+    // Fetch global paid fines to add to revenue
+    useEffect(() => {
+        const fetchTotalFines = async () => {
+            try {
+                const allFines = await api.treasury.getFines();
+                const paid = allFines
+                    .filter(f => f.estado === 'pagado')
+                    .reduce((sum, f) => sum + parseFloat(f.monto || 0), 0);
+                setTotalPaidFines(paid);
+            } catch (e) {
+                console.error("Error fetching total fines:", e);
+            }
+        };
+        fetchTotalFines();
+    }, [contributionPlan, fines]); // Re-fetch when plan or fines update
+
     const totalExpected = organizers.reduce((sum, org) => sum + org.total_esperado, 0);
-    const totalPaid = organizers.reduce((sum, org) => sum + org.total_pagado, 0);
-    const totalPending = totalExpected - totalPaid;
+    const totalPaidQuotas = organizers.reduce((sum, org) => sum + org.total_pagado, 0);
+    const totalPaid = totalPaidQuotas + totalPaidFines;
+    const totalPending = totalExpected - totalPaidQuotas;
 
     return (
         <div className="space-y-6">
@@ -536,6 +612,65 @@ const ContributionsManager = ({
                                         })}
                                     </div>
 
+                                    {/* Penalties Section */}
+                                    {/* Penalties Section */}
+                                    {fines.length > 0 && (
+                                        <div className="mb-6 mt-6">
+                                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
+                                                <AlertTriangle size={16} />
+                                                Penalidades ({fines.length})
+                                            </h4>
+                                            <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
+                                                {fines.map(fine => {
+                                                    const isPaid = fine.estado === 'pagado';
+                                                    const isValidating = fine.estado === 'validando';
+                                                    const isPending = fine.estado === 'pendiente';
+
+                                                    return (
+                                                        <div
+                                                            key={fine.id}
+                                                            onClick={() => !isPaid && handleFineClick(fine)}
+                                                            className={`
+                                                            border rounded-lg p-3 flex justify-between items-center shadow-sm transition-colors group
+                                                            ${isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-red-200 cursor-pointer hover:bg-red-50'}
+                                                        `}
+                                                        >
+                                                            <div>
+                                                                <p className={`text-sm font-bold ${isPaid ? 'text-green-800' : 'text-red-800'}`}>{fine.descripcion}</p>
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${isPaid ? 'text-green-600 bg-green-100 border-green-200' : 'text-red-600 bg-red-50 border-red-100'}`}>
+                                                                        {isPaid ? 'Pagado' : `Vence: ${new Date(fine.dueDate + 'T00:00:00').toLocaleDateString('es-PE')}`}
+                                                                    </span>
+                                                                    {isValidating && (
+                                                                        <span className="text-[10px] text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full font-bold animate-pulse border border-yellow-200">
+                                                                            En Validación
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-[10px] text-gray-400">
+                                                                        {new Date(fine.fecha + 'T00:00:00').toLocaleDateString('es-PE')}
+                                                                    </span>
+                                                                </div>
+                                                            </div>
+                                                            <div className="text-right">
+                                                                <p className={`font-bold ${isPaid ? 'text-green-700' : 'text-red-700'}`}>S/ {parseFloat(fine.monto).toFixed(2)}</p>
+                                                                {!isPaid && (
+                                                                    <span className="text-[10px] text-red-600 font-bold uppercase tracking-wider group-hover:underline">
+                                                                        {isValidating ? 'Validar' : 'Pagar Ahora'}
+                                                                    </span>
+                                                                )}
+                                                                {isPaid && (
+                                                                    <span className="flex items-center justify-end gap-1 text-[10px] text-green-600 font-bold uppercase tracking-wider">
+                                                                        <CheckCircle size={12} /> Pagado
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    )
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     {/* Status Banner */}
                                     {debtStatus && debtStatus.status !== 'ok' && (
                                         <div className={`px-4 py-2 rounded-xl text-sm font-bold flex flex-col items-end ${debtStatus.status === 'late' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
@@ -590,108 +725,171 @@ const ContributionsManager = ({
             <Modal
                 isOpen={isRecordModalOpen}
                 onClose={() => setIsRecordModalOpen(false)}
-                title="Registrar Pago Directo"
+                title={selectedFine?.estado === 'validando' ? "Validar Pago de Penalidad" : "Registrar Pago Directo"}
             >
                 {selectedOrganizer && (
                     <form onSubmit={handleRecordSubmit} className="space-y-6">
+                        {/* Validation Notice for Validating Fines */}
+                        {selectedFine?.estado === 'validando' && (
+                            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mb-4 animate-in fade-in slide-in-from-top-2">
+                                <div className="flex items-start gap-3">
+                                    <div className="p-2 bg-yellow-100 rounded-full text-yellow-700 mt-0.5">
+                                        <AlertTriangle size={18} />
+                                    </div>
+                                    <div className="flex-1">
+                                        <h4 className="font-bold text-yellow-900 text-sm">Pago en Revisión</h4>
+                                        <p className="text-xs text-yellow-700 mt-1">
+                                            Este pago ha sido enviado por el organizador y requiere tu aprobación.
+                                            Verifica el comprobante antes de confirmar.
+                                        </p>
+                                        {selectedFine.voucher && (
+                                            <a
+                                                href={selectedFine.voucher}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-blue-600 hover:underline"
+                                            >
+                                                <ImageIcon size={14} /> Ver Comprobante Original
+                                            </a>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-gray-500">Organizador</span>
                                 <span className="font-bold text-gray-900">{selectedOrganizer.organizador_nombre}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Periodos ({selectedMonths.length})</span>
-                                <span className="font-bold text-blue-600">
-                                    {selectedMonths.map(id => months.find(m => m.id === id)?.label).join(', ')}
-                                </span>
+                                <span className="text-gray-500">{selectedFine ? 'Concepto' : `Periodos (${selectedMonths.length})`}</span>
+                                {selectedFine ? (
+                                    <span className="font-bold text-red-600 uppercase tracking-tight">{selectedFine.descripcion}</span>
+                                ) : (
+                                    <span className="font-bold text-blue-600">
+                                        {selectedMonths.map(id => months.find(m => m.id === id)?.label).join(', ')}
+                                    </span>
+                                )}
+                            </div>
+                            {selectedFine && (
+                                <div className="flex justify-between items-center text-sm">
+                                    <span className="text-gray-500">Categoría</span>
+                                    <span className="font-bold text-gray-700 bg-gray-200 px-2 py-0.5 rounded text-xs">Penalidades</span>
+                                </div>
+                            )}
+                            <div className="flex justify-between items-center text-sm">
+                                <span className="text-gray-500">Cuenta de Destino</span>
+                                {config?.contribution?.defaultContributionAccount ? (
+                                    <>
+                                        <span className="font-bold text-gray-900 text-right">
+                                            {(() => {
+                                                const acc = accounts.find(a => a.id === config.contribution.defaultContributionAccount);
+                                                return acc ? (acc.nombre || 'Cuenta sin nombre') : 'Cuenta no encontrada';
+                                            })()}
+                                        </span>
+                                        <input type="hidden" name="accountId" value={config.contribution.defaultContributionAccount} />
+                                    </>
+                                ) : (
+                                    <select
+                                        name="accountId"
+                                        className="font-bold text-gray-900 bg-transparent border-none focus:ring-0 text-right p-0 cursor-pointer"
+                                        defaultValue={accounts[0]?.id}
+                                    >
+                                        {accounts.map(acc => (
+                                            <option key={acc.id} value={acc.id}>{acc.nombre} ({acc.tipo})</option>
+                                        ))}
+                                    </select>
+                                )}
                             </div>
                             <div className="h-px bg-gray-200" />
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-500 text-sm font-medium tracking-tight">Monto Total</span>
-                                <span className="text-2xl font-black text-green-600">
-                                    S/ {(selectedMonths.length * (config?.contribution?.monthlyAmount || 0)).toFixed(2)}
+                                <span className={`text-2xl font-black ${selectedFine ? 'text-red-600' : 'text-green-600'}`}>
+                                    S/ {(selectedFine ? parseFloat(selectedFine.monto) : selectedMonths.length * (config?.contribution?.monthlyAmount || 0)).toFixed(2)}
                                 </span>
                             </div>
                         </div>
 
                         {/* File Upload Section */}
-                        <div className="space-y-3">
-                            <label className="block text-sm font-medium text-gray-700">
-                                Comprobante de Pago (Imagen) *
-                            </label>
-
-                            <div className="flex items-center gap-4">
-                                <label className="flex-1 cursor-pointer">
-                                    <div className={`border-2 border-dashed rounded-xl p-6 text-center transition-all ${voucherFile
-                                        ? 'border-green-300 bg-green-50'
-                                        : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'
-                                        }`}>
+                        {/* Voucher Upload Section - Hide if validating an existing payment */}
+                        {selectedFine?.estado !== 'validando' && (
+                            <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    Comprobante de Pago (Imagen) <span className="text-red-500">*</span>
+                                </label>
+                                <label className="block cursor-pointer group">
+                                    <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${voucherFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}>
                                         <input
                                             type="file"
                                             accept="image/*"
                                             onChange={handleFileChange}
                                             className="hidden"
-                                            required
+                                            required={!selectedFine}
                                         />
-                                        <div className="flex flex-col items-center gap-2">
+                                        <div className="space-y-3">
                                             {voucherFile ? (
                                                 <>
-                                                    <CheckCircle className="text-green-600" size={32} />
-                                                    <p className="text-sm font-medium text-green-700">{voucherFile.name}</p>
-                                                    <p className="text-xs text-green-600">
-                                                        {(voucherFile.size / 1024).toFixed(1)} KB
-                                                    </p>
+                                                    <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
+                                                        <CheckCircle size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-green-800">{voucherFile.name}</p>
+                                                        <p className="text-xs text-green-600">{(voucherFile.size / 1024).toFixed(1)} KB</p>
+                                                    </div>
+                                                    <p className="text-xs text-gray-400">Click para cambiar archivo</p>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <Upload className="text-gray-400" size={32} />
-                                                    <p className="text-sm text-gray-600">
-                                                        <span className="font-semibold text-blue-600">Click para subir</span> o arrastra la imagen
-                                                    </p>
-                                                    <p className="text-xs text-gray-500">PNG, JPG hasta 5MB</p>
+                                                    <div className="w-12 h-12 bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 rounded-full flex items-center justify-center mx-auto transition-colors">
+                                                        <Upload size={24} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm font-bold text-gray-700 group-hover:text-blue-700">
+                                                            Click para subir <span className="font-normal text-gray-500">o arrastra la imagen</span>
+                                                        </p>
+                                                        <p className="text-xs text-gray-400 mt-1">PNG, JPG hasta 5MB</p>
+                                                    </div>
                                                 </>
                                             )}
                                         </div>
                                     </div>
                                 </label>
-
-                                {/* Preview */}
-                                {voucherPreview && (
-                                    <div className="w-32 h-32 border-2 border-gray-200 rounded-xl overflow-hidden flex-shrink-0">
-                                        <img
-                                            src={voucherPreview}
-                                            alt="Preview"
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                )}
                             </div>
-                        </div>
+                        )}
+                        {voucherPreview && (
+                            <div className="w-32 h-32 border-2 border-gray-200 rounded-xl overflow-hidden flex-shrink-0">
+                                <img
+                                    src={voucherPreview}
+                                    alt="Preview"
+                                    className="w-full h-full object-cover"
+                                />
+                            </div>
+                        )}
 
-                        <div className="flex gap-3 pt-2">
+                        <div className="flex gap-4 pt-4">
                             <Button
                                 type="button"
-                                variant="ghost"
-                                onClick={() => setIsRecordModalOpen(false)}
+                                variant="outline"
                                 className="flex-1"
+                                onClick={() => setIsRecordModalOpen(false)}
                             >
                                 Cancelar
                             </Button>
                             <Button
+                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                                 type="submit"
-                                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                                 loading={isUploading}
                             >
                                 <CheckCircle size={18} className="mr-2" />
-                                Confirmar Pago
+                                {selectedFine?.estado === 'validando' ? 'Aprobar Pago' : 'Confirmar Pago'}
                             </Button>
                         </div>
                     </form>
                 )}
-            </Modal>
+            </Modal >
 
             {/* Validation Modal */}
-            <Modal
+            < Modal
                 isOpen={isValidatingModalOpen}
                 onClose={() => setIsValidatingModalOpen(false)}
                 title="Validar Aporte de Organizador"
@@ -758,8 +956,8 @@ const ContributionsManager = ({
                         })()}
                     </div>
                 )}
-            </Modal>
-        </div>
+            </Modal >
+        </div >
     );
 };
 

@@ -71,6 +71,7 @@ const TreasurerDashboard = ({ user }) => {
         updateConfig,
         reload: reloadTreasury,
         setCategories,
+        recordFinePayment,
         error: treasuryError
     } = useTreasury();
 
@@ -1160,6 +1161,7 @@ const TreasurerDashboard = ({ user }) => {
                         onApproveContribution={validateContribution}
                         onInitializePlan={initializeContributionPlan}
                         onReload={reloadTreasury}
+                        onRecordFine={recordFinePayment}
                     />
                 )
             }

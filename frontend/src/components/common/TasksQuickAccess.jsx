@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard, Edit3 } from 'lucide-react';
+import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard, Edit3, AlertTriangle } from 'lucide-react';
 import { useTreasury } from '../../hooks/useTreasury';
 import { showError, showSuccess } from '../../utils/alerts';
 import { Modal, Button, Card, LoadingSpinner } from '../ui';
@@ -21,6 +21,8 @@ const TasksQuickAccess = ({ user }) => {
     const [voucherFile, setVoucherFile] = useState(null);
     const [voucherPreview, setVoucherPreview] = useState(null);
     const [isSubmittingVoucher, setIsSubmittingVoucher] = useState(false);
+    const [pendingFines, setPendingFines] = useState([]);
+    const [selectedFine, setSelectedFine] = useState(null);
 
     const {
         contributionPlan: allContributionPlan, // Renamed to indicate it contains all data
@@ -110,6 +112,21 @@ const TasksQuickAccess = ({ user }) => {
             setLoadingMeetings(false);
         }
     };
+
+    // Load fines when tab is payments
+    useEffect(() => {
+        if (isOpen && activeModalTab === 'payments') {
+            const loadFines = async () => {
+                try {
+                    const fines = await api.treasury.getFines(user.id);
+                    setPendingFines(fines.filter(f => f.estado === 'pendiente' || f.estado === 'validando'));
+                } catch (err) {
+                    console.error("Error loading fines", err);
+                }
+            };
+            loadFines();
+        }
+    }, [isOpen, activeModalTab, user.id]);
 
     const handleMarkAttendance = async (meeting) => {
         try {
@@ -259,13 +276,25 @@ const TasksQuickAccess = ({ user }) => {
                                         const attendance = getAttendanceStatus(meeting);
                                         const hasMarked = !!attendance;
                                         // Handle inconsistent property names (time vs startTime)
-                                        const meetingTime = meeting.time || meeting.startTime || '00:00';
+                                        const rawTime = meeting.time || meeting.startTime || '00:00';
+
+                                        // Format to 12h AM/PM
+                                        const formatTime12Hour = (timeStr) => {
+                                            if (!timeStr) return '';
+                                            const [hours, minutes] = timeStr.split(':');
+                                            const h = parseInt(hours, 10);
+                                            const ampm = h >= 12 ? 'PM' : 'AM';
+                                            const h12 = h % 12 || 12;
+                                            return `${h12}:${minutes} ${ampm}`;
+                                        };
+
+                                        const meetingTime = formatTime12Hour(rawTime);
 
                                         // Condition 4: Post-Meeting Visibility
                                         if (meeting.status === 'closed' && !hasMarked) return null;
 
                                         // Condition 3: Meeting Start Time Restriction
-                                        const meetingDateTime = new Date(`${meeting.date}T${meetingTime}`);
+                                        const meetingDateTime = new Date(`${meeting.date}T${rawTime}`);
                                         const now = new Date();
                                         const hasStarted = now >= meetingDateTime;
 
@@ -452,6 +481,57 @@ const TasksQuickAccess = ({ user }) => {
                             </p>
                         </div>
 
+                        {/* Penalties Section */}
+                        {pendingFines.length > 0 && (
+                            <div className="mb-6">
+                                <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-4">
+                                    <h4 className="text-red-900 font-bold flex items-center gap-2 mb-1">
+                                        <AlertTriangle size={18} />
+                                        Penalidades Pendientes
+                                    </h4>
+                                    <p className="text-red-700 text-xs">
+                                        Tienes multas por inasistencia o tardanza. Debes regularizarlas para estar al día.
+                                    </p>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {pendingFines.map(fine => (
+                                        <div key={fine.id} className={`border rounded-xl p-4 flex justify-between items-center bg-white shadow-sm transition-all ${selectedFine?.id === fine.id ? 'border-red-500 ring-2 ring-red-100' : 'border-gray-200'}`}>
+                                            <div>
+                                                <p className="font-bold text-gray-800 text-sm">{fine.descripcion}</p>
+                                                <p className="text-xs text-red-500 font-medium mt-1">Vence: {new Date(fine.dueDate + 'T00:00:00').toLocaleDateString()}</p>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                {fine.estado === 'validando' ? (
+                                                    <span className="text-xs px-2 py-1 bg-yellow-100 text-yellow-700 rounded-full font-bold animate-pulse border border-yellow-200">
+                                                        Validando
+                                                    </span>
+                                                ) : (
+                                                    <>
+                                                        <span className="font-bold text-gray-900">S/ {parseFloat(fine.monto).toFixed(2)}</span>
+                                                        <Button
+                                                            size="sm"
+                                                            variant={selectedFine?.id === fine.id ? 'default' : 'outline'}
+                                                            className={selectedFine?.id === fine.id ? 'bg-red-600 hover:bg-red-700 text-white border-transparent' : 'border-red-200 text-red-600 hover:bg-red-50'}
+                                                            onClick={() => {
+                                                                if (selectedFine?.id === fine.id) {
+                                                                    setSelectedFine(null);
+                                                                } else {
+                                                                    setSelectedFine(fine);
+                                                                    // Removed setSelectedMonths([]) to allow combined payment
+                                                                }
+                                                            }}>
+                                                            {selectedFine?.id === fine.id ? 'Seleccionado' : 'Pagar'}
+                                                        </Button>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Contribution Calendar Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                             {treasuryConfig?.contribution?.months?.map(month => {
@@ -492,6 +572,7 @@ const TasksQuickAccess = ({ user }) => {
                                             return;
                                         }
                                         setSelectedMonths(prev => [...prev, month.id]);
+                                        // Removed setSelectedFine(null) to allow combined payment
                                     }
                                 };
 
@@ -516,18 +597,23 @@ const TasksQuickAccess = ({ user }) => {
                         </div>
 
                         {/* Voucher Form */}
-                        {selectedMonths.length > 0 && (
+                        {(selectedMonths.length > 0 || selectedFine) && (
                             <Card className="bg-gray-50 border-blue-100 mt-6 p-4 animate-in fade-in slide-in-from-bottom-2">
                                 <h5 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
                                     <Upload size={16} className="text-blue-600" />
-                                    Registrar Pago ({selectedMonths.length} {selectedMonths.length === 1 ? 'Periodo' : 'Periodos'})
+                                    {selectedFine ? 'Registrar Pago de Penalidad' : `Registrar Pago (${selectedMonths.length} ${selectedMonths.length === 1 ? 'Periodo' : 'Periodos'})`}
                                 </h5>
 
 
                                 <div className="space-y-4">
                                     <div className="flex justify-between text-xs mb-3">
                                         <span className="text-gray-500">Monto Final:</span>
-                                        <span className="font-black text-gray-900 text-sm">S/ {selectedMonths.length * treasuryConfig.contribution.monthlyAmount}</span>
+                                        <span className="font-black text-gray-900 text-sm">
+                                            S/ {(
+                                                (selectedFine ? parseFloat(selectedFine.monto || selectedFine.amount || 0) : 0) +
+                                                (selectedMonths.length * treasuryConfig.contribution.monthlyAmount)
+                                            ).toFixed(2)}
+                                        </span>
                                     </div>
 
                                     {/* File Upload */}
@@ -584,6 +670,7 @@ const TasksQuickAccess = ({ user }) => {
                                         className="flex-1"
                                         onClick={() => {
                                             setSelectedMonths([]);
+                                            setSelectedFine(null);
                                             setVoucherUrl('');
                                             setVoucherFile(null);
                                             setVoucherPreview(null);
@@ -607,16 +694,37 @@ const TasksQuickAccess = ({ user }) => {
                                                 // Upload file to cloud
                                                 const uploadedUrl = await uploadToCloud(voucherFile);
 
-                                                await recordContribution(
-                                                    user.id,
-                                                    selectedMonths,
-                                                    null, // No account selection for organizer
-                                                    selectedMonths.length * treasuryConfig.contribution.monthlyAmount,
-                                                    uploadedUrl,
-                                                    true // isValidationRequest
-                                                );
+                                                // Handle combined payment (Fine + Months) or single payment
+                                                const uploadPromise = Promise.resolve(uploadedUrl); // Can be used by both if needed
+
+                                                const promises = [];
+
+                                                if (selectedFine) {
+                                                    promises.push(api.treasury.submitFinePayment(selectedFine.id, uploadedUrl));
+                                                }
+
+                                                if (selectedMonths.length > 0) {
+                                                    promises.push(recordContribution(
+                                                        user.id,
+                                                        selectedMonths,
+                                                        null, // No account selection for organizer
+                                                        selectedMonths.length * treasuryConfig.contribution.monthlyAmount,
+                                                        uploadedUrl,
+                                                        true // isValidationRequest
+                                                    ));
+                                                }
+
+                                                await Promise.all(promises);
+
                                                 await reload();
+                                                // Refresh fines if paid fine
+                                                if (selectedFine) {
+                                                    const fines = await api.treasury.getFines(user.id);
+                                                    setPendingFines(fines.filter(f => f.estado === 'pendiente' || f.estado === 'validando'));
+                                                }
+
                                                 setSelectedMonths([]);
+                                                setSelectedFine(null);
                                                 setVoucherUrl('');
                                                 setVoucherFile(null);
                                                 setVoucherPreview(null);

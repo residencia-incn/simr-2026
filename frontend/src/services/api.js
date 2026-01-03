@@ -60,7 +60,7 @@ const DEFAULT_DAYS = [
 ];
 
 const DEFAULT_CATEGORIES = {
-    income: ['Inscripciones', 'Aporte Mensual', 'Patrocinio', 'Subvención', 'Donación', 'Otro'],
+    income: ['Inscripciones', 'Aporte Mensual', 'Penalidades', 'Patrocinio', 'Subvención', 'Donación', 'Otro'],
     expense: ['Logística', 'Honorarios', 'Alimentación', 'Transporte', 'Publicidad', 'Materiales', 'Otro']
 };
 
@@ -932,6 +932,29 @@ export const api = {
             const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
             const existing = meetings.findIndex(m => m.id === meeting.id);
 
+            // Reversal Logic: Check for Justifications
+            if (meeting.attendance) {
+                const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+                let finesUpdated = false;
+
+                meeting.attendance.forEach(att => {
+                    if (att.justified) {
+                        // Find fine for this user and meeting
+                        const fineIdx = fines.findIndex(f => f.userId === att.userId && f.meetingId === meeting.id && f.estado === 'pendiente');
+                        if (fineIdx !== -1) {
+                            // Remove/Void fine
+                            console.log(`[API] Voiding fine for user ${att.userId} in meeting ${meeting.id}`);
+                            fines.splice(fineIdx, 1);
+                            finesUpdated = true;
+                        }
+                    }
+                });
+
+                if (finesUpdated) {
+                    storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+                }
+            }
+
             if (existing >= 0) {
                 meetings[existing] = { ...meeting, updatedAt: Date.now() };
             } else {
@@ -1138,8 +1161,38 @@ export const api = {
             // Prevent double processing
             if (meeting.finesProcessed) return { processed: false, reason: "Ya procesada" };
 
-            // Get organizers (people who SHOULD attend)
-            // Ideally we get this from an invite list, but if not exists, we assume all 'organizadores'
+            // Check if 15 minutes have passed since closing
+            if (meeting.status === 'closed') {
+                if (meeting.closedAt) {
+                    const closedTime = new Date(meeting.closedAt).getTime();
+                    const now = Date.now();
+                    const minutesSinceClose = (now - closedTime) / 60000;
+                    if (minutesSinceClose < 15) {
+                        return { processed: false, reason: "Periodo de firma (15 min) activo" };
+                    }
+                }
+                // If closedAt is missing but status is 'closed', assume it's ready (legacy/manual close)
+            } else {
+                return { processed: false, reason: "Reunión no cerrada" };
+            }
+
+            // Get Treasury Config for Due Date
+            const config = storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
+            const deadlineDay = config.contribution?.monthlyDeadlineDay || 29; // Default to 29 if missing
+
+            // Calculate Due Date (29th of the meeting's month)
+            // e.g. Meeting 02/01/2026 -> Due Date 29/01/2026
+            const meetingDateObj = new Date(meeting.date);
+            const dueYear = meetingDateObj.getFullYear();
+            const dueMonth = meetingDateObj.getMonth(); // 0-indexed
+
+            // Create date object but avoid UTC conversion shift
+            const dueDateObj = new Date(dueYear, dueMonth, deadlineDay);
+            const yyyy = dueDateObj.getFullYear();
+            const mm = String(dueDateObj.getMonth() + 1).padStart(2, '0');
+            const dd = String(dueDateObj.getDate()).padStart(2, '0');
+            const dueDate = `${yyyy}-${mm}-${dd}`;
+
             const allUsers = await api.users.getAll();
             const organizers = allUsers.filter(u =>
                 u.eventRole === 'organizador' || u.eventRoles?.includes('organizador')
@@ -1154,41 +1207,37 @@ export const api = {
                 const attendance = meeting.attendance?.find(a => a.userId === user.id);
 
                 // Skip if justified
-                if (attendance?.isJustified) continue;
+                if (attendance?.isJustified || attendance?.justified) continue;
 
                 let fineAmount = 0;
                 let reason = '';
 
                 // Condition 1: Absent (No attendance ref OR not signed)
-                // Note: User constraint says "si no firman contara como inasistencia"
                 if (!attendance || !attendance.signedAt) {
                     // It's an absence
-                    // Check reincidence
                     const absences = (user.unjustifiedAbsences || 0) + 1;
                     fineAmount = absences === 1 ? 10 : 20;
-                    reason = `Inasistencia/Falta de Firma - ${meeting.title}`;
+                    reason = `Inasistencia Reunion ${meeting.date}`;
 
                     // Update user absence count
                     await api.users.update({ ...user, unjustifiedAbsences: absences });
                 } else {
                     // Condition 2: Late
                     const markedAt = new Date(attendance.markedAt);
-                    // Check if markedAt > start + 10 mins
                     if (markedAt.getTime() > (meetingStart.getTime() + toleranceMs)) {
-                        // It's a delay (Note: User request says "10 soles" for tolerance breach, implies similar to 1st absence?)
-                        // Request says: "Posterior a ellos se considera inasistencia y pago de multa de 10 soles."
-                        // So it counts as absence effectively? Let's treat as separate fine category "Tardanza" but S/ 10.
-                        // Or "Reincidencia" applies? Let's stick to user text: "multa de 10 soles".
-                        // Logic implies reincidence applies to "inasistencia".
-                        // Let's default to S/ 10 for lateness unless specified reincidence.
                         fineAmount = 10;
-                        reason = `Tardanza (>10min) - ${meeting.title}`;
+                        reason = `Tardanza Reunion ${meeting.date}`;
                     }
                 }
 
                 if (fineAmount > 0) {
                     // Create fine in treasury fines system
                     const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+
+                    // Avoid duplicate fine for same meeting/user
+                    const existingFine = fines.find(f => f.userId === user.id && f.meetingId === meeting.id);
+                    if (existingFine) continue;
+
                     const newFine = {
                         id: `fine-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
                         userId: user.id,
@@ -1197,8 +1246,10 @@ export const api = {
                         descripcion: reason,
                         meetingId: meeting.id,
                         meetingTitle: meeting.title,
+                        category: 'Penalidades', // New Category
                         estado: 'pendiente',
                         fecha: new Date().toISOString().split('T')[0],
+                        dueDate: dueDate, // Dynamic Due Date based on Config
                         createdAt: new Date().toISOString(),
                         metadata: {
                             type: 'meeting_attendance',
@@ -1300,6 +1351,18 @@ export const api = {
             meetings[meetingIndex] = meeting;
             storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
 
+            // Reversal Logic: If status is 'confirmed' or 'justified', remove any pending fine
+            if (status === 'confirmed' || status === 'justified') {
+                const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+                const fineIdx = fines.findIndex(f => f.userId === userId && f.meetingId === meetingId && f.estado === 'pendiente');
+
+                if (fineIdx !== -1) {
+                    console.log(`[API] Voiding fine for user ${userId} in meeting ${meetingId} due to status update to ${status}`);
+                    fines.splice(fineIdx, 1);
+                    storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+                }
+            }
+
             return meeting;
         },
 
@@ -1336,6 +1399,17 @@ export const api = {
 
             meetings[meetingIndex] = meeting;
             storage.set(STORAGE_KEYS.PLANNING_MEETINGS, meetings);
+
+            // Reversal Logic: Remove Fine if exists
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const fineIdx = fines.findIndex(f => f.userId === userId && f.meetingId === meetingId && f.estado === 'pendiente');
+
+            if (fineIdx !== -1) {
+                console.log(`[API] Voiding fine for user ${userId} in meeting ${meetingId} due to justification`);
+                fines.splice(fineIdx, 1);
+                storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+            }
+
             return meeting;
         },
 
@@ -1799,6 +1873,25 @@ export const api = {
             const totalAmount = targetContribs.reduce((sum, c) => sum + (c.monto_esperado || 0), 0);
             const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
 
+            // Just create transaction, no need to update plan here as it's separate?
+            // Actually recordContribution updates plan state to 'pagado'.
+            // validateContribution should probably call recordContribution internally or similar updates?
+            // The previous code for recordContribution handles creation of transaction.
+            // Let's assume validateContribution is just a wrapper or specific to "validando" -> "pagado" transition.
+
+            // For now, I will just return true as placeholder or whatever logic existed. 
+            // WAIT, I am REPLACING this block to ADD `getFines`. I should NOT change `validateContribution` logic if I can avoid it.
+            // But I need to anchor myself.
+            // I'll append `getFines` AFTER `validateContribution`.
+
+            // ... (keeping existing validateContribution logic roughly same if possible, or just append)
+            // It seems I selected a block containing validateContribution.
+            // I will implement getFines AFTER it.
+
+            // ... existing logic ...
+
+            // Actually, to be safe, I will target the END of validateContribution or add it before. 
+            // Let's add it BEFORE `validateContribution` or AFTER `addFine`.
             const transaction = {
                 fecha: new Date().toISOString().split('T')[0],
                 descripcion: `Aporte Validado ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
@@ -1824,6 +1917,37 @@ export const api = {
                 transaction: newTx,
                 updatedPlan
             };
+        },
+
+        getFines: async (userId) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            if (userId) {
+                return fines.filter(f => f.userId === userId);
+            }
+            return fines;
+        },
+
+        submitFinePayment: async (fineId, voucherUrl) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const fineIndex = fines.findIndex(f => f.id === fineId);
+
+            if (fineIndex === -1) throw new Error('Penalidad no encontrada');
+
+            fines[fineIndex] = {
+                ...fines[fineIndex],
+                estado: 'validando',
+                voucher: voucherUrl,
+                paidAt: new Date().toISOString()
+            };
+
+            storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+
+            // Notify treasury (optional, but good practice)
+            // api.notifications.add(...)
+
+            return fines[fineIndex];
         },
 
         rejectContribution: async (organizadorId, mesIds, reason) => {
@@ -2039,7 +2163,28 @@ export const api = {
 
         getCategories: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
+            const stored = storage.get(STORAGE_KEYS.TREASURY_CATEGORIES, DEFAULT_CATEGORIES);
+
+            // Ensure new system categories are present even if storage exists
+            let changed = false;
+
+            // Sync Income Categories
+            DEFAULT_CATEGORIES.income.forEach(cat => {
+                const isSystem = ['Penalidades', 'Inscripciones', 'Aporte Mensual'].includes(cat);
+
+                if (isSystem && !stored.income.includes(cat)) {
+                    // Add to the list (after first item is a safe bet for order, or just push)
+                    // Let's put Penalidades after Inscripciones keys if possible, but index 1 is fine.
+                    stored.income.splice(1, 0, cat);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                storage.set(STORAGE_KEYS.TREASURY_CATEGORIES, stored);
+            }
+
+            return stored;
         },
 
         addCategory: async (type, category) => {
@@ -2091,19 +2236,36 @@ export const api = {
 
         // --- Fines Management (Meeting Attendance) ---
 
-        /**
-         * Get all fines or fines for a specific user
-         * @param {string} userId - Optional user ID to filter fines
-         * @returns {Array} Array of fine objects
-         */
-        getFines: async (userId = null) => {
-            await delay();
-            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+        // Helper to trigger fine processing for all suitable meetings
+        checkPendingFines: async () => {
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const closedUnprocessed = meetings.filter(m => m.status === 'closed' && !m.finesProcessed);
 
+            for (const meeting of closedUnprocessed) {
+                await api.planning.processFines(meeting.id);
+            }
+        },
+
+        getFines: async (userId) => {
+            await delay();
+
+            // Trigger processing of any pending fines
+            // We use the internal helper we just defined (need to access it via api.treasury or define it outside?)
+            // Since we are inside the object definition, we can't easily reference 'this' reliably if destructured.
+            // But api.treasury should be available globally or we can define the helper outside.
+            // Let's rely on api.treasury.checkPendingFines() designated below, or inline logic.
+            // Safest: inline the logic or use api.planning.processFines which is available.
+
+            const meetings = storage.get(STORAGE_KEYS.PLANNING_MEETINGS, []);
+            const closedUnprocessed = meetings.filter(m => m.status === 'closed' && !m.finesProcessed);
+            for (const meeting of closedUnprocessed) {
+                await api.planning.processFines(meeting.id);
+            }
+
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
             if (userId) {
                 return fines.filter(f => f.userId === userId);
             }
-
             return fines;
         },
 
@@ -2153,7 +2315,7 @@ export const api = {
 
                 await api.treasury.addTransactionV2({
                     tipo: 'ingreso',
-                    categoria: 'Multas',
+                    categoria: 'Penalidades',
                     monto: fine.monto,
                     descripcion: `Pago de multa: ${fine.descripcion}`,
                     cuenta_id: accountId,
@@ -2168,6 +2330,7 @@ export const api = {
             }
 
             storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+            await delay(100); // Ensure storage write
             return fines[index];
         },
 

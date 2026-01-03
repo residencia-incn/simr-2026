@@ -311,7 +311,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     );
 };
 
-const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes', 'Aporte Mensual'];
+const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes', 'Aporte Mensual', 'Penalidades'];
 
 const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
     const [newCat, setNewCat] = useState('');

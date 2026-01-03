@@ -417,6 +417,23 @@ export const useTreasury = () => {
         setCategories,
         renameCategory: api.treasury.renameCategory,
 
+        // Fine Operations
+        recordFinePayment: useCallback(async (fineId, accountId, voucherUrl, notes) => {
+            try {
+                const result = await api.treasury.updateFineStatus(fineId, 'pagado', {
+                    accountId,
+                    notes,
+                    voucher: voucherUrl,
+                    paidAt: new Date().toISOString()
+                });
+                await loadTreasuryData();
+                return result;
+            } catch (err) {
+                console.error('Error recording fine payment:', err);
+                throw err;
+            }
+        }, [loadTreasuryData]),
+
         // Reload
         reload: loadTreasuryData
     };

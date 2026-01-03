@@ -1473,8 +1473,13 @@ const PlanningManager = ({ currentUser }) => {
                     // 2. Helper to calculate status and fine
                     const getAttendanceInfo = (user) => {
                         const attendance = currentAttendees.find(a => a.userId === user.id);
+
+                        // Dynamic Fine Calculation based on history
+                        const priorAbsences = user.unjustifiedAbsences || 0;
+                        const absenceFine = priorAbsences === 0 ? 10.00 : 20.00;
+
                         let status = 'falta'; // Default to Absent
-                        let fine = 20.00; // Default Fine for Absence
+                        let fine = absenceFine; // Default Fine for Absence (Dynamic)
                         let statusLabel = 'Falta';
                         let statusColor = 'bg-red-100 text-red-700';
                         let timeLabel = '-';
@@ -1528,7 +1533,7 @@ const PlanningManager = ({ currentUser }) => {
                             if (isClosed) {
                                 if (!attendance.signedAt) {
                                     status = 'falta_firma';
-                                    fine = 20.00; // Treated as Falta
+                                    fine = absenceFine; // Treated as Falta (Dynamic)
                                     statusLabel = 'Falta (No Firmó)';
                                     statusColor = 'bg-red-100 text-red-700 border-red-200';
                                 } else {
@@ -1543,7 +1548,7 @@ const PlanningManager = ({ currentUser }) => {
                                             // Late signing = Falta? Per requirement: "Si no se firmo en ese tiempo, contara como falta"
                                             // Assuming "signing late" is equivalent to not signing in time window.
                                             status = 'falta_firma_tarde';
-                                            fine = 20.00;
+                                            fine = absenceFine; // Dynamic Fine
                                             statusLabel = 'Falta (Firma Tarde)';
                                             statusColor = 'bg-red-100 text-red-700';
                                         }
@@ -1597,7 +1602,7 @@ const PlanningManager = ({ currentUser }) => {
                                 <p><strong>Reglas de Asistencia:</strong></p>
                                 <ul className="list-disc pl-4 mt-1 space-y-1">
                                     <li>Tolerancia: 10 min (Tardanza: S/ 10.00)</li>
-                                    <li>Firma de Acta: 15 min tras cierre (Falta: S/ 20.00)</li>
+                                    <li>Firma de Acta: 15 min tras cierre (Falta: S/ 10.00 - S/ 20.00)</li>
                                 </ul>
                             </div>
 
