@@ -258,13 +258,14 @@ const TasksQuickAccess = ({ user }) => {
                                     {(activeMeetings || []).map(meeting => {
                                         const attendance = getAttendanceStatus(meeting);
                                         const hasMarked = !!attendance;
+                                        // Handle inconsistent property names (time vs startTime)
+                                        const meetingTime = meeting.time || meeting.startTime || '00:00';
 
                                         // Condition 4: Post-Meeting Visibility
-                                        // If a meeting has ended and the user did not mark attendance, they should not see the meeting
                                         if (meeting.status === 'closed' && !hasMarked) return null;
 
                                         // Condition 3: Meeting Start Time Restriction
-                                        const meetingDateTime = new Date(`${meeting.date}T${meeting.time}`);
+                                        const meetingDateTime = new Date(`${meeting.date}T${meetingTime}`);
                                         const now = new Date();
                                         const hasStarted = now >= meetingDateTime;
 
@@ -280,7 +281,7 @@ const TasksQuickAccess = ({ user }) => {
                                                             </span>
                                                             <span className="flex items-center gap-1">
                                                                 <Clock size={12} />
-                                                                {meeting.time}
+                                                                {meetingTime}
                                                             </span>
                                                         </div>
                                                     </div>
@@ -330,7 +331,7 @@ const TasksQuickAccess = ({ user }) => {
                                                                 ) : (
                                                                     <span className="text-xs text-gray-400 italic flex items-center gap-1 bg-gray-50 px-2 py-1 rounded border border-gray-100">
                                                                         <Clock size={12} />
-                                                                        Inicia a las {meeting.time}
+                                                                        Inicia a las {meetingTime}
                                                                     </span>
                                                                 )
                                                             )
