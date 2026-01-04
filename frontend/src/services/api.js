@@ -60,8 +60,21 @@ const DEFAULT_DAYS = [
 ];
 
 const DEFAULT_CATEGORIES = {
-    income: ['Inscripciones', 'Aporte Mensual', 'Penalidades', 'Patrocinio', 'Subvención', 'Donación', 'Otro'],
+    income: ['Inscripciones', 'Aporte Mensual', 'Penalidades', 'Patrocinio', 'Subvención', 'Donación', 'Talleres', 'Otro'],
     expense: ['Logística', 'Honorarios', 'Alimentación', 'Transporte', 'Publicidad', 'Materiales', 'Otro']
+};
+
+// Pricing Constants (matches frontend/src/views/TreasurerDashboard.jsx)
+const TICKET_OPTIONS = {
+    'presencial': { title: 'Presencial', price: 0 },
+    'presencial_cert': { title: 'Presencial + Certificado', price: 50 },
+    'virtual': { title: 'Virtual', price: 50 }
+};
+
+const WORKSHOP_OPTIONS = {
+    'workshop1': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
+    'workshop2': { name: 'Taller de Electroencefalografía', price: 20 },
+    'workshop3': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
 };
 
 /**
@@ -287,7 +300,9 @@ export const api = {
                 modules: existingUser ? [...new Set([...(existingUser.modules || []), ...assignedModules])] : assignedModules,
                 password: existingUser ? existingUser.password : '123456',
                 voucherData: reg.voucherData,
-                image: reg.img // Ensure image is preserved if present
+                image: reg.img, // Ensure image is preserved if present
+                ticketType: reg.ticketType,
+                workshops: reg.workshops
             };
 
             if (existingUser) {
@@ -300,7 +315,53 @@ export const api = {
             // since Attendees.getAll now proxies to Users.getAll
 
             // 3. Add to Treasury Income
-            await api.treasury.addIncome(reg.amount, `Inscripción: ${reg.name}`, 'Inscripciones', reg.voucherData);
+            // 3. Add to Treasury Income (ITEMIZED SPLIT)
+
+            // 3.1. Main Ticket Income
+            let ticketAmount = 0;
+            let ticketTitle = '';
+
+            if (reg.ticketType && TICKET_OPTIONS[reg.ticketType]) {
+                ticketAmount = TICKET_OPTIONS[reg.ticketType].price;
+                ticketTitle = TICKET_OPTIONS[reg.ticketType].title;
+            } else {
+                // Fallback for legacy or manual checks
+                ticketAmount = reg.amount; // Assume all is ticket if no details
+                // If there are workshops but no ticketType, we might double count if we aren't careful.
+                // But in this logic, if we have workshops, we subtract them from total to find ticket price?
+                // A safer bet is: if ticketType is missing, assume the *remainder* is the ticket.
+                if (reg.workshops && reg.workshops.length > 0) {
+                    const workshopsTotal = reg.workshops.reduce((sum, wid) => sum + (WORKSHOP_OPTIONS[wid]?.price || 0), 0);
+                    ticketAmount = reg.amount - workshopsTotal;
+                }
+                ticketTitle = reg.modalidad || 'Entrada General';
+            }
+
+            if (ticketAmount > 0) {
+                await api.treasury.addIncome(
+                    ticketAmount,
+                    `Inscripción: ${reg.name} - ${ticketTitle}`,
+                    'Inscripciones',
+                    reg.voucherData,
+                    reg.paymentAccountId // Use the configured 'Inscripciones' account
+                );
+            }
+
+            // 3.2. Workshops Income
+            if (reg.workshops && reg.workshops.length > 0) {
+                for (const workshopId of reg.workshops) {
+                    const ws = WORKSHOP_OPTIONS[workshopId];
+                    if (ws) {
+                        await api.treasury.addIncome(
+                            ws.price,
+                            `Taller: ${reg.name} - ${ws.name}`,
+                            'Talleres',
+                            reg.voucherData,
+                            reg.paymentAccountId // Same account as Inscriptions
+                        );
+                    }
+                }
+            }
 
             // 4. Remove from Pending
             await api.registrations.remove(reg.id);
@@ -1527,10 +1588,94 @@ export const api = {
             return storage.get(STORAGE_KEYS.TREASURY_CONFIG, TREASURY_CONFIG);
         },
 
+        getContributionPlan: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
+        },
+
         saveConfig: async (config) => {
             await delay();
             storage.set(STORAGE_KEYS.TREASURY_CONFIG, config);
+
+            // Auto-synchronize plan with new config
+            await api.treasury.synchronizeContributionPlan(config);
+
             return config;
+        },
+
+        synchronizeContributionPlan: async (config) => {
+            const plan = storage.get(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, INITIAL_CONTRIBUTION_PLAN);
+            const allUsers = await api.users.getAll();
+            const organizers = allUsers.filter(u =>
+                u.eventRole === 'organizador' ||
+                u.eventRoles?.includes('organizador')
+            );
+            console.log('🔄 Sincronizando Plan. Config Months:', config.contribution.months.length, 'Organizers:', organizers.length);
+
+            let updatedPlan = [...plan];
+            const configMonths = config.contribution.months;
+            const configMonthIds = configMonths.map(m => m.id);
+
+            // 1. Add missing months and update existing pending amounts
+            organizers.forEach(organizer => {
+                configMonths.forEach(month => {
+                    const existingIndex = updatedPlan.findIndex(
+                        c => c.organizador_id === organizer.id && c.mes === month.id
+                    );
+
+                    if (existingIndex === -1) {
+                        // Add new
+                        console.log(`➕ Agregando: ${organizer.id} - ${month.id}`);
+                        updatedPlan.push({
+                            id: `contrib-${organizer.id}-${month.id}`,
+                            organizador_id: organizer.id,
+                            organizador_nombre: organizer.nombre || organizer.name || 'Sin nombre',
+                            organizador_rol: organizer.eventRole || 'organizador',
+                            mes: month.id,
+                            mes_label: month.label,
+                            monto_esperado: config.contribution.monthlyAmount,
+                            estado: 'pendiente',
+                            transaccion_id: null,
+                            deadline: month.deadline
+                        });
+                    } else if (updatedPlan[existingIndex].estado === 'pendiente') {
+                        // Update amount for existing pending items
+                        updatedPlan[existingIndex] = {
+                            ...updatedPlan[existingIndex],
+                            monto_esperado: config.contribution.monthlyAmount,
+                            deadline: month.deadline // Update deadline too if changed
+                        };
+                    }
+                });
+            });
+
+            // 2. Remove 'pendiente' months that are no longer in config
+            // (Only remove if status is 'pendiente'. Keep 'pagado'/'validando' for safety)
+            updatedPlan = updatedPlan.filter(item => {
+                const isInDataRange = configMonthIds.includes(item.mes);
+                if (isInDataRange) return true; // Keep everything in range
+
+                // If out of range, only keep if it's NOT pending (i.e. keep paid/validating history)
+                return item.estado !== 'pendiente';
+            });
+
+            // 3. Sort plan (optional, but good for UI consistency)
+            // We can sort by organizer then by month id (assuming month ids are comparable or we have order)
+            // For now, appending is fine as UI usually filters/sorts.
+
+            const success = storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
+            console.log('✅ Plan guardado. Total items:', updatedPlan.length, 'Success:', success);
+
+            // 4. Update Budget for 'Aporte Mensual'
+            // Calculate total expected only for CURRENT active range
+            const totalExpected = organizers.length * configMonths.length * config.contribution.monthlyAmount;
+            const budgetPlan = storage.get(STORAGE_KEYS.TREASURY_BUDGET_PLAN, INITIAL_BUDGET_PLAN);
+            const updatedBudget = budgetPlan.map(item =>
+                item.categoria === 'Aporte Mensual' ? { ...item, presupuestado: totalExpected } : item
+            );
+            storage.set(STORAGE_KEYS.TREASURY_BUDGET_PLAN, updatedBudget);
+
+            return updatedPlan;
         },
 
         // Accounts Management
@@ -1600,11 +1745,18 @@ export const api = {
                 ...transactionData
             };
 
-            const updatedAccounts = accounts.map(acc =>
-                acc.id === transactionData.cuenta_id
-                    ? { ...acc, saldo_actual: acc.saldo_actual + transactionData.monto }
-                    : acc
-            );
+            const updatedAccounts = accounts.map(acc => {
+                if (acc.id === transactionData.cuenta_id) {
+                    const amount = parseFloat(transactionData.monto);
+                    // For expenses, subtract. For income, add.
+                    // Note: If transactionData.monto comes in negative for expense, we should handle that.
+                    // But standardizing on positive magnitude + type is better.
+                    // Current usage sends positive magnitude.
+                    const change = transactionData.type === 'expense' ? -Math.abs(amount) : Math.abs(amount);
+                    return { ...acc, saldo_actual: (acc.saldo_actual || 0) + change };
+                }
+                return acc;
+            });
 
             storage.set(STORAGE_KEYS.TREASURY_TRANSACTIONS_V2, [newTransaction, ...transactions]);
             storage.set(STORAGE_KEYS.TREASURY_ACCOUNTS, updatedAccounts);
@@ -1620,11 +1772,15 @@ export const api = {
             const transaction = transactions.find(tx => tx.id === transactionId);
             if (!transaction) throw new Error('Transacción no encontrada');
 
-            const updatedAccounts = accounts.map(acc =>
-                acc.id === transaction.cuenta_id
-                    ? { ...acc, saldo_actual: acc.saldo_actual - transaction.monto }
-                    : acc
-            );
+            const updatedAccounts = accounts.map(acc => {
+                if (acc.id === transaction.cuenta_id) {
+                    const amount = parseFloat(transaction.monto);
+                    // Reverse the operation: Expense (subtracted) -> Add back. Income (added) -> Subtract.
+                    const change = transaction.type === 'expense' ? Math.abs(amount) : -Math.abs(amount);
+                    return { ...acc, saldo_actual: (acc.saldo_actual || 0) + change };
+                }
+                return acc;
+            });
 
             const updated = transactions.filter(tx => tx.id !== transactionId);
             storage.set(STORAGE_KEYS.TREASURY_TRANSACTIONS_V2, updated);
@@ -2000,7 +2156,45 @@ export const api = {
             return updated.find(item => item.categoria === categoria);
         },
 
-        // Legacy Compatibility
+        transfer: async (fromAccountId, toAccountId, amount, description) => {
+            await delay();
+            const accounts = await api.treasury.getAccounts();
+            const fromAccount = accounts.find(a => a.id === fromAccountId);
+            const toAccount = accounts.find(a => a.id === toAccountId);
+
+            if (!fromAccount || !toAccount) throw new Error('Cuentas no encontradas');
+            if (fromAccount.saldo_actual < amount) throw new Error('Saldo insuficiente en la cuenta de origen');
+
+            const transferId = `transfer-${Date.now()}`;
+
+            // 1. Create Expense (Salida) from Source
+            // Note: We send positive amount here because addTransactionV2 handles the sign for balance update based on 'expense' type.
+            // However, to ensure ReportsView sees it as negative (expense), we should store it as negative?
+            // ReportsView filters t.monto < 0 for expenses.
+            // So we MUST send negative amount for the expense transaction record.
+            const expenseTx = await api.treasury.addTransactionV2({
+                type: 'expense',
+                monto: -parseFloat(amount), // Store as negative for correct reporting
+                descripcion: `Transferencia: ${fromAccount.nombre} --> ${toAccount.nombre}: ${description}`,
+                categoria: 'Transferencia Interna',
+                cuenta_id: fromAccountId,
+                metadata: { type: 'transfer_out', transferId, relatedAccountId: toAccountId }
+            });
+
+            // 2. Create Income (Entrada) to Destination
+            const incomeTx = await api.treasury.addTransactionV2({
+                type: 'income',
+                monto: parseFloat(amount),
+                descripcion: `Transferencia: ${fromAccount.nombre} --> ${toAccount.nombre}: ${description}`,
+                categoria: 'Transferencia Interna',
+                cuenta_id: toAccountId,
+                metadata: { type: 'transfer_in', transferId, relatedAccountId: fromAccountId }
+            });
+
+            return { expense: expenseTx, income: incomeTx };
+        },
+
+        // Legacy V1 Transactions (Support until full migration)
         getTransactions: async () => {
             await delay();
             return storage.get(STORAGE_KEYS.TREASURY, INITIAL_TRANSACTIONS);
@@ -2026,7 +2220,7 @@ export const api = {
             return true;
         },
 
-        addIncome: async (amount, description, category, voucherData = null) => {
+        addIncome: async (amount, description, category, voucherData = null, accountId = null) => {
             await delay();
             const accounts = await api.treasury.getAccounts();
             if (accounts.length === 0) throw new Error("No hay cuentas disponibles para registrar el ingreso.");
@@ -2035,17 +2229,17 @@ export const api = {
             const config = await api.treasury.getConfig();
             const defaultAccountId = config?.contribution?.defaultInscriptionAccount;
 
-            let targetAccountId = defaultAccountId;
+            let targetAccountId = accountId || defaultAccountId;
 
             // Validate if configured account still exists
             if (targetAccountId && !accounts.find(a => a.id === targetAccountId)) {
-                console.warn(`Configured default inscription account ${targetAccountId} not found. Falling back to first account.`);
+                console.warn(`Configured target account ${targetAccountId} not found. Falling back to first account.`);
                 targetAccountId = null;
             }
 
             // Fallback to first account
             if (!targetAccountId) {
-                targetAccountId = accounts[0].id;
+                targetAccountId = accounts[0].id; // Fallback to first available account if no specific or default account is valid
             }
 
             return await api.treasury.addTransactionV2({
@@ -2170,7 +2364,7 @@ export const api = {
 
             // Sync Income Categories
             DEFAULT_CATEGORIES.income.forEach(cat => {
-                const isSystem = ['Penalidades', 'Inscripciones', 'Aporte Mensual'].includes(cat);
+                const isSystem = ['Penalidades', 'Inscripciones', 'Aporte Mensual', 'Talleres'].includes(cat);
 
                 if (isSystem && !stored.income.includes(cat)) {
                     // Add to the list (after first item is a safe bet for order, or just push)

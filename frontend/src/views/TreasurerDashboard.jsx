@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet, ShieldCheck, Clock, AlertCircle, RefreshCw, Search, Tag } from 'lucide-react';
+import { DollarSign, TrendingUp, TrendingDown, Plus, Trash2, FileText, Users, Settings, X, CheckSquare, FileDown, PieChart, Calendar, User, Building, Wallet, ShieldCheck, Clock, AlertCircle, RefreshCw, Search, Tag, Award } from 'lucide-react';
 import { Button, Card, Table, FormField, ConfirmDialog, LoadingSpinner, EmptyState, Modal } from '../components/ui';
 import TreasurerCharts from './TreasurerCharts';
 import { api } from '../services/api';
@@ -10,7 +10,20 @@ import ContributionsManager from '../components/treasury/ContributionsManager';
 import ReportsView from '../components/treasury/ReportsView';
 import TreasurySettings from '../components/treasury/TreasurySettings';
 import IncomeManager from '../components/treasury/IncomeManager';
-import { showSuccess, showError, showWarning } from '../utils/alerts';
+import { showSuccess, showError, showConfirm, showWarning } from '../utils/alerts';
+
+
+const TICKET_OPTIONS = {
+    'presencial': { title: 'Presencial', price: 0, subtitle: 'Gratis' },
+    'presencial_cert': { title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00' },
+    'virtual': { title: 'Virtual', price: 50, subtitle: 'S/ 50.00' }
+};
+
+const WORKSHOP_OPTIONS = {
+    'workshop1': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
+    'workshop2': { name: 'Taller de Electroencefalografía', price: 20 },
+    'workshop3': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
+};
 
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
@@ -498,8 +511,41 @@ const TreasurerDashboard = ({ user }) => {
     };
 
 
-    // Dedicated handler for income modal (doesn't depend on activeTab)
-    const handleIncomeSubmit = async (formData) => {
+    // Dedicated handler for income modal
+    const handleIncomeSubmit = async (data) => {
+        try {
+            await api.treasury.addTransactionV2({
+                fecha: data.date || new Date().toISOString(),
+                descripcion: data.description,
+                monto: parseFloat(data.amount),
+                categoria: data.category,
+                cuenta_id: data.accountId,
+                type: 'income'
+            });
+            await loadData();
+            showSuccess('Ingreso registrado correctamente.');
+        } catch (error) {
+            console.error(error);
+            showError(error.message, 'Error al registrar ingreso');
+        }
+    };
+
+    // Dedicated handler for transfers
+    // Dedicated handler for transfers
+    const handleTransfer = async (fromId, toId, amount, description) => {
+        try {
+            await api.treasury.transfer(fromId, toId, amount, description);
+            showSuccess('Transferencia realizada correctamente.');
+            await Promise.all([
+                loadData(),
+                reloadTreasury() // Reload new treasury system data
+            ]);
+        } catch (error) {
+            showError(error.message, 'Error en transferencia');
+        }
+    };
+
+    const handleCreateAccount = async (accountData) => {
         if (!formData.accountId) {
             showWarning('Seleccione una cuenta para continuar.', 'Cuenta requerida');
             return;
@@ -702,21 +748,13 @@ const TreasurerDashboard = ({ user }) => {
     // But `addTreasuryIncome` implies it goes there.
     // I will assume `transactions` is the source of truth for money.
 
-    // 1. Calculate Total Expenses from Transactions (Flow)
-    const totalExpenses = transactions
-        .filter(t => t.type === 'expense')
-        .reduce((acc, curr) => acc + (parseFloat(curr.amount) || 0), 0);
+    // Use centralized values from useTreasury to ensure consistency with ReportsView
+    const totalIncome = treasuryIncome;
+    const totalExpenses = treasuryExpenses;
 
-    // 2. Calculate Real Balance from Accounts (Source of Truth for "What we have")
-    // This fixes the issue where initial balances weren't showing up in the summary
-    const accountsBalance = accountBalances.reduce((acc, curr) => acc + (parseFloat(curr.saldo) || 0), 0);
-
-    // 3. Force Income to balance the equation visually: Income = Balance + Expenses
-    // This ensures "Total Income" reflects all funds available (Initial + Added)
-    // and prevents "Total Balance" from being 0 when there is money in accounts.
-    const totalIncome = accountsBalance + totalExpenses;
-
-    const balance = accountsBalance;
+    // Per user request, Balance Total MUST be Ingresos - Egresos.
+    // NOTE: This might differ from 'totalBalance' (Sum of Accounts) if there are data integrity issues.
+    const balance = totalIncome - totalExpenses;
 
     if (treasuryError || (error && !data && !loading)) {
         return (
@@ -985,7 +1023,8 @@ const TreasurerDashboard = ({ user }) => {
                                                 amount: parseFloat(attendee.amount || 0),
                                                 voucher: attendee.voucherData || attendee.voucher,
                                                 coupon: attendee.coupon || attendee.couponCode,
-                                                email: attendee.email
+                                                email: attendee.email,
+                                                original: attendee // Pass full object for detail view
                                             };
                                             handleViewDetail(item);
                                         }}
@@ -1137,14 +1176,31 @@ const TreasurerDashboard = ({ user }) => {
 
 
 
+            {/* Treasury Error Alert */}
+            {treasuryError && (
+                <div className="mb-6 bg-red-50 border-l-4 border-red-500 p-4 rounded-r shadow-sm flex items-start justify-between">
+                    <div className="flex items-center">
+                        <AlertCircle className="text-red-500 mr-2" size={20} />
+                        <div>
+                            <h3 className="text-red-800 font-bold text-sm">Error de Sistema de Tesorería</h3>
+                            <p className="text-red-700 text-sm mt-1">{treasuryError}</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Accounts Tab */}
             {
                 activeTab === 'accounts' && (
                     <AccountsManager
+                        key={transactions.length} // Force re-render on transaction change
                         accounts={accounts}
+                        financialAssets={config?.financialAssets || []}
+                        transactions={transactions}
                         onCreateAccount={createAccount}
                         onUpdateAccount={updateAccount}
                         onDeleteAccount={deleteAccount}
+                        onTransfer={handleTransfer}
                     />
                 )
             }
@@ -1334,15 +1390,77 @@ const TreasurerDashboard = ({ user }) => {
                                     <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución / Concepto</p>
                                     <p className="font-semibold text-gray-900">{selectedDetail.details || selectedDetail.institution || '-'}</p>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4 pt-2">
-                                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-100">
-                                        <p className="text-xs font-bold text-blue-600 uppercase mb-1">Monto Pagado</p>
-                                        <p className="text-xl font-bold text-blue-700">S/ {selectedDetail.amount.toFixed(2)}</p>
+                                {console.log('SelectedDetail Debug:', selectedDetail)}
+
+                                {/* Payment Breakdown Section */}
+                                <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
+                                    <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
+                                        <Award size={14} className="text-orange-600" /> Detalle de Pago
+                                    </p>
+
+                                    {selectedDetail.original && (
+                                        selectedDetail.original.ticketType ||
+                                        selectedDetail.original.modalidad ||
+                                        selectedDetail.original.modality ||
+                                        (selectedDetail.original.workshops && selectedDetail.original.workshops.length > 0)
+                                    ) ? (
+                                        <>
+                                            <div className="flex justify-between items-center text-sm">
+                                                <span className="text-gray-700 font-medium text-base">
+                                                    Ticket: {(() => {
+                                                        const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                        const option = TICKET_OPTIONS[type];
+                                                        return option ? option.title : (type || 'Entrada General');
+                                                    })()}
+                                                </span>
+                                                <span className="font-bold text-gray-900 text-base">
+                                                    {(() => {
+                                                        const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                        const option = TICKET_OPTIONS[type];
+                                                        if (option) return `S/ ${option.price.toFixed(2)}`;
+
+                                                        // Fallback: Calculate from total - workshops
+                                                        if (selectedDetail.amount && selectedDetail.original.workshops) {
+                                                            const wsTotal = selectedDetail.original.workshops.reduce((sum, w) => sum + (WORKSHOP_OPTIONS[w]?.price || 0), 0);
+                                                            const ticketPart = selectedDetail.amount - wsTotal;
+                                                            return `S/ ${ticketPart.toFixed(2)}`;
+                                                        }
+                                                        return '-';
+                                                    })()}
+                                                </span>
+                                            </div>
+
+                                            {selectedDetail.original.workshops && selectedDetail.original.workshops.length > 0 && (
+                                                <div className="space-y-2 pt-2 border-t border-gray-200 mt-2">
+                                                    <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
+                                                    {selectedDetail.original.workshops.map(wsId => {
+                                                        const ws = WORKSHOP_OPTIONS[wsId];
+                                                        return (
+                                                            <div key={wsId} className="flex justify-between items-center text-sm pl-2">
+                                                                <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
+                                                                <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <div className="text-sm text-gray-500 italic">
+                                            <p>Detalle no disponible para este tipo de registro.</p>
+                                            <p className="text-xs mt-2 font-mono bg-gray-100 p-1 rounded break-all">
+                                                Debug: {selectedDetail.original ? Object.keys(selectedDetail.original).filter(k => !['voucherData', 'image', 'paymentData'].includes(k)).join(', ') : 'No Data'}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="flex justify-between items-center pt-3 border-t-2 border-gray-200 mt-2">
+                                        <span className="text-base font-bold text-gray-900">Total Pagado</span>
+                                        <span className="text-2xl font-extrabold text-blue-600">S/ {selectedDetail.amount.toFixed(2)}</span>
                                     </div>
-                                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                        <p className="text-xs font-bold text-gray-500 uppercase mb-1">Fecha</p>
-                                        <p className="text-sm font-semibold text-gray-900">
-                                            {new Date(selectedDetail.date).toLocaleDateString()}
+                                    <div className="flex justify-end">
+                                        <p className="text-xs text-gray-500 font-semibold">
+                                            Fecha: {new Date(selectedDetail.date).toLocaleDateString()}
                                         </p>
                                     </div>
                                 </div>

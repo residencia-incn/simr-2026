@@ -358,14 +358,15 @@ export const useTreasury = () => {
     const updateConfig = useCallback(async (newConfig) => {
         try {
             await api.treasury.saveConfig(newConfig);
-            const updated = await api.treasury.getConfig();
-            setConfig(updated);
+            // Reload all data because saveConfig might have synchronized (changed) the contribution plan
+            await loadTreasuryData();
+            const updated = await api.treasury.getConfig(); // Redundant via loadTreasuryData but harmless, or we can just rely on loadTreasuryData
             return updated;
         } catch (err) {
             console.error('Error updating treasury config:', err);
             throw err;
         }
-    }, []);
+    }, [loadTreasuryData]);
 
     return {
         // Data

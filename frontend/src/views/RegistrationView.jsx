@@ -31,17 +31,22 @@ const RegistrationView = () => {
     });
     const [workDeclarations, setWorkDeclarations] = useState({});
     const [academicConfig, setAcademicConfig] = useState(null);
+    const [treasuryData, setTreasuryData] = useState({ config: null, accounts: [] });
+    const [selectedPaymentAccount, setSelectedPaymentAccount] = useState(null);
 
     const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
 
     useEffect(() => {
         const loadConfig = async () => {
-            const [eventConfig, acConfig] = await Promise.all([
+            const [eventConfig, acConfig, trConfig, accs] = await Promise.all([
                 api.content.getConfig(),
-                api.academic.getConfig()
+                api.academic.getConfig(),
+                api.treasury.getConfig(),
+                api.treasury.getAccounts()
             ]);
-            setConfig(eventConfig);
+            setConfig({ ...eventConfig, treasury: trConfig });
             setAcademicConfig(acConfig);
+            setTreasuryData({ config: trConfig, accounts: accs });
         };
         loadConfig();
     }, []);
@@ -236,6 +241,11 @@ const RegistrationView = () => {
             return;
         }
 
+        if (paymentNeeded && !selectedPaymentAccount) {
+            showWarning('Por favor selecciona la cuenta donde realizaste el depósito.', 'Cuenta requerida');
+            return;
+        }
+
         // Convert file to base64 if it exists
         let base64Voucher = null;
         if (voucherFile && convertToBase64) {
@@ -262,7 +272,8 @@ const RegistrationView = () => {
                 coupon: appliedCoupon ? appliedCoupon.code : null,
                 voucherData: base64Voucher,
                 status: paymentNeeded ? 'pending_payment' : 'confirmed',
-                processedAt: new Date().toISOString()
+                processedAt: new Date().toISOString(),
+                paymentAccountId: selectedPaymentAccount // Pass the selected account ID
             };
 
             const result = await submitRegistration(registrationData);
@@ -904,16 +915,62 @@ const RegistrationView = () => {
                                 </div>
 
                                 <div className="grid md:grid-cols-2 gap-8">
-                                    {/* Left Col: Bank Info */}
+                                    {/* Left Col: Bank Info - Dynamic */}
                                     <div className="space-y-4">
-                                        <h4 className="font-bold text-gray-800 border-b pb-2">Datos Bancarios</h4>
-                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
-                                            <p className="text-xs text-blue-600 font-bold uppercase mb-1">Banco de Crédito (BCP)</p>
-                                            <p className="font-mono text-xl font-bold text-gray-900 tracking-wide">191-12345678-0-00</p>
-                                        </div>
-                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 hover:border-blue-300 transition-colors">
-                                            <p className="text-xs text-blue-600 font-bold uppercase mb-1">CCI Interbancario</p>
-                                            <p className="font-mono text-lg font-bold text-gray-900 tracking-wide">002-191-12345678000-55</p>
+                                        <h4 className="font-bold text-gray-800 border-b pb-2">Cuentas Disponibles</h4>
+                                        <p className="text-sm text-gray-600 mb-2">Selecciona la cuenta donde realizaste el pago:</p>
+
+                                        <div className="space-y-3">
+                                            {(() => {
+                                                const inscriptionAccountIds = treasuryData.config?.contribution?.inscriptionAccounts ||
+                                                    (treasuryData.config?.contribution?.defaultInscriptionAccount ? [treasuryData.config.contribution.defaultInscriptionAccount] : []);
+
+                                                const validAccounts = treasuryData.accounts.filter(acc => inscriptionAccountIds.includes(acc.id));
+
+                                                if (validAccounts.length === 0) {
+                                                    return <p className="text-red-500 text-sm italic">No hay cuentas de inscripción configuradas.</p>;
+                                                }
+
+                                                return validAccounts.map(account => {
+                                                    const asset = treasuryData.config?.financialAssets?.find(a => a.id === account.financialAssetId);
+                                                    const isSelected = selectedPaymentAccount === account.id;
+
+                                                    // Determine visual style based on asset type/subtype
+                                                    const subtype = asset?.subtype || account.tipo;
+                                                    let colorClass = 'bg-gray-50 border-gray-200';
+                                                    let iconClass = 'bg-gray-200 text-gray-600';
+
+                                                    if (subtype === 'Yape') { colorClass = 'bg-purple-50 border-purple-200'; iconClass = 'bg-purple-600 text-white'; }
+                                                    else if (subtype === 'Plin') { colorClass = 'bg-cyan-50 border-cyan-200'; iconClass = 'bg-cyan-500 text-white'; }
+                                                    else if (subtype === 'BCP') { colorClass = 'bg-orange-50 border-orange-200'; iconClass = 'bg-orange-500 text-white'; }
+                                                    else if (subtype === 'Interbank') { colorClass = 'bg-green-50 border-green-200'; iconClass = 'bg-green-600 text-white'; }
+                                                    else if (subtype === 'BBVA') { colorClass = 'bg-blue-50 border-blue-200'; iconClass = 'bg-blue-600 text-white'; }
+
+                                                    if (isSelected) {
+                                                        colorClass = colorClass.replace('bg-', 'bg-opacity-50 ring-2 ring-blue-500 border-blue-500');
+                                                    }
+
+                                                    return (
+                                                        <div
+                                                            key={account.id}
+                                                            onClick={() => setSelectedPaymentAccount(account.id)}
+                                                            className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'}`}
+                                                        >
+                                                            <div className="flex items-center gap-3">
+                                                                <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm ${iconClass}`}>
+                                                                    {subtype?.substring(0, 4) || '??'}
+                                                                </div>
+                                                                <div className="flex-1">
+                                                                    <p className="font-bold text-gray-900 leading-tight">{asset?.name || account.nombre}</p>
+                                                                    <p className="text-sm font-mono text-gray-700 mt-0.5">{account.numero_cuenta}</p>
+                                                                    {asset?.cci && <p className="text-xs text-gray-500 font-mono">CCI: {asset.cci}</p>}
+                                                                </div>
+                                                                {isSelected && <CheckCircle className="text-blue-600" size={24} />}
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                });
+                                            })()}
                                         </div>
                                     </div>
 
@@ -924,40 +981,34 @@ const RegistrationView = () => {
                                             {voucherError && <span className="text-red-500 text-xs font-normal flex items-center gap-1"><AlertCircle size={12} /> Requerido</span>}
                                         </h4>
                                         {requiresPayment ? (
-                                            <div className="flex gap-4">
-                                                <div className="bg-purple-600 text-white p-4 rounded-xl flex-shrink-0 flex flex-col items-center justify-center w-24 shadow-md">
-                                                    <span className="text-xs font-bold mb-1">YAPE</span>
-                                                    <div className="w-12 h-12 bg-white/20 rounded-lg"></div>
-                                                </div>
-                                                <div className="flex-grow">
-                                                    {!voucherPreview ? (
-                                                        <div onClick={() => fileInputRef.current.click()} className={`h-full border-2 border-dashed ${voucherError ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'} rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer transition-all text-center group`}>
-                                                            <Upload className={`${voucherError ? 'text-red-400' : 'text-gray-400'} mb-2 group-hover:scale-110 transition-transform`} size={24} />
-                                                            <span className={`text-sm font-medium ${voucherError ? 'text-red-600' : 'text-gray-600'}`}>Subir Voucher</span>
-                                                            <span className="text-xs text-gray-400">PDF, JPG, PNG</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="h-full border-2 border-green-200 bg-green-50 rounded-xl p-3 flex items-center justify-between">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="p-2 bg-white rounded-lg border border-green-100"><FileCheck className="text-green-500" size={20} /></div>
-                                                                <div>
-                                                                    <p className="text-xs font-bold text-gray-900">Archivo cargado</p>
-                                                                    <button type="button" onClick={(e) => { e.stopPropagation(); clearVoucher(); }} className="text-xs text-red-500 hover:underline">Eliminar</button>
-                                                                </div>
+                                            <div className="flex-grow">
+                                                {!voucherPreview ? (
+                                                    <div onClick={() => fileInputRef.current.click()} className={`h-full border-2 border-dashed ${voucherError ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'} rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer transition-all text-center group`}>
+                                                        <Upload className={`${voucherError ? 'text-red-400' : 'text-gray-400'} mb-2 group-hover:scale-110 transition-transform`} size={24} />
+                                                        <span className={`text-sm font-medium ${voucherError ? 'text-red-600' : 'text-gray-600'}`}>Subir Voucher</span>
+                                                        <span className="text-xs text-gray-400">PDF, JPG, PNG</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="h-full border-2 border-green-200 bg-green-50 rounded-xl p-3 flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="p-2 bg-white rounded-lg border border-green-100"><FileCheck className="text-green-500" size={20} /></div>
+                                                            <div>
+                                                                <p className="text-xs font-bold text-gray-900">Archivo cargado</p>
+                                                                <button type="button" onClick={(e) => { e.stopPropagation(); clearVoucher(); }} className="text-xs text-red-500 hover:underline">Eliminar</button>
                                                             </div>
                                                         </div>
-                                                    )}
-                                                    <input
-                                                        type="file"
-                                                        ref={fileInputRef}
-                                                        className="hidden"
-                                                        accept="image/*,.pdf"
-                                                        onChange={(e) => {
-                                                            setVoucherError(false); // Clear error on interaction
-                                                            handleFileChange(e);
-                                                        }}
-                                                    />
-                                                </div>
+                                                    </div>
+                                                )}
+                                                <input
+                                                    type="file"
+                                                    ref={fileInputRef}
+                                                    className="hidden"
+                                                    accept="image/*,.pdf"
+                                                    onChange={(e) => {
+                                                        setVoucherError(false); // Clear error on interaction
+                                                        handleFileChange(e);
+                                                    }}
+                                                />
                                             </div>
                                         ) : (
                                             <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
@@ -1022,42 +1073,44 @@ const RegistrationView = () => {
             </div>
 
             {/* Success Modal */}
-            {showSuccessModal && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
-                    <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-slideUp">
-                        {/* Header with gradient */}
-                        <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
-                            <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                                <CheckCircle className="text-green-500" size={48} />
+            {
+                showSuccessModal && (
+                    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 animate-fadeIn">
+                        <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full mx-4 overflow-hidden transform animate-slideUp">
+                            {/* Header with gradient */}
+                            <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-center">
+                                <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                    <CheckCircle className="text-green-500" size={48} />
+                                </div>
+                                <h2 className="text-3xl font-bold text-white mb-2">¡Registro Exitoso!</h2>
+                                <p className="text-green-50 text-sm">Tu inscripción ha sido enviada correctamente</p>
                             </div>
-                            <h2 className="text-3xl font-bold text-white mb-2">¡Registro Exitoso!</h2>
-                            <p className="text-green-50 text-sm">Tu inscripción ha sido enviada correctamente</p>
-                        </div>
 
-                        {/* Body */}
-                        <div className="p-8 text-center">
-                            <p className="text-gray-600 mb-6">
-                                Hemos recibido tu solicitud de inscripción para el <span className="font-bold text-gray-900">SIMR 2026</span>.
-                                Pronto recibirás un correo de confirmación con los detalles.
-                            </p>
-
-                            <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
-                                <p className="text-sm text-blue-800">
-                                    <span className="font-semibold">Próximos pasos:</span> Revisa tu correo electrónico para más información sobre el evento.
+                            {/* Body */}
+                            <div className="p-8 text-center">
+                                <p className="text-gray-600 mb-6">
+                                    Hemos recibido tu solicitud de inscripción para el <span className="font-bold text-gray-900">SIMR 2026</span>.
+                                    Pronto recibirás un correo de confirmación con los detalles.
                                 </p>
-                            </div>
 
-                            <button
-                                onClick={handleCloseSuccessModal}
-                                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg transform hover:-translate-y-0.5"
-                            >
-                                Registrar Otra Persona
-                            </button>
+                                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+                                    <p className="text-sm text-blue-800">
+                                        <span className="font-semibold">Próximos pasos:</span> Revisa tu correo electrónico para más información sobre el evento.
+                                    </p>
+                                </div>
+
+                                <button
+                                    onClick={handleCloseSuccessModal}
+                                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-4 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg transform hover:-translate-y-0.5"
+                                >
+                                    Registrar Otra Persona
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 };
 

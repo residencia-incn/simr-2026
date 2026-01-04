@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard, Edit3, AlertTriangle } from 'lucide-react';
+import { ListTodo, CheckCircle, Clock, AlertCircle, Calendar, MessageSquare, UserCheck, Users, DollarSign, Upload, CreditCard, Edit3, AlertTriangle, Building, Smartphone } from 'lucide-react';
 import { useTreasury } from '../../hooks/useTreasury';
 import { showError, showSuccess } from '../../utils/alerts';
 import { Modal, Button, Card, LoadingSpinner } from '../ui';
@@ -27,9 +27,81 @@ const TasksQuickAccess = ({ user }) => {
     const {
         contributionPlan: allContributionPlan, // Renamed to indicate it contains all data
         config: treasuryConfig,
+        accounts,
         recordContribution,
         reload
     } = useTreasury();
+
+    // Helper to render destination account
+    const renderDestinationAccount = () => {
+        if (!treasuryConfig?.contribution?.defaultContributionAccount || !accounts || !treasuryConfig?.financialAssets) return null;
+
+        const accountId = treasuryConfig.contribution.defaultContributionAccount;
+        const account = accounts.find(a => a.id === accountId);
+        if (!account) return null;
+
+        const asset = treasuryConfig.financialAssets.find(a => a.id === account.financialAssetId);
+
+        // Determine icon and color
+        const isWallet = account.tipo !== 'banco'; // Or check asset.type
+        const subtype = asset?.subtype || '';
+
+        let colorClass = 'bg-gray-100 text-gray-600';
+        let Icon = Building;
+
+        if (subtype === 'Yape') { colorClass = 'bg-purple-600 text-white'; Icon = Smartphone; }
+        else if (subtype === 'Plin') { colorClass = 'bg-cyan-500 text-white'; Icon = Smartphone; }
+        else if (subtype === 'Agora / OH!') { colorClass = 'bg-pink-600 text-white'; Icon = Smartphone; }
+        else if (subtype === 'BCP') { colorClass = 'bg-orange-500 text-white'; Icon = Building; }
+        else if (subtype === 'Interbank') { colorClass = 'bg-green-600 text-white'; Icon = Building; }
+        else if (subtype === 'BBVA') { colorClass = 'bg-blue-600 text-white'; Icon = Building; }
+
+        return (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h4 className="text-blue-900 font-bold flex items-center gap-2 mb-2 text-sm uppercase tracking-wide opacity-80">
+                            <CreditCard size={14} />
+                            Cuenta de Destino
+                        </h4>
+
+                        <div className="flex items-center gap-4">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${colorClass}`}>
+                                {['Yape', 'Plin', 'Agora / OH!', 'BCP', 'BBVA', 'Interbank'].includes(subtype) ? (
+                                    <span className="font-bold text-xs">{subtype.substring(0, 4)}</span>
+                                ) : (
+                                    <Icon size={24} />
+                                )}
+                            </div>
+
+                            <div>
+                                <p className="font-bold text-gray-900 text-lg leading-tight">{asset?.name || account.nombre}</p>
+                                <div className="text-sm text-gray-600 font-medium mt-1">
+                                    <p className="flex items-center gap-1">
+                                        <span className="text-xs uppercase bg-gray-100 px-1.5 rounded text-gray-500 font-bold tracking-wider">{asset?.subtype || account.tipo}</span>
+                                        <span className="font-mono text-gray-800 tracking-wide">{account.numero_cuenta}</span>
+                                    </p>
+                                    {/* Show CCI if it's a bank account and available in asset */}
+                                    {asset?.cci && (
+                                        <p className="flex items-center gap-1 mt-0.5">
+                                            <span className="text-[10px] uppercase bg-blue-50 px-1.5 rounded text-blue-600 font-bold tracking-wider">CCI</span>
+                                            <span className="font-mono text-gray-600 text-xs tracking-wide">{asset.cci}</span>
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Description hidden as requested */}
+                    </div>
+                </div>
+                <div className="mt-3 text-xs text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg border border-blue-100 inline-flex items-center gap-2">
+                    <AlertCircle size={12} />
+                    Realiza tu pago a esta cuenta y adjunta el comprobante abajo.
+                </div>
+            </div>
+        );
+    };
 
     // SECURITY: Filter to show only current user's contributions
     // TODO: When connecting to backend, the API should ONLY return the current user's data
@@ -98,6 +170,7 @@ const TasksQuickAccess = ({ user }) => {
     useEffect(() => {
         if (isOrganizer && isOpen) {
             loadActiveMeetings();
+            reload(); // Force reload of treasury data to get latest config/accounts
         }
     }, [isOrganizer, isOpen]);
 
@@ -471,15 +544,20 @@ const TasksQuickAccess = ({ user }) => {
                 ) : (
                     /* Payments Section */
                     <div className="space-y-6">
-                        <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
-                            <h4 className="text-blue-900 font-bold flex items-center gap-2 mb-1">
-                                <CreditCard size={18} />
-                                Aportes Mensuales
-                            </h4>
-                            <p className="text-blue-700 text-xs">
-                                Selecciona los meses pendientes de forma secuencial para registrar tu pago adjuntando un comprobante.
-                            </p>
-                        </div>
+                        {/* Destination Account Card */}
+                        {renderDestinationAccount()}
+
+                        {!renderDestinationAccount() && (
+                            <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6">
+                                <h4 className="text-blue-900 font-bold flex items-center gap-2 mb-1">
+                                    <CreditCard size={18} />
+                                    Aportes Mensuales
+                                </h4>
+                                <p className="text-blue-700 text-xs">
+                                    Selecciona los meses pendientes de forma secuencial para registrar tu pago adjuntando un comprobante.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Penalties Section */}
                         {pendingFines.length > 0 && (

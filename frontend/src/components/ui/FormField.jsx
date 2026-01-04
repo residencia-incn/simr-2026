@@ -13,6 +13,7 @@ const FormField = ({
     disabled = false,
     options = [], // for select
     rows = 3, // for textarea
+    helpText,
     ...props
 }) => {
     const baseInputStyles = `
@@ -85,6 +86,11 @@ const FormField = ({
                 <p className="mt-1 text-xs text-red-500 font-medium flex items-center gap-1">
                     <span className="block w-1 h-1 bg-red-500 rounded-full"></span>
                     {error}
+                </p>
+            )}
+            {helpText && !error && (
+                <p className="mt-1 text-xs text-gray-500">
+                    {helpText}
                 </p>
             )}
         </div>

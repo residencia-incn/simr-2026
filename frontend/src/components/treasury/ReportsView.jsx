@@ -38,8 +38,15 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
 
     // Calcular totales
     const summary = useMemo(() => {
-        const income = filteredTransactions.filter(t => t.monto > 0).reduce((sum, t) => sum + t.monto, 0);
-        const expense = filteredTransactions.filter(t => t.monto < 0).reduce((sum, t) => sum + Math.abs(t.monto), 0);
+        // Use type-based calculation to handle both legacy (positive amount expense) and new (negative amount expense) correctly
+        const income = filteredTransactions
+            .filter(t => t.type === 'income')
+            .reduce((sum, t) => sum + Math.abs(t.monto || 0), 0);
+
+        const expense = filteredTransactions
+            .filter(t => t.type === 'expense')
+            .reduce((sum, t) => sum + Math.abs(t.monto || 0), 0);
+
         return {
             income,
             expense,

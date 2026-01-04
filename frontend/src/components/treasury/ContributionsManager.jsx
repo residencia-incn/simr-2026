@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon, AlertTriangle, Search, Printer, FileText } from 'lucide-react';
 import { Button, Card, FormField, Modal } from '../ui';
 import { showError, showSuccess } from '../../utils/alerts';
 import { api } from '../../services/api';
@@ -29,6 +29,10 @@ const ContributionsManager = ({
 
     const organizers = contributionStatus || [];
     const months = config?.contribution?.months || [];
+
+    useEffect(() => {
+        console.log('📊 ContributionsManager: Config updated. Months:', months.length);
+    }, [config]);
 
     // --- Helper Functions ---
     const getCellStatus = (organizadorId, mes) => {
@@ -114,6 +118,143 @@ const ContributionsManager = ({
     };
 
     const debtStatus = calculateDebtStatus();
+
+    // --- Account Status Calculation ---
+    const calculateAccountStatus = () => {
+        if (!selectedOrganizer || !months.length) return null;
+
+        // Contributions
+        const totalContributionsExpected = months.length * (config?.contribution?.monthlyAmount || 0);
+        const paidMonthsCount = contributionPlan.filter(
+            c => c.organizador_id === selectedOrganizer.organizador_id && c.estado === 'pagado'
+        ).length;
+        const totalContributionsPaid = paidMonthsCount * (config?.contribution?.monthlyAmount || 0);
+        const pendingContributionsCount = months.length - paidMonthsCount;
+
+        // Fines (Assuming 'fines' state contains all unpaid and paid fines for selected organizer)
+        const unpaidFines = fines.filter(f => f.estado === 'pendiente');
+        const totalFinesPending = unpaidFines.reduce((sum, f) => sum + parseFloat(f.monto), 0);
+
+        const totalPending = (totalContributionsExpected - totalContributionsPaid) + totalFinesPending;
+
+        return {
+            totalPending,
+            pendingContributionsCount,
+            totalFinesPending,
+            isClean: totalPending === 0
+        };
+    };
+
+    const accountStatus = calculateAccountStatus();
+
+    const handlePrintReport = () => {
+        if (!selectedOrganizer) return;
+
+        const printWindow = window.open('', '_blank');
+        const status = accountStatus;
+
+        const htmlContent = `
+            <html>
+                <head>
+                    <title>Estado de Cuenta - ${selectedOrganizer.organizador_nombre}</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 40px; }
+                        h1 { color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
+                        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
+                        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+                        .status-box { background-color: ${status.isClean ? '#f0fdf4' : '#fef2f2'}; padding: 20px; border-radius: 8px; text-align: right; }
+                        .total { font-size: 24px; font-weight: bold; color: ${status.isClean ? '#166534' : '#991b1b'}; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                        th { background-color: #f3f4f6; }
+                        .footer { margin-top: 40px; font-size: 12px; text-align: center; color: #666; }
+                    </style>
+                </head>
+                <body>
+                    <div class="header">
+                        <div>
+                            <h1>SIMR 2026</h1>
+                            <p>Reporte de Estado de Cuenta</p>
+                        </div>
+                        <div style="text-align: right;">
+                            <p><strong>Fecha:</strong> ${new Date().toLocaleDateString()}</p>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <h2>${selectedOrganizer.organizador_nombre}</h2>
+                        <p><strong>Rol:</strong> ${selectedOrganizer.organizador_rol || 'Organizador'}</p>
+                    </div>
+
+                    <h3>Resumen Financiero</h3>
+                    <div class="status-box">
+                        <p>Total Pendiente a Pagar</p>
+                        <div class="total">S/ ${status.totalPending.toFixed(2)}</div>
+                        <p style="font-size: 14px; color: #666;">
+                            incluye ${status.pendingContributionsCount} cuotas y S/ ${status.totalFinesPending} en penalidades
+                        </p>
+                    </div>
+
+                    <h3>Detalle de Aportes</h3>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Mes</th>
+                                <th>Estado</th>
+                                <th>Monto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${months.map(m => {
+            const st = getCellStatus(selectedOrganizer.organizador_id, m.id);
+            return `
+                                    <tr>
+                                        <td>${m.label}</td>
+                                        <td style="color: ${st === 'pagado' ? 'green' : st === 'pendiente' ? 'red' : 'orange'}">
+                                            ${st.toUpperCase()}
+                                        </td>
+                                        <td>S/ ${config?.contribution?.monthlyAmount}</td>
+                                    </tr>
+                                `;
+        }).join('')}
+                        </tbody>
+                    </table>
+
+                    ${fines.length > 0 ? `
+                        <h3>Detalle de Penalidades</h3>
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Concepto</th>
+                                    <th>Fecha</th>
+                                    <th>Estado</th>
+                                    <th>Monto</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                ${fines.map(f => `
+                                    <tr>
+                                        <td>${f.descripcion}</td>
+                                        <td>${f.fecha}</td>
+                                        <td style="color: ${f.estado === 'pagado' ? 'green' : 'red'}">${f.estado.toUpperCase()}</td>
+                                        <td>S/ ${f.monto}</td>
+                                    </tr>
+                                `).join('')}
+                            </tbody>
+                        </table>
+                    ` : '<p>No hay penalidades registradas.</p>'}
+
+                    <div class="footer">
+                        Generado automáticamente por el sistema de tesorería SIMR 2026
+                    </div>
+                </body>
+            </html>
+        `;
+
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        printWindow.print();
+    };
 
     // Auto-select organizer from URL params (Notification link)
     useEffect(() => {
@@ -339,6 +480,10 @@ const ContributionsManager = ({
                     uploadedUrl,
                     notes
                 );
+
+                // Refetch fines immediately to reflect status change
+                const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                setFines(updatedFines);
             } else {
                 await onRecordContribution(
                     selectedOrganizer.organizador_id,
@@ -561,6 +706,14 @@ const ContributionsManager = ({
                                             Registrar {selectedMonths.length} {selectedMonths.length === 1 ? 'Mes' : 'Meses'}
                                         </Button>
                                     )}
+
+                                    <button
+                                        onClick={handlePrintReport}
+                                        className="ml-2 p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                        title="Imprimir Estado de Cuenta"
+                                    >
+                                        <Printer size={20} />
+                                    </button>
                                 </div>
 
                                 {/* Detail Body (Months) */}
@@ -671,25 +824,32 @@ const ContributionsManager = ({
                                         </div>
                                     )}
 
-                                    {/* Status Banner */}
-                                    {debtStatus && debtStatus.status !== 'ok' && (
-                                        <div className={`px-4 py-2 rounded-xl text-sm font-bold flex flex-col items-end ${debtStatus.status === 'late' ? 'bg-red-50 text-red-600' : 'bg-blue-50 text-blue-600'
-                                            }`}>
-                                            <span className="uppercase text-[10px] opacity-80">{debtStatus.status === 'late' ? 'Estado Crítico' : 'Estado de Cuenta'}</span>
-                                            <span className="flex items-center gap-1">
-                                                {debtStatus.status === 'late' ? <XCircle size={16} /> : <DollarSign size={16} />}
-                                                {debtStatus.label}
-                                            </span>
-                                            <span className="text-xs font-normal mt-0.5">{debtStatus.message}</span>
-                                        </div>
-                                    )}
-                                    {debtStatus && debtStatus.status === 'ok' && (
-                                        <div className="px-4 py-2 rounded-xl text-sm font-bold bg-green-50 text-green-600 flex flex-col items-end">
-                                            <span className="uppercase text-[10px] opacity-80">Estado de Cuenta</span>
-                                            <span className="flex items-center gap-1"><CheckCircle size={16} /> {debtStatus.label}</span>
-                                        </div>
-                                    )}
                                 </div>
+
+                                {/* Account Status Footer */}
+                                {accountStatus && (
+                                    <div className={`p-4 border-t border-gray-200 ${accountStatus.isClean ? 'bg-green-50' : 'bg-red-50'}`}>
+                                        <div className="flex justify-between items-center">
+                                            <div>
+                                                <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado de Cuenta</p>
+                                                <div className={`text-2xl font-black ${accountStatus.isClean ? 'text-green-700' : 'text-red-700'}`}>
+                                                    {accountStatus.isClean ? '¡Al Día!' : `S/ ${accountStatus.totalPending.toFixed(2)}`}
+                                                </div>
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    {accountStatus.isClean
+                                                        ? 'No hay pagos pendientes.'
+                                                        : `Debes: ${accountStatus.pendingContributionsCount} cuotas y S/ ${accountStatus.totalFinesPending} en penalidades`
+                                                    }
+                                                </p>
+                                            </div>
+                                            {!accountStatus.isClean && (
+                                                <div className="text-right">
+                                                    <p className="text-xs font-bold text-blue-600">Por Pagar</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )}
                             </Card>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center p-8 text-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp } from 'lucide-react';
+import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp, Wallet } from 'lucide-react';
 import { Button, Card, FormField, LoadingSpinner } from '../ui';
 import { showSuccess, showError, showConfirm } from '../../utils/alerts';
 import { api } from '../../services/api';
@@ -14,8 +14,11 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     const [endMonth, setEndMonth] = useState(config?.contribution?.endMonth || '2026-06');
     const [defaultContributionAccount, setDefaultContributionAccount] = useState(config?.contribution?.defaultContributionAccount || '');
 
-    // Inscription Config State
-    const [defaultInscriptionAccount, setDefaultInscriptionAccount] = useState(config?.contribution?.defaultInscriptionAccount || '');
+    // Inscription Config State - Now Multi-select
+    const [inscriptionAccounts, setInscriptionAccounts] = useState(config?.contribution?.inscriptionAccounts || []);
+
+    // Financial Assets Config State
+    const [financialAssets, setFinancialAssets] = useState(config?.financialAssets || []);
 
     const [saving, setSaving] = useState(false);
 
@@ -26,7 +29,9 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
             setStartMonth(config.contribution.startMonth);
             setEndMonth(config.contribution.endMonth);
             setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
-            setDefaultInscriptionAccount(config.contribution.defaultInscriptionAccount || '');
+            setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
+            setInscriptionAccounts(config.contribution.inscriptionAccounts || []);
+            setFinancialAssets(config.financialAssets || []);
         }
     }, [config]);
 
@@ -69,6 +74,20 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
         e.preventDefault();
         setSaving(true);
         try {
+            // Validation: Prevent reducing period below active payments
+            const currentPlan = await api.treasury.getContributionPlan();
+            const activeContributions = currentPlan.filter(c => c.estado === 'pagado' || c.estado === 'validando');
+
+            if (activeContributions.length > 0) {
+                // Find latest month with activity (Lexicographical sort works for YYYY-MM)
+                const sortedActive = activeContributions.sort((a, b) => b.mes.localeCompare(a.mes));
+                const maxActiveMonth = sortedActive[0].mes;
+
+                if (endMonth < maxActiveMonth) {
+                    throw new Error(`No puedes reducir el periodo hasta ${endMonth} porque existen aportes registrados hasta ${maxActiveMonth}.`);
+                }
+            }
+
             const months = generateMonthsArray(startMonth, endMonth, parseInt(monthlyDeadlineDay));
             await onUpdateConfig({
                 contribution: {
@@ -78,8 +97,9 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                     endMonth,
                     months,
                     defaultContributionAccount,
-                    defaultInscriptionAccount
-                }
+                    inscriptionAccounts
+                },
+                financialAssets // Save the assets definitions
             });
             showSuccess('Configuración actualizada correctamente.', 'Configuración guardada');
         } catch (error) {
@@ -113,35 +133,37 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
             </div>
 
             {activeSection === 'contributions' && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Aportes Configuration */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+                    {/* Left Column: Definitions & Assets */}
                     <div className="space-y-6">
+                        {/* 1. Variables de Aportes */}
                         <Card className="p-6">
                             <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
                                 <Settings className="text-blue-600" size={20} />
                                 Variables de Aportes
                             </h3>
-                            <form onSubmit={handleSaveConfig} className="space-y-4">
-                                <FormField
-                                    label="Cuota Mensual (S/)"
-                                    type="number"
-                                    value={monthlyAmount}
-                                    onChange={(e) => setMonthlyAmount(e.target.value)}
-                                    placeholder="0.00"
-                                    step="0.01"
-                                    required
-                                />
-                                <FormField
-                                    label="Día Límite Mensual de Pago"
-                                    type="number"
-                                    value={monthlyDeadlineDay}
-                                    onChange={(e) => setMonthlyDeadlineDay(e.target.value)}
-                                    placeholder="Ej. 5"
-                                    min="1"
-                                    max="31"
-                                    required
-                                    helpText="Día del mes hasta el cual se considera puntual."
-                                />
+                            <div className="grid grid-cols-1 gap-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField
+                                        label="Cuota Mensual (S/)"
+                                        type="number"
+                                        value={monthlyAmount}
+                                        onChange={(e) => setMonthlyAmount(e.target.value)}
+                                        placeholder="0.00"
+                                        step="0.01"
+                                        required
+                                    />
+                                    <FormField
+                                        label="Día Límite"
+                                        type="number"
+                                        value={monthlyDeadlineDay}
+                                        onChange={(e) => setMonthlyDeadlineDay(e.target.value)}
+                                        placeholder="Ej. 5"
+                                        min="1"
+                                        max="31"
+                                        required
+                                    />
+                                </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <FormField
                                         label="Mes Inicio"
@@ -158,7 +180,45 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                                         required
                                     />
                                 </div>
+                            </div>
+                            <div className="mt-4 flex justify-end">
+                                <Button
+                                    type="button"
+                                    onClick={handleSaveConfig}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                    disabled={saving}
+                                >
+                                    {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Variables</>}
+                                </Button>
+                            </div>
+                        </Card>
 
+                        {/* 2. Cuentas Financieras (Asset Definitions) */}
+                        <Card className="p-6 border-t-4 border-t-purple-500">
+                            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                <Wallet className="text-purple-600" size={20} />
+                                Cuentas Financieras
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Define aquí tus cuentas bancarias, billeteras digitales y cajas.
+                            </p>
+
+                            <FinancialAssetsManager
+                                assets={financialAssets}
+                                onChange={setFinancialAssets}
+                            />
+                        </Card>
+                    </div>
+
+                    {/* Right Column: Destinations & Actions */}
+                    <div className="space-y-6">
+                        {/* 3. Configuración de Destinos */}
+                        <Card className="p-6 border-t-4 border-t-green-500">
+                            <h3 className="text-lg font-bold text-gray-900 mb-6 flex items-center gap-2">
+                                <TrendingUp className="text-green-600" size={20} />
+                                Destinos de Fondos
+                            </h3>
+                            <div className="space-y-4">
                                 <FormField
                                     label="Cuenta Destino (Aportes)"
                                     type="select"
@@ -171,43 +231,61 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                                     helpText="Cuenta donde se registrarán automáticamente los aportes."
                                 />
 
-                                <div className="pt-2 border-t mt-4">
-                                    <h4 className="text-sm font-bold text-gray-900 mb-3 block">Configuración de Inscripciones</h4>
-                                    <FormField
-                                        label="Cuenta Destino (Inscripciones)"
-                                        type="select"
-                                        value={defaultInscriptionAccount}
-                                        onChange={(e) => setDefaultInscriptionAccount(e.target.value)}
-                                        options={[
-                                            { value: "", label: "Seleccionar cuenta..." },
-                                            ...accounts.map(acc => ({ value: acc.id, label: acc.nombre }))
-                                        ]}
-                                        helpText="Cuenta donde se registrarán las inscripciones aprobadas."
-                                    />
+                                {/* Multi-select for Inscription Accounts */}
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-semibold text-gray-700">
+                                        Cuentas Destino (Inscripciones)
+                                    </label>
+                                    <div className="p-3 border rounded-xl bg-gray-50 max-h-48 overflow-y-auto space-y-2">
+                                        {accounts.length === 0 && <p className="text-sm text-gray-400 italic">No hay cuentas disponibles</p>}
+                                        {accounts.map(acc => {
+                                            const isSelected = inscriptionAccounts.includes(acc.id);
+                                            return (
+                                                <div key={acc.id} className="flex items-center gap-2">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={`ins-acc-${acc.id}`}
+                                                        checked={isSelected}
+                                                        onChange={(e) => {
+                                                            if (e.target.checked) {
+                                                                setInscriptionAccounts([...inscriptionAccounts, acc.id]);
+                                                            } else {
+                                                                setInscriptionAccounts(inscriptionAccounts.filter(id => id !== acc.id));
+                                                            }
+                                                        }}
+                                                        className="rounded text-blue-600 focus:ring-blue-500"
+                                                    />
+                                                    <label htmlFor={`ins-acc-${acc.id}`} className="text-sm text-gray-700 cursor-pointer select-none">
+                                                        {acc.nombre} <span className="text-xs text-gray-500">({acc.tipo})</span>
+                                                    </label>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                    <p className="text-xs text-gray-500">Selecciona las cuentas disponibles para recibir pagos de inscripción.</p>
                                 </div>
-
-                                <div className="pt-4">
-                                    <Button
-                                        type="submit"
-                                        className="w-full bg-blue-600 hover:bg-blue-700 text-white"
-                                        disabled={saving}
-                                    >
-                                        {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Cambios</>}
-                                    </Button>
-                                </div>
-                            </form>
+                            </div>
+                            <div className="mt-4 flex justify-end">
+                                <Button
+                                    type="button"
+                                    onClick={handleSaveConfig}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                    disabled={saving}
+                                >
+                                    {saving ? <LoadingSpinner size="sm" /> : <><Save size={18} className="mr-2" /> Guardar Destinos</>}
+                                </Button>
+                            </div>
                         </Card>
-                    </div>
 
-                    <div className="space-y-6">
+                        {/* Actions */}
                         <Card className="p-6 bg-amber-50 border-amber-200">
                             <h3 className="text-lg font-bold text-amber-900 mb-4 flex items-center gap-2">
                                 <RefreshCw className="text-amber-600" size={20} />
                                 Acciones Críticas
                             </h3>
                             <p className="text-sm text-amber-800 mb-6">
-                                Al cambiar el rango de meses o el monto de aportes, debes reinicializar el plan para que los cambios se apliquen a todos los miembros.
-                                <strong> ¡Cuidado!</strong> Al reinicializar, se perderán los registros de pagos marcados en el plan actual (aunque las transacciones en el historial se mantienen).
+                                Al cambiar el rango de meses o el monto de aportes, debes reinicializar el plan.
+                                <strong> ¡Cuidado!</strong> Se perderán los registros de pagos marcados en el plan actual.
                             </p>
                             <Button
                                 variant="danger"
@@ -311,7 +389,7 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     );
 };
 
-const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes', 'Aporte Mensual', 'Penalidades'];
+const IMMUTABLE_CATEGORIES = ['Inscripciones', 'Aportes', 'Aporte Mensual', 'Penalidades', 'Talleres'];
 
 const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
     const [newCat, setNewCat] = useState('');
@@ -418,3 +496,230 @@ const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
 };
 
 export default TreasurySettings;
+
+const FinancialAssetsManager = ({ assets, onChange }) => {
+    const [isEditing, setIsEditing] = useState(false);
+    const [currentAsset, setCurrentAsset] = useState(null);
+    const [formData, setFormData] = useState({
+        id: '',
+        type: 'banco',
+        subtype: '',
+        name: '',
+        number: '',
+        cci: '',
+        phone: ''
+    });
+
+    const ASSET_TYPES = [
+        { value: 'banco', label: 'Cuenta Bancaria' },
+        { value: 'billetera', label: 'Billetera Digital' },
+        { value: 'efectivo', label: 'Efectivo / Caja' }
+    ];
+
+    const BANKS = ['BCP', 'Interbank', 'BBVA', 'Scotiabank', 'Banco de la Nación', 'Otro'];
+    const WALLETS = ['Yape', 'Plin', 'Agora / OH!', 'Ligo', 'Otro'];
+
+    const handleAddNew = () => {
+        setFormData({
+            id: '',
+            type: 'banco',
+            subtype: 'BCP',
+            name: '',
+            number: '',
+            cci: '',
+            phone: ''
+        });
+        setCurrentAsset(null);
+        setIsEditing(true);
+    };
+
+    const handleEdit = (asset) => {
+        setFormData({ ...asset });
+        setCurrentAsset(asset);
+        setIsEditing(true);
+    };
+
+    const handleDelete = (id) => {
+        onChange(assets.filter(a => a.id !== id));
+    };
+
+    const handleSave = () => {
+        // Validation
+        if (!formData.name) return alert('El nombre es requerido'); // Simple alert for now or use toast
+
+        const newAsset = {
+            ...formData,
+            id: currentAsset ? currentAsset.id : `asset-${Date.now()}`
+        };
+
+        if (currentAsset) {
+            onChange(assets.map(a => a.id === currentAsset.id ? newAsset : a));
+        } else {
+            onChange([...assets, newAsset]);
+        }
+        setIsEditing(false);
+    };
+
+    const getLogoPlaceholder = (type, subtype) => {
+        // Simple visual placeholder logic
+        let color = 'bg-gray-200';
+        let text = subtype ? subtype.substring(0, 2) : '??';
+
+        if (subtype === 'BCP') { color = 'bg-orange-500 text-white'; text = 'BCP'; }
+        if (subtype === 'Interbank') { color = 'bg-green-600 text-white'; text = 'IB'; }
+        if (subtype === 'BBVA') { color = 'bg-blue-600 text-white'; text = 'BBVA'; }
+        if (subtype === 'Yape') { color = 'bg-purple-600 text-white'; text = 'Y'; }
+        if (subtype === 'Plin') { color = 'bg-cyan-500 text-white'; text = 'Plin'; }
+
+        return (
+            <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center font-bold text-xs shadow-sm`}>
+                {text}
+            </div>
+        );
+    };
+
+    if (isEditing) {
+        return (
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 transition-all animate-in fade-in zoom-in-95 duration-200">
+                <div className="flex justify-between items-center mb-4">
+                    <h4 className="font-bold text-gray-800">{currentAsset ? 'Editar Cuenta' : 'Nueva Cuenta Financiera'}</h4>
+                    <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+                </div>
+
+                <div className="space-y-4">
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Tipo de Activo</label>
+                        <select
+                            className="w-full p-2 border rounded-lg bg-white"
+                            value={formData.type}
+                            onChange={(e) => setFormData({ ...formData, type: e.target.value, subtype: e.target.value === 'banco' ? 'BCP' : e.target.value === 'billetera' ? 'Yape' : '' })}
+                        >
+                            {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                        </select>
+                    </div>
+
+                    {formData.type === 'banco' && (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Banco</label>
+                                <select
+                                    className="w-full p-2 border rounded-lg bg-white"
+                                    value={formData.subtype}
+                                    onChange={(e) => setFormData({ ...formData, subtype: e.target.value })}
+                                >
+                                    {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">Nro. Cuenta</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 border rounded-lg"
+                                        value={formData.number}
+                                        onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+                                        placeholder="000-000..."
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-500 mb-1">CCI</label>
+                                    <input
+                                        type="text"
+                                        className="w-full p-2 border rounded-lg"
+                                        value={formData.cci}
+                                        onChange={(e) => setFormData({ ...formData, cci: e.target.value })}
+                                        placeholder="002-..."
+                                    />
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {formData.type === 'billetera' && (
+                        <>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Billetera</label>
+                                <select
+                                    className="w-full p-2 border rounded-lg bg-white"
+                                    value={formData.subtype}
+                                    onChange={(e) => setFormData({ ...formData, subtype: e.target.value })}
+                                >
+                                    {WALLETS.map(w => <option key={w} value={w}>{w}</option>)}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 mb-1">Nro. Celular</label>
+                                <input
+                                    type="text"
+                                    className="w-full p-2 border rounded-lg"
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    placeholder="999..."
+                                />
+                            </div>
+                        </>
+                    )}
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Identificador</label>
+                        <input
+                            type="text"
+                            className="w-full p-2 border rounded-lg"
+                            value={formData.name}
+                            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                            placeholder="Ej: BCP Principal Soles"
+                        />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                        <Button onClick={handleSave} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
+                            {currentAsset ? 'Actualizar' : 'Agregar'}
+                        </Button>
+                        <Button onClick={() => setIsEditing(false)} variant="outline" className="flex-1">
+                            Cancelar
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-3">
+                {assets.map(asset => (
+                    <div key={asset.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow">
+                        <div className="flex items-center gap-3">
+                            {getLogoPlaceholder(asset.type, asset.subtype)}
+                            <div>
+                                <p className="font-bold text-sm text-gray-900">{asset.name}</p>
+                                <div className="flex items-center gap-2 text-xs text-gray-500">
+                                    <span className="capitalize">{asset.type} {asset.subtype}</span>
+                                    {asset.number && <span>• {asset.number}</span>}
+                                    {asset.phone && <span>• {asset.phone}</span>}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="flex gap-1">
+                            <button onClick={() => handleEdit(asset)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
+                                <Edit2 size={16} />
+                            </button>
+                            <button onClick={() => handleDelete(asset.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
+                    </div>
+                ))}
+            </div>
+
+            <Button
+                onClick={handleAddNew}
+                className="w-full border-2 border-dashed border-gray-300 text-gray-500 hover:border-purple-500 hover:text-purple-600 hover:bg-purple-50"
+                variant="ghost"
+            >
+                <DollarSign size={18} className="mr-2" />
+                Agregar Nueva Cuenta Financiera
+            </Button>
+        </div>
+    );
+};

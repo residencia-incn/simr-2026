@@ -44,6 +44,9 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
             } else if (category.includes('penalidades') || category.includes('multas')) {
                 type = 'penalty';
                 typeLabel = 'Penalidades';
+            } else if (category.includes('taller')) {
+                type = 'workshop';
+                typeLabel = 'Talleres';
             }
 
             // Append user name if available
@@ -132,6 +135,8 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                 return 'bg-purple-100 text-purple-700 border-purple-200';
             case 'penalty':
                 return 'bg-red-100 text-red-700 border-red-200';
+            case 'workshop':
+                return 'bg-orange-100 text-orange-700 border-orange-200';
             case 'other':
                 return 'bg-gray-100 text-gray-700 border-gray-200';
             default:
