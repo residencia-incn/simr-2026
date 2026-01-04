@@ -3,7 +3,7 @@ import { DollarSign, Filter, Search, Users, Calendar, Wallet, TrendingUp, Plus, 
 import { Card, Table, Badge, EmptyState, Button, FormField } from '../ui';
 
 const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = [], contributionStatus = {}, categories = { income: [] }, onIncomeSubmit }) => {
-    const [filterType, setFilterType] = useState('all'); // 'all' | 'inscription' | 'contribution' | 'other'
+    const [selectedCategory, setSelectedCategory] = useState('Todas'); // 'Todas' | specific category name
     const [searchTerm, setSearchTerm] = useState('');
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
@@ -31,20 +31,22 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
             const account = accounts.find(a => a.id === accId);
 
             // Determine if this is an inscription or contribution based on category
+            // Determine if this is an inscription or contribution based on category
             let type = 'other';
-            let typeLabel = 'Otro Concepto';
+            let categoryName = tx.category || tx.categoria || 'Sin Categoría';
+            let typeLabel = categoryName;
 
-            const category = (tx.category || tx.categoria || '').toLowerCase();
-            if (category.includes('inscri')) {
+            const categoryLower = categoryName.toLowerCase();
+            if (categoryLower.includes('inscri')) {
                 type = 'inscription';
                 typeLabel = 'Inscripciones';
-            } else if (category.includes('aporte')) {
+            } else if (categoryLower.includes('aporte')) {
                 type = 'contribution';
                 typeLabel = 'Aporte Mensual';
-            } else if (category.includes('penalidades') || category.includes('multas')) {
+            } else if (categoryLower.includes('penalidades') || categoryLower.includes('multas')) {
                 type = 'penalty';
                 typeLabel = 'Penalidades';
-            } else if (category.includes('taller')) {
+            } else if (categoryLower.includes('taller')) {
                 type = 'workshop';
                 typeLabel = 'Talleres';
             }
@@ -83,8 +85,8 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
         let filtered = allIncomes;
 
         // Filter by type
-        if (filterType !== 'all') {
-            filtered = filtered.filter(income => income.type === filterType);
+        if (selectedCategory !== 'Todas') {
+            filtered = filtered.filter(income => income.category === selectedCategory);
         }
 
         // Filter by search term
@@ -107,7 +109,7 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
         }
 
         return filtered;
-    }, [allIncomes, filterType, searchTerm, startDate, endDate]);
+    }, [allIncomes, selectedCategory, searchTerm, startDate, endDate]);
 
     // Calculate total for filtered results
     const filteredTotal = useMemo(() => {
@@ -124,7 +126,7 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
     // Reset to page 1 when filters change
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [filterType, searchTerm, startDate, endDate]);
+    }, [selectedCategory, searchTerm, startDate, endDate]);
 
     // Get badge color based on type
     const getTypeBadgeColor = (type) => {
@@ -175,9 +177,6 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                             <span className="inline-flex items-center gap-1">
                                 <Calendar size={10} /> {income.month}
                             </span>
-                        )}
-                        {income.type === 'other' && (
-                            <span>{income.category}</span>
                         )}
                     </div>
                 </div>
@@ -268,7 +267,7 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                             </div>
                             <div>
                                 <div className="text-xs text-green-700 font-medium uppercase">
-                                    Total {filterType !== 'all' && `(${filteredIncomes.length} registros)`}
+                                    Total {selectedCategory !== 'Todas' && `(${filteredIncomes.length} registros)`}
                                 </div>
                                 <div className="text-2xl font-bold text-green-900">
                                     S/ {filteredTotal.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -282,55 +281,32 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
             {/* Filters and Search */}
             <Card className="p-6">
                 <div className="flex flex-col gap-4">
-                    {/* Type Filters */}
+                    {/* Type Filters - Dynamic */}
                     <div className="flex items-center gap-2">
                         <Filter size={18} className="text-gray-400" />
                         <div className="flex gap-2 flex-wrap">
                             <button
-                                onClick={() => setFilterType('all')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'all'
+                                onClick={() => setSelectedCategory('Todas')}
+                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === 'Todas'
                                     ? 'bg-blue-600 text-white shadow-md'
                                     : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                                     }`}
                             >
-                                Todos ({allIncomes.length})
+                                Todas ({allIncomes.length})
                             </button>
-                            <button
-                                onClick={() => setFilterType('inscription')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'inscription'
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                            >
-                                Inscripciones ({allIncomes.filter(i => i.type === 'inscription').length})
-                            </button>
-                            <button
-                                onClick={() => setFilterType('contribution')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'contribution'
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                            >
-                                Aportes Mensuales ({allIncomes.filter(i => i.type === 'contribution').length})
-                            </button>
-                            <button
-                                onClick={() => setFilterType('penalty')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'penalty'
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                            >
-                                Penalidades ({allIncomes.filter(i => i.type === 'penalty').length})
-                            </button>
-                            <button
-                                onClick={() => setFilterType('other')}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${filterType === 'other'
-                                    ? 'bg-blue-600 text-white shadow-md'
-                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                    }`}
-                            >
-                                Otros Conceptos ({allIncomes.filter(i => i.type === 'other').length})
-                            </button>
+
+                            {(categories.income || []).map(cat => (
+                                <button
+                                    key={cat}
+                                    onClick={() => setSelectedCategory(cat)}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${selectedCategory === cat
+                                        ? 'bg-blue-600 text-white shadow-md'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                        }`}
+                                >
+                                    {cat} ({allIncomes.filter(i => i.category === cat).length})
+                                </button>
+                            ))}
                         </div>
                     </div>
 
@@ -393,8 +369,8 @@ const IncomeManager = ({ transactions = [], accounts = [], confirmedAttendees = 
                         description={
                             searchTerm
                                 ? "Intenta con otros términos de búsqueda"
-                                : filterType !== 'all'
-                                    ? `No hay ingresos de tipo "${filterType === 'inscription' ? 'Inscripciones' : filterType === 'contribution' ? 'Aportes Mensuales' : filterType === 'penalty' ? 'Penalidades' : 'Otros Conceptos'}"`
+                                : selectedCategory !== 'Todas'
+                                    ? `No hay ingresos de la categoría "${selectedCategory}"`
                                     : "Aún no hay ingresos registrados"
                         }
                     />

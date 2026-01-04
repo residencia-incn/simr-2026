@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive } from 'lucide-react';
+import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import CarouselManager from './CarouselManager';
@@ -20,7 +20,7 @@ const SystemConfiguration = () => {
         { id: 'general', label: 'General', icon: Settings },
         { id: 'content', label: 'Contenido', icon: Layout },
         { id: 'lists', label: 'Listas', icon: List },
-        { id: 'pricing', label: 'Tarifas', icon: DollarSign },
+        { id: 'pricing', label: 'Inscripciones', icon: Ticket }, // Renamed from Tarifas
         { id: 'print', label: 'Impresión', icon: Printer },
         { id: 'system', label: 'Sistema', icon: HardDrive }
     ];
@@ -28,6 +28,9 @@ const SystemConfiguration = () => {
     // Dialog states
     const [showArchiveConfirm, setShowArchiveConfirm] = useState(false);
     const [showNewYearConfirm, setShowNewYearConfirm] = useState(false);
+
+    // Pricing State (New)
+    const [pricingConfig, setPricingConfig] = useState({ ticketTypes: [], workshops: [] });
 
     // Subspecialty state
     const [newSpecialty, setNewSpecialty] = useState("");
@@ -38,7 +41,13 @@ const SystemConfiguration = () => {
 
     useEffect(() => {
         const loadConfig = async () => {
-            const data = await api.content.getConfig();
+            const [data, pricing] = await Promise.all([
+                api.content.getConfig(),
+                api.treasury.getPricing()
+            ]);
+
+            setPricingConfig(pricing);
+
             setConfig({
                 eventName: data.eventName || "Simposio Internacional de Medicina y Residencia",
                 eventYear: data.eventYear || "2026",
@@ -79,11 +88,18 @@ const SystemConfiguration = () => {
 
     const handleSave = async () => {
         setIsSaving(true);
-        await api.content.saveConfig({
-            ...config
-        });
-        setIsSaving(false);
-        showSuccess('Los cambios han sido aplicados correctamente.', 'Configuración guardada');
+        try {
+            await Promise.all([
+                api.content.saveConfig({ ...config }),
+                api.treasury.updatePricing(pricingConfig)
+            ]);
+            showSuccess('Los cambios han sido aplicados correctamente.', 'Configuración guardada');
+        } catch (err) {
+            console.error(err);
+            // showError('Error al guardar la configuración'); // Import showError if not available or just log
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     const handleArchive = async () => {
@@ -192,6 +208,60 @@ const SystemConfiguration = () => {
         const newSchedule = [...config.schedule];
         newSchedule[index] = { ...newSchedule[index], [field]: value };
         setConfig({ ...config, schedule: newSchedule });
+    };
+
+    // --- Pricing Management Handlers ---
+    const handleUpdateTicket = (idx, field, value) => {
+        const newTickets = [...(pricingConfig?.ticketTypes || [])];
+        newTickets[idx] = { ...newTickets[idx], [field]: value };
+        setPricingConfig({ ...pricingConfig, ticketTypes: newTickets });
+    };
+
+    const handleAddTicket = () => {
+        const newTicket = {
+            id: `t_${Date.now()}`,
+            key: `ticket_${Date.now()}`,
+            title: 'Nueva Modalidad',
+            price: 0,
+            subtitle: 'Gratis',
+            description: 'Descripción de la modalidad'
+        };
+        setPricingConfig({
+            ...pricingConfig,
+            ticketTypes: [...(pricingConfig?.ticketTypes || []), newTicket]
+        });
+    };
+
+    const handleRemoveTicket = (idx) => {
+        const newTickets = [...(pricingConfig?.ticketTypes || [])];
+        newTickets.splice(idx, 1);
+        setPricingConfig({ ...pricingConfig, ticketTypes: newTickets });
+    };
+
+    const handleUpdateWorkshop = (idx, field, value) => {
+        const newWorkshops = [...(pricingConfig?.workshops || [])];
+        newWorkshops[idx] = { ...newWorkshops[idx], [field]: value };
+        setPricingConfig({ ...pricingConfig, workshops: newWorkshops });
+    };
+
+    const handleAddWorkshop = () => {
+        const newWorkshop = {
+            id: `w_${Date.now()}`,
+            key: `workshop_${Date.now()}`,
+            name: 'Nuevo Taller',
+            price: 50,
+            description: 'Descripción del taller'
+        };
+        setPricingConfig({
+            ...pricingConfig,
+            workshops: [...(pricingConfig?.workshops || []), newWorkshop]
+        });
+    };
+
+    const handleRemoveWorkshop = (idx) => {
+        const newWorkshops = [...(pricingConfig?.workshops || [])];
+        newWorkshops.splice(idx, 1);
+        setPricingConfig({ ...pricingConfig, workshops: newWorkshops });
     };
 
     return (
@@ -641,195 +711,154 @@ const SystemConfiguration = () => {
 
                 {activeTab === 'pricing' && (
                     <div className="grid grid-cols-1 gap-6 animate-fadeIn">
+                        {/* 1. Modalidades (Ticket Types) */}
                         <Card className="p-6">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2">
-                                <DollarSign size={20} className="text-gray-500" />
-                                Gestión de Matriz de Precios
-                            </h4>
+                            <div className="flex justify-between items-center mb-6">
+                                <h4 className="flex items-center gap-2 font-bold text-gray-800 border-b pb-2">
+                                    <Ticket size={20} className="text-gray-500" />
+                                    Modalidades de Inscripción
+                                </h4>
+                                <Button size="sm" onClick={handleAddTicket}>
+                                    <Plus size={16} /> Agregar Modalidad
+                                </Button>
+                            </div>
 
-                            <div className="space-y-8">
-                                {/* Columns Management */}
-                                <div>
-                                    <h5 className="font-bold text-sm text-gray-700 mb-3 flex items-center justify-between">
-                                        Columnas (Fechas / Etapas)
-                                        <Button
-                                            size="sm"
-                                            onClick={() => {
-                                                const newId = `col_${Date.now()}`;
-                                                setConfig({
-                                                    ...config,
-                                                    pricingMatrix: {
-                                                        ...config.pricingMatrix,
-                                                        columns: [...config.pricingMatrix.columns, { id: newId, label: 'Nueva Etapa', deadline: '' }]
-                                                    }
-                                                });
-                                            }}
-                                        >
-                                            <Plus size={14} /> Agregar Columna
-                                        </Button>
-                                    </h5>
-                                    <div className="grid gap-3">
-                                        {config.pricingMatrix?.columns?.map((col, idx) => (
-                                            <div key={col.id} className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                                                <span className="text-xs font-bold text-gray-400 w-6">#{idx + 1}</span>
-                                                <input
-                                                    type="text"
-                                                    value={col.label}
-                                                    onChange={(e) => {
-                                                        const newCols = [...config.pricingMatrix.columns];
-                                                        newCols[idx].label = e.target.value;
-                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
-                                                    }}
-                                                    className="flex-1 p-1.5 border border-gray-300 rounded text-sm"
-                                                    placeholder="Etiqueta (Ej. Hasta 15 Ene)"
-                                                />
-                                                <input
-                                                    type="date"
-                                                    value={col.deadline}
-                                                    onChange={(e) => {
-                                                        const newCols = [...config.pricingMatrix.columns];
-                                                        newCols[idx].deadline = e.target.value;
-                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
-                                                    }}
-                                                    className="p-1.5 border border-gray-300 rounded text-sm w-40"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const newCols = config.pricingMatrix.columns.filter(c => c.id !== col.id);
-                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, columns: newCols } });
-                                                    }}
-                                                    className="text-red-500 hover:bg-red-50 p-1 rounded"
-                                                >
-                                                    <X size={16} />
-                                                </button>
-                                            </div>
+                            <div className="overflow-x-auto border rounded-xl shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 text-gray-600 font-bold">
+                                        <tr>
+                                            <th className="p-3 border-b">Título</th>
+                                            <th className="p-3 border-b">Subtítulo (Mostrar)</th>
+                                            <th className="p-3 border-b">Precio (S/.)</th>
+                                            <th className="p-3 border-b">Descripción</th>
+                                            <th className="p-3 border-b text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pricingConfig?.ticketTypes?.map((ticket, idx) => (
+                                            <tr key={ticket.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={ticket.title}
+                                                        onChange={(e) => handleUpdateTicket(idx, 'title', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm font-medium"
+                                                        placeholder="Ej. Presencial"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={ticket.subtitle}
+                                                        onChange={(e) => handleUpdateTicket(idx, 'subtitle', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm"
+                                                        placeholder="Ej. Gratis"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="number"
+                                                        value={ticket.price}
+                                                        onChange={(e) => handleUpdateTicket(idx, 'price', parseFloat(e.target.value))}
+                                                        className="w-24 p-1.5 border border-gray-300 rounded text-sm text-center font-bold text-gray-700"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={ticket.description}
+                                                        onChange={(e) => handleUpdateTicket(idx, 'description', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm text-gray-500"
+                                                        placeholder="Descripción breve..."
+                                                    />
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <button onClick={() => handleRemoveTicket(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors">
+                                                        <X size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         ))}
-                                    </div>
-                                </div>
+                                        {(!pricingConfig?.ticketTypes || pricingConfig.ticketTypes.length === 0) && (
+                                            <tr>
+                                                <td colSpan="5" className="p-4 text-center text-gray-400 italic">No hay modalidades definidas.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
 
-                                {/* Rows Management */}
-                                <div>
-                                    <h5 className="font-bold text-sm text-gray-700 mb-3 flex items-center justify-between">
-                                        Filas (Categorías)
-                                        <Button
-                                            size="sm"
-                                            onClick={() => {
-                                                const newId = `row_${Date.now()}`;
-                                                setConfig({
-                                                    ...config,
-                                                    pricingMatrix: {
-                                                        ...config.pricingMatrix,
-                                                        rows: [...config.pricingMatrix.rows, { id: newId, label: 'Nueva Categoría' }]
-                                                    }
-                                                });
-                                            }}
-                                        >
-                                            <Plus size={14} /> Agregar Fila
-                                        </Button>
-                                    </h5>
-                                    <div className="grid gap-3">
-                                        {config.pricingMatrix?.rows?.map((row, idx) => (
-                                            <div key={row.id} className="flex items-center gap-3 bg-gray-50 p-2 rounded-lg border border-gray-200">
-                                                <span className="text-xs font-bold text-gray-400 w-6">#{idx + 1}</span>
-                                                <input
-                                                    type="text"
-                                                    value={row.label}
-                                                    onChange={(e) => {
-                                                        const newRows = [...config.pricingMatrix.rows];
-                                                        newRows[idx].label = e.target.value;
-                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, rows: newRows } });
-                                                    }}
-                                                    className="flex-1 p-1.5 border border-gray-300 rounded text-sm"
-                                                    placeholder="Categoría"
-                                                />
-                                                <button
-                                                    onClick={() => {
-                                                        const newRows = config.pricingMatrix.rows.filter(r => r.id !== row.id);
-                                                        setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, rows: newRows } });
-                                                    }}
-                                                    className="text-red-500 hover:bg-red-50 p-1 rounded"
-                                                >
-                                                    <X size={16} />
-                                                </button>
-                                            </div>
+                        {/* 2. Talleres (Workshops) */}
+                        <Card className="p-6">
+                            <div className="flex justify-between items-center mb-6">
+                                <h4 className="flex items-center gap-2 font-bold text-gray-800 border-b pb-2">
+                                    <DollarSign size={20} className="text-gray-500" />
+                                    Gestión de Talleres
+                                </h4>
+                                <Button size="sm" onClick={handleAddWorkshop}>
+                                    <Plus size={16} /> Agregar Taller
+                                </Button>
+                            </div>
+
+                            <div className="overflow-x-auto border rounded-xl shadow-sm">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-100 text-gray-600 font-bold">
+                                        <tr>
+                                            <th className="p-3 border-b">Nombre del Taller</th>
+                                            <th className="p-3 border-b">Precio (S/.)</th>
+                                            <th className="p-3 border-b">Descripción</th>
+                                            <th className="p-3 border-b text-center">Acciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pricingConfig?.workshops?.map((workshop, idx) => (
+                                            <tr key={workshop.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={workshop.name}
+                                                        onChange={(e) => handleUpdateWorkshop(idx, 'name', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm font-medium"
+                                                        placeholder="Nombre del taller..."
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="number"
+                                                        value={workshop.price}
+                                                        onChange={(e) => handleUpdateWorkshop(idx, 'price', parseFloat(e.target.value))}
+                                                        className="w-24 p-1.5 border border-gray-300 rounded text-sm text-center font-bold text-gray-700"
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="text"
+                                                        value={workshop.description}
+                                                        onChange={(e) => handleUpdateWorkshop(idx, 'description', e.target.value)}
+                                                        className="w-full p-1.5 border border-gray-300 rounded text-sm text-gray-500"
+                                                        placeholder="Descripción..."
+                                                    />
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    <button onClick={() => handleRemoveWorkshop(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors">
+                                                        <X size={16} />
+                                                    </button>
+                                                </td>
+                                            </tr>
                                         ))}
-                                    </div>
-                                </div>
-
-                                {/* Matrix Values */}
-                                <div>
-                                    <h5 className="font-bold text-sm text-gray-700 mb-3">Matriz de Precios (S/.)</h5>
-                                    <div className="overflow-x-auto border rounded-xl shadow-sm">
-                                        <table className="w-full text-sm text-left">
-                                            <thead className="bg-gray-100 text-gray-600 font-bold">
-                                                <tr>
-                                                    <th className="p-3 border-b">Categoría / Etapa</th>
-                                                    {config.pricingMatrix?.columns?.map(col => (
-                                                        <th key={col.id} className="p-3 border-b text-center border-l w-32">{col.label}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {config.pricingMatrix?.rows?.map(row => (
-                                                    <tr key={row.id} className="border-b last:border-0 hover:bg-gray-50">
-                                                        <td className="p-3 font-medium text-gray-900">{row.label}</td>
-                                                        {config.pricingMatrix?.columns?.map(col => {
-                                                            const cellId = `${row.id}_${col.id}`;
-                                                            return (
-                                                                <td key={col.id} className="p-2 border-l text-center">
-                                                                    <div className="flex items-center justify-center">
-                                                                        <span className="text-gray-400 text-xs mr-1">S/.</span>
-                                                                        <input
-                                                                            type="number"
-                                                                            value={config.pricingMatrix.values?.[cellId] || 0}
-                                                                            onChange={(e) => {
-                                                                                const newValues = { ...config.pricingMatrix.values, [cellId]: parseInt(e.target.value) || 0 };
-                                                                                setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, values: newValues } });
-                                                                            }}
-                                                                            className="w-16 p-1 border border-gray-300 rounded text-center focus:ring-1 focus:ring-blue-500"
-                                                                        />
-                                                                    </div>
-                                                                </td>
-                                                            );
-                                                        })}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                </div>
-
-                                {/* Additional Costs */}
-                                <div className="grid grid-cols-2 gap-6 pt-4 border-t border-gray-200">
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Costo Certificado (Solo Presencial)</label>
-                                        <div className="flex items-center">
-                                            <span className="bg-gray-100 border border-gray-300 border-r-0 rounded-l-lg p-2 text-gray-500">S/.</span>
-                                            <input
-                                                type="number"
-                                                value={config.pricingMatrix?.certificationCost || 0}
-                                                onChange={(e) => setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, certificationCost: parseInt(e.target.value) } })}
-                                                className="w-full p-2 border border-gray-300 rounded-r-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                            />
-                                        </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1">Tarifa Plana INCN</label>
-                                        <div className="flex items-center">
-                                            <span className="bg-blue-100 border border-blue-200 border-r-0 rounded-l-lg p-2 text-blue-600 font-bold">S/.</span>
-                                            <input
-                                                type="number"
-                                                value={config.pricingMatrix?.incnRate || 0}
-                                                onChange={(e) => setConfig({ ...config, pricingMatrix: { ...config.pricingMatrix, incnRate: parseInt(e.target.value) } })}
-                                                className="w-full p-2 border border-blue-200 bg-blue-50 rounded-r-lg focus:ring-2 focus:ring-blue-500 outline-none font-bold text-blue-700"
-                                            />
-                                        </div>
-                                    </div>
-                                </div>
+                                        {(!pricingConfig?.workshops || pricingConfig.workshops.length === 0) && (
+                                            <tr>
+                                                <td colSpan="4" className="p-4 text-center text-gray-400 italic">No hay talleres definidos.</td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
                             </div>
                         </Card>
                     </div>
                 )}
+
 
                 {activeTab === 'print' && (
                     <div className="animate-fadeIn">

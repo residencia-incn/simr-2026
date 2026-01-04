@@ -105,6 +105,7 @@ export const STORAGE_KEYS = {
     TREASURY_CONFIG: 'treasury_config',
     TREASURY_FINES: 'treasury_fines_v1',
     // End Treasury Keys
+    PRICING: 'simr_pricing_config', // New Dynamic Pricing
     PRINT_CONFIG: 'simr_print_config',
     PROGRAM: 'event_program',
     PROGRAM_DAYS: 'event_days',

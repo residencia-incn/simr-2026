@@ -7,6 +7,7 @@ import { showSuccess, showError, showWarning } from '../utils/alerts';
 
 const RegistrationView = () => {
     const [config, setConfig] = useState(null);
+    const [pricing, setPricing] = useState({ ticketTypes: [], workshops: [] }); // New pricing state
     const [couponError, setCouponError] = useState('');
     const [voucherError, setVoucherError] = useState(false);
     const [currentStep, setCurrentStep] = useState(1);
@@ -38,21 +39,25 @@ const RegistrationView = () => {
 
     useEffect(() => {
         const loadConfig = async () => {
-            const [eventConfig, acConfig, trConfig, accs] = await Promise.all([
+            const [eventConfig, acConfig, trConfig, accs, pricingConfig] = await Promise.all([
                 api.content.getConfig(),
                 api.academic.getConfig(),
                 api.treasury.getConfig(),
-                api.treasury.getAccounts()
+                api.treasury.getAccounts(),
+                api.treasury.getPricing()
             ]);
             setConfig({ ...eventConfig, treasury: trConfig });
             setAcademicConfig(acConfig);
             setTreasuryData({ config: trConfig, accounts: accs });
+            setPricing(pricingConfig || { ticketTypes: [], workshops: [] });
         };
         loadConfig();
     }, []);
 
     // Local ref for file input
     const fileInputRef = useRef(null);
+    const accountsRef = useRef(null); // Ref for scrolling to accounts section
+    const [showAccountError, setShowAccountError] = useState(false);
 
     // File Upload Hook
     const {
@@ -132,10 +137,20 @@ const RegistrationView = () => {
 
     const calculateAmount = () => {
         let basePrice = 0;
-        if (selectedTicket === 'presencial_cert') basePrice = 50;
-        else if (selectedTicket === 'virtual') basePrice = 50;
 
-        basePrice += selectedWorkshops.length * 20;
+        // Find selected ticket price
+        const ticket = pricing.ticketTypes.find(t => t.id === selectedTicket);
+        if (ticket) {
+            basePrice = parseFloat(ticket.price) || 0; // Ensure it's a number
+        }
+
+        // Add workshops price
+        selectedWorkshops.forEach(workshopId => {
+            const ws = pricing.workshops.find(w => w.id === workshopId);
+            if (ws) {
+                basePrice += ws.price;
+            }
+        });
 
         if (basePrice > 0 && appliedCoupon) {
             if (appliedCoupon.type === 'percentage') {
@@ -242,7 +257,11 @@ const RegistrationView = () => {
         }
 
         if (paymentNeeded && !selectedPaymentAccount) {
+            setShowAccountError(true);
             showWarning('Por favor selecciona la cuenta donde realizaste el depósito.', 'Cuenta requerida');
+            if (accountsRef.current) {
+                accountsRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
             return;
         }
 
@@ -261,14 +280,19 @@ const RegistrationView = () => {
         // Note: loading state is handled by useApi internally
 
         try {
+            const currentTicket = pricing.ticketTypes.find(t => t.id === selectedTicket);
+            const isVirtual = currentTicket?.title.toLowerCase().includes('virtual');
+            // Check for certificate based on title or explicit flag if we add it later
+            const wantsCert = currentTicket?.title.toLowerCase().includes('certificado');
+
             const registrationData = {
                 ...form,
                 name: `${form.lastName} ${form.firstName}`.trim(),
                 ticketType: selectedTicket,
                 workshops: selectedWorkshops,
                 amount: currentAmount,
-                modalidad: selectedTicket === 'virtual' ? 'Virtual' : 'Presencial',
-                wantsCertification: selectedTicket === 'presencial_cert',
+                modalidad: isVirtual ? 'Virtual' : 'Presencial',
+                wantsCertification: wantsCert,
                 coupon: appliedCoupon ? appliedCoupon.code : null,
                 voucherData: base64Voucher,
                 status: paymentNeeded ? 'pending_payment' : 'confirmed',
@@ -434,17 +458,29 @@ const RegistrationView = () => {
         }
     };
 
-    const ticketOptions = [
-        { id: 'presencial', title: 'Presencial', subtitle: 'Gratis', price: 0, icon: User, color: 'blue' },
-        { id: 'presencial_cert', title: 'Presencial + Certificado', subtitle: 'S/ 50.00', price: 50, icon: Award, color: 'emerald' },
-        { id: 'virtual', title: 'Virtual', subtitle: 'S/ 50.00', price: 50, icon: Wifi, color: 'purple' }
-    ];
+    const ticketOptions = pricing.ticketTypes.map(ticket => {
+        let icon = User;
+        let color = 'blue';
 
-    const availableWorkshops = [
-        { id: 'workshop1', name: 'Taller de Neuroimagen Avanzada', price: 20 },
-        { id: 'workshop2', name: 'Taller de Electroencefalografía', price: 20 },
-        { id: 'workshop3', name: 'Taller de Rehabilitación Neurológica', price: 20 }
-    ];
+        if (ticket.title.toLowerCase().includes('virtual')) {
+            icon = Wifi;
+            color = 'purple';
+        } else if (ticket.title.toLowerCase().includes('certificado')) {
+            icon = Award;
+            color = 'emerald';
+        }
+
+        return {
+            id: ticket.id,
+            title: ticket.title,
+            subtitle: ticket.subtitle || `S/ ${ticket.price}`,
+            price: ticket.price,
+            icon: icon,
+            color: color
+        };
+    });
+
+    const availableWorkshops = pricing.workshops;
 
     // Mock options for dropdowns (typically would come from config/api)
     const specialties = [
@@ -916,8 +952,10 @@ const RegistrationView = () => {
 
                                 <div className="grid md:grid-cols-2 gap-8">
                                     {/* Left Col: Bank Info - Dynamic */}
-                                    <div className="space-y-4">
-                                        <h4 className="font-bold text-gray-800 border-b pb-2">Cuentas Disponibles</h4>
+                                    <div className="space-y-4" ref={accountsRef}>
+                                        <h4 className={`font-bold border-b pb-2 ${showAccountError ? 'text-red-600 border-red-300' : 'text-gray-800'}`}>
+                                            Cuentas Disponibles {showAccountError && <span className="text-xs font-normal text-red-500 float-right mt-1">* Requerido</span>}
+                                        </h4>
                                         <p className="text-sm text-gray-600 mb-2">Selecciona la cuenta donde realizaste el pago:</p>
 
                                         <div className="space-y-3">
@@ -953,8 +991,11 @@ const RegistrationView = () => {
                                                     return (
                                                         <div
                                                             key={account.id}
-                                                            onClick={() => setSelectedPaymentAccount(account.id)}
-                                                            className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'}`}
+                                                            onClick={() => {
+                                                                setSelectedPaymentAccount(account.id);
+                                                                setShowAccountError(false);
+                                                            }}
+                                                            className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'} ${showAccountError && !isSelected ? 'border-red-300 bg-red-50' : ''}`}
                                                         >
                                                             <div className="flex items-center gap-3">
                                                                 <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm ${iconClass}`}>

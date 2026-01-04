@@ -838,7 +838,7 @@ export const TREASURY_CONFIG = {
  * Plan de Aportes - Se inicializa vacío y se genera dinámicamente
  * basado en los miembros del comité y la configuración
  */
-export const INITIAL_CONTRIBUTION_PLAN = [];
+
 
 /**
  * Plan Presupuestal - Categorías con montos presupuestados
@@ -865,3 +865,23 @@ export const INITIAL_BUDGET_PLAN = [
  */
 export const INITIAL_TRANSACTIONS_V2 = [];
 
+export const PRICING_CONFIG = {
+    ticketTypes: [
+        { id: 'presencial', title: 'Presencial', price: 0, subtitle: 'Gratis', description: 'Acceso a todas las conferencias presenciales' },
+        { id: 'presencial_cert', title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00', description: 'Incluye certificado digital oficial' },
+        { id: 'virtual', title: 'Virtual', price: 70, subtitle: 'S/ 70.00', description: 'Acceso a transmisión en vivo y certificado' }
+    ],
+    workshops: [
+        { id: 'workshop1', name: 'Taller de Neuroimagen Avanzada', price: 20, description: 'Sábado 24 - 15:00 hrs' },
+        { id: 'workshop2', name: 'Taller de Electroencefalografía', price: 20, description: 'Viernes 23 - 09:00 hrs' },
+        { id: 'workshop3', name: 'Taller de Rehabilitación Neurológica', price: 20, description: 'Jueves 22 - 11:00 hrs' }
+    ]
+
+};
+
+export const INITIAL_CONTRIBUTION_PLAN = {
+    monthlyAmount: 50,
+    startMonth: 10, // Octubre
+    year: 2025,
+    months: 12
+};

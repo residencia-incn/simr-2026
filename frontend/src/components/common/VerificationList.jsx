@@ -3,19 +3,9 @@ import { Check, X, Eye, FileText, Calendar, User, CreditCard, DollarSign, Award,
 import { Button, Card, EmptyState, Modal } from '../ui';
 
 // Constants for display mapping (mirrors RegistrationView)
-const TICKET_OPTIONS = {
-    'presencial': { title: 'Presencial', price: 0, subtitle: 'Gratis' },
-    'presencial_cert': { title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00' },
-    'virtual': { title: 'Virtual', price: 50, subtitle: 'S/ 50.00' }
-};
 
-const WORKSHOP_OPTIONS = {
-    'workshop1': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
-    'workshop2': { name: 'Taller de Electroencefalografía', price: 20 },
-    'workshop3': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
-};
 
-const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
+const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingConfig }) => {
     const [selectedRegistration, setSelectedRegistration] = useState(null);
 
     if (!pendingRegistrations || pendingRegistrations.length === 0) {
@@ -28,7 +18,10 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
         );
     }
 
-    const getTicketInfo = (type) => TICKET_OPTIONS[type] || { title: type, price: 0 };
+    const getTicketInfo = (type) => {
+        const ticket = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
+        return ticket ? { title: ticket.title, price: ticket.price, subtitle: ticket.subtitle } : { title: type, price: 0 };
+    };
 
     const handleViewVoucher = (e) => {
         e.preventDefault();
@@ -210,13 +203,13 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject }) => {
                                                 <div className="space-y-3 pt-3 border-t border-gray-200">
                                                     <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
                                                     {selectedRegistration.workshops.map(wsId => {
-                                                        const ws = WORKSHOP_OPTIONS[wsId];
-                                                        return ws ? (
+                                                        const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
+                                                        return (
                                                             <div key={wsId} className="flex justify-between items-center text-sm pl-2">
-                                                                <span className="text-gray-700">• {ws.name}</span>
-                                                                <span className="font-semibold text-gray-900">+ S/ {ws.price.toFixed(2)}</span>
+                                                                <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
+                                                                <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
                                                             </div>
-                                                        ) : null;
+                                                        );
                                                     })}
                                                 </div>
                                             )}

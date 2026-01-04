@@ -13,20 +13,11 @@ import IncomeManager from '../components/treasury/IncomeManager';
 import { showSuccess, showError, showConfirm, showWarning } from '../utils/alerts';
 
 
-const TICKET_OPTIONS = {
-    'presencial': { title: 'Presencial', price: 0, subtitle: 'Gratis' },
-    'presencial_cert': { title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00' },
-    'virtual': { title: 'Virtual', price: 50, subtitle: 'S/ 50.00' }
-};
 
-const WORKSHOP_OPTIONS = {
-    'workshop1': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
-    'workshop2': { name: 'Taller de Electroencefalografía', price: 20 },
-    'workshop3': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
-};
 
 const TreasurerDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('summary');
+    const [pricingConfig, setPricingConfig] = useState(null); // Dynamic Pricing
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
 
     // URL syncing for tabs
@@ -54,6 +45,19 @@ const TreasurerDashboard = ({ user }) => {
         if (tab && ['summary', 'income', 'expenses', 'reports', 'settings', 'contributions', 'accounts', 'verification'].includes(tab)) {
             setActiveTab(tab);
         }
+    }, []);
+
+    // Load Pricing Config
+    useEffect(() => {
+        const loadPricing = async () => {
+            try {
+                const config = await api.treasury.getPricing();
+                setPricingConfig(config);
+            } catch (err) {
+                console.error("Failed to load pricing config", err);
+            }
+        };
+        loadPricing();
     }, []);
 
     // New Treasury System Hook
@@ -988,6 +992,7 @@ const TreasurerDashboard = ({ user }) => {
                             pendingRegistrations={allPendingValidations}
                             onApprove={handleApproveRegistration}
                             onReject={handleRejectRegistration}
+                            pricingConfig={pricingConfig}
                         />
                     </div>
 
@@ -1409,19 +1414,23 @@ const TreasurerDashboard = ({ user }) => {
                                                 <span className="text-gray-700 font-medium text-base">
                                                     Ticket: {(() => {
                                                         const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
-                                                        const option = TICKET_OPTIONS[type];
+                                                        const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
                                                         return option ? option.title : (type || 'Entrada General');
                                                     })()}
                                                 </span>
                                                 <span className="font-bold text-gray-900 text-base">
                                                     {(() => {
                                                         const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
-                                                        const option = TICKET_OPTIONS[type];
+                                                        const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
+
                                                         if (option) return `S/ ${option.price.toFixed(2)}`;
 
                                                         // Fallback: Calculate from total - workshops
-                                                        if (selectedDetail.amount && selectedDetail.original.workshops) {
-                                                            const wsTotal = selectedDetail.original.workshops.reduce((sum, w) => sum + (WORKSHOP_OPTIONS[w]?.price || 0), 0);
+                                                        if (selectedDetail.amount && selectedDetail.original.workshops && pricingConfig?.workshops) {
+                                                            const wsTotal = selectedDetail.original.workshops.reduce((sum, wId) => {
+                                                                const ws = pricingConfig.workshops.find(w => w.id === wId || w.key === wId);
+                                                                return sum + (ws?.price || 0);
+                                                            }, 0);
                                                             const ticketPart = selectedDetail.amount - wsTotal;
                                                             return `S/ ${ticketPart.toFixed(2)}`;
                                                         }
@@ -1434,7 +1443,7 @@ const TreasurerDashboard = ({ user }) => {
                                                 <div className="space-y-2 pt-2 border-t border-gray-200 mt-2">
                                                     <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
                                                     {selectedDetail.original.workshops.map(wsId => {
-                                                        const ws = WORKSHOP_OPTIONS[wsId];
+                                                        const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
                                                         return (
                                                             <div key={wsId} className="flex justify-between items-center text-sm pl-2">
                                                                 <span className="text-gray-700">• {ws ? ws.name : wsId}</span>

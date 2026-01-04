@@ -14,10 +14,11 @@ import {
     INITIAL_BUDGETS,
     // New Treasury System
     INITIAL_ACCOUNTS,
-    INITIAL_TRANSACTIONS_V2,
-    INITIAL_CONTRIBUTION_PLAN,
     INITIAL_BUDGET_PLAN,
-    TREASURY_CONFIG
+    TREASURY_CONFIG,
+    PRICING_CONFIG,
+    INITIAL_TRANSACTIONS_V2,
+    INITIAL_CONTRIBUTION_PLAN // Add this
 } from '../data/mockData';
 import { MOCK_ATTENDEES } from '../data/mockAttendees';
 import { MOCK_USERS } from '../data/mockUsers';
@@ -316,25 +317,38 @@ export const api = {
 
             // 3. Add to Treasury Income
             // 3. Add to Treasury Income (ITEMIZED SPLIT)
+            const pricingConfig = await api.treasury.getPricing();
 
             // 3.1. Main Ticket Income
             let ticketAmount = 0;
             let ticketTitle = '';
 
-            if (reg.ticketType && TICKET_OPTIONS[reg.ticketType]) {
-                ticketAmount = TICKET_OPTIONS[reg.ticketType].price;
-                ticketTitle = TICKET_OPTIONS[reg.ticketType].title;
+            // Find ticket info from config
+            const ticketTypeInfo = pricingConfig?.ticketTypes?.find(t => t.id === reg.ticketType || t.key === reg.ticketType);
+
+            if (ticketTypeInfo) {
+                ticketAmount = ticketTypeInfo.price;
+                ticketTitle = ticketTypeInfo.title;
             } else {
-                // Fallback for legacy or manual checks
-                ticketAmount = reg.amount; // Assume all is ticket if no details
-                // If there are workshops but no ticketType, we might double count if we aren't careful.
-                // But in this logic, if we have workshops, we subtract them from total to find ticket price?
-                // A safer bet is: if ticketType is missing, assume the *remainder* is the ticket.
-                if (reg.workshops && reg.workshops.length > 0) {
-                    const workshopsTotal = reg.workshops.reduce((sum, wid) => sum + (WORKSHOP_OPTIONS[wid]?.price || 0), 0);
-                    ticketAmount = reg.amount - workshopsTotal;
+                // Fallback for legacy or manual checks or default modality matching
+                // Try to find by title/modality if id match failed
+                const matchByTitle = pricingConfig?.ticketTypes?.find(t => t.title.toLowerCase() === (reg.modalidad || '').toLowerCase());
+                if (matchByTitle) {
+                    ticketAmount = matchByTitle.price;
+                    ticketTitle = matchByTitle.title;
+                } else {
+                    // Last resort fallback
+                    ticketAmount = reg.amount;
+                    if (reg.workshops && reg.workshops.length > 0) {
+                        // Safely subtract workshop costs if we can identify them
+                        const workshopsTotal = reg.workshops.reduce((sum, wid) => {
+                            const ws = pricingConfig?.workshops?.find(w => w.id === wid || w.id === wid);
+                            return sum + (ws ? ws.price : 0);
+                        }, 0);
+                        ticketAmount = reg.amount - workshopsTotal;
+                    }
+                    ticketTitle = reg.modalidad || 'Entrada General';
                 }
-                ticketTitle = reg.modalidad || 'Entrada General';
             }
 
             if (ticketAmount > 0) {
@@ -349,8 +363,11 @@ export const api = {
 
             // 3.2. Workshops Income
             if (reg.workshops && reg.workshops.length > 0) {
+                // Iterate through ALL selected workshops
                 for (const workshopId of reg.workshops) {
-                    const ws = WORKSHOP_OPTIONS[workshopId];
+                    // Find workshop in dynamic config
+                    const ws = pricingConfig?.workshops?.find(w => w.id === workshopId || w.key === workshopId);
+
                     if (ws) {
                         await api.treasury.addIncome(
                             ws.price,
@@ -359,6 +376,8 @@ export const api = {
                             reg.voucherData,
                             reg.paymentAccountId // Same account as Inscriptions
                         );
+                    } else {
+                        console.warn(`Workshop ID ${workshopId} not found in pricing config during approval.`);
                     }
                 }
             }
@@ -2426,6 +2445,17 @@ export const api = {
             await delay();
             storage.set(STORAGE_KEYS.TREASURY_BUDGETS, budgets);
             return budgets;
+        },
+
+        // --- Pricing Config ---
+        getPricing: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
+        },
+        updatePricing: async (newPricing) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PRICING, newPricing);
+            return newPricing;
         },
 
         // --- Fines Management (Meeting Attendance) ---
