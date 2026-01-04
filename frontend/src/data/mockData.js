@@ -879,9 +879,4 @@ export const PRICING_CONFIG = {
 
 };
 
-export const INITIAL_CONTRIBUTION_PLAN = {
-    monthlyAmount: 50,
-    startMonth: 10, // Octubre
-    year: 2025,
-    months: 12
-};
+export const INITIAL_CONTRIBUTION_PLAN = [];

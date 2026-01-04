@@ -17,6 +17,7 @@ const ContributionsManager = ({
 }) => {
     const [selectedMonths, setSelectedMonths] = useState([]); // Array of month IDs
     const [selectedOrganizer, setSelectedOrganizer] = useState(null);
+    const [searchTerm, setSearchTerm] = useState('');
     const [selectedFine, setSelectedFine] = useState(null); // New State for selected fine
     const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
     const [isValidatingModalOpen, setIsValidatingModalOpen] = useState(false);
@@ -638,12 +639,14 @@ const ContributionsManager = ({
                                 <input
                                     type="text"
                                     placeholder="Buscar organizador..."
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
                                     className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 />
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                            {organizers.map((organizer) => {
+                            {organizers.filter(org => org.organizador_nombre.toLowerCase().includes(searchTerm.toLowerCase())).map((organizer) => {
                                 const isSelected = selectedOrganizer?.organizador_id === organizer.organizador_id;
                                 const progress = (organizer.total_pagado / organizer.total_esperado) * 100;
 

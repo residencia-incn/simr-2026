@@ -12,6 +12,7 @@ export const useTreasury = () => {
     const [budgetPlan, setBudgetPlan] = useState([]);
     const [config, setConfig] = useState(null);
     const [categories, setCategories] = useState({ income: [], expense: [] });
+    const [fines, setFines] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -22,13 +23,14 @@ export const useTreasury = () => {
         setLoading(true);
         setError(null);
         try {
-            const [accs, txs, contrib, budget, cfg, cats] = await Promise.all([
+            const [accs, txs, contrib, budget, cfg, cats, allFines] = await Promise.all([
                 api.treasury.getAccounts(),
                 api.treasury.getTransactionsV2(),
                 api.treasury.getContributionPlan(),
                 api.treasury.getBudgetPlan(),
                 api.treasury.getConfig(),
-                api.treasury.getCategories()
+                api.treasury.getCategories(),
+                api.treasury.getFines()
             ]);
 
             setAccounts(accs);
@@ -54,6 +56,7 @@ export const useTreasury = () => {
             setBudgetPlan(budget);
             setConfig(cfg);
             setCategories(cats);
+            setFines(allFines || []);
         } catch (err) {
             console.error('Error loading treasury data:', err);
             setError(err.message);
@@ -160,8 +163,20 @@ export const useTreasury = () => {
             org.meses[contrib.mes] = contrib.estado;
         });
 
+        // Add Fines to totals
+        fines.forEach(fine => {
+            if (organizerMap.has(fine.userId)) {
+                const org = organizerMap.get(fine.userId);
+                const amount = parseFloat(fine.monto || 0);
+                org.total_esperado += amount;
+                if (fine.estado === 'pagado') {
+                    org.total_pagado += amount;
+                }
+            }
+        });
+
         return Array.from(organizerMap.values());
-    }, [contributionPlan, config]);
+    }, [contributionPlan, config, fines]);
 
     // ==========================================
     // ACCOUNT OPERATIONS
@@ -376,6 +391,7 @@ export const useTreasury = () => {
         budgetPlan,
         config,
         categories,
+        fines,
         loading,
         error,
 

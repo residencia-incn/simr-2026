@@ -64,7 +64,7 @@ const TreasurerDashboard = ({ user }) => {
     const {
         accounts = [],
         transactions = [],
-        contributionPlan = {},
+        contributionPlan = [],
         budgetPlan = [],
         config = {},
         categories = { income: [], expense: [] },
