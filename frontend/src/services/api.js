@@ -1923,31 +1923,55 @@ export const api = {
 
             if (!targetAccountId) throw new Error("No hay cuenta asignada para este aporte.");
 
-            const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
-            const transaction = {
-                fecha: new Date().toISOString().split('T')[0],
-                descripcion: `Aporte ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
-                monto: totalAmount,
-                categoria: 'Aporte Mensual',
-                cuenta_id: targetAccountId,
-                url_comprobante: comprobante,
-                estado: 'validado',
-                meses: mesArray // Keep track of which months this covers
-            };
+            // Create SEPARATE transactions for each month
+            const createdTransactions = [];
 
-            const newTx = await api.treasury.addTransactionV2(transaction);
+            for (const contrib of targetContribs) {
+                const transaction = {
+                    fecha: new Date().toISOString().split('T')[0],
+                    descripcion: `Aporte ${contrib.mes_label} - ${contrib.organizador_nombre}`,
+                    monto: contrib.monto_esperado, // Use the expected amount per month
+                    categoria: 'Aporte Mensual',
+                    cuenta_id: targetAccountId,
+                    url_comprobante: comprobante,
+                    estado: 'validado',
+                    meses: [contrib.mes]
+                };
 
+                const newTx = await api.treasury.addTransactionV2(transaction);
+                createdTransactions.push({
+                    monthId: contrib.mes,
+                    txId: newTx.id,
+                    txDate: newTx.fecha
+                });
+            }
+
+            // Update plan with specific transaction IDs
             const updatedPlan = plan.map(c => {
                 if (c.organizador_id === organizadorId && mesArray.includes(c.mes)) {
-                    return { ...c, estado: 'pagado', transaccion_id: newTx.id, fecha_pago: newTx.fecha, comprobante };
+                    const matchingTx = createdTransactions.find(t => t.monthId === c.mes);
+                    if (matchingTx) {
+                        return {
+                            ...c,
+                            estado: 'pagado',
+                            transaccion_id: matchingTx.txId,
+                            fecha_pago: matchingTx.txDate,
+                            comprobante
+                        };
+                    }
                 }
                 return c;
             });
+
             storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
 
             return {
-                updatedMonths: targetContribs.map(c => ({ ...c, estado: 'pagado', transaccion_id: newTx.id })),
-                transaction: newTx
+                updatedMonths: targetContribs.map(c => ({
+                    ...c,
+                    estado: 'pagado',
+                    transaccion_id: createdTransactions.find(t => t.monthId === c.mes)?.txId
+                })),
+                transactions: createdTransactions
             };
         },
 
@@ -2045,51 +2069,47 @@ export const api = {
                 targetAccountId = accounts[0]?.id;
             }
 
-            const totalAmount = targetContribs.reduce((sum, c) => sum + (c.monto_esperado || 0), 0);
-            const mesLabels = targetContribs.map(c => c.mes_label).join(', ');
+            // Create SEPARATE transactions for each month
+            const createdTransactions = [];
 
-            // Just create transaction, no need to update plan here as it's separate?
-            // Actually recordContribution updates plan state to 'pagado'.
-            // validateContribution should probably call recordContribution internally or similar updates?
-            // The previous code for recordContribution handles creation of transaction.
-            // Let's assume validateContribution is just a wrapper or specific to "validando" -> "pagado" transition.
+            for (const contrib of targetContribs) {
+                const transaction = {
+                    fecha: new Date().toISOString().split('T')[0],
+                    descripcion: `Aporte Validado ${contrib.mes_label} - ${contrib.organizador_nombre}`,
+                    monto: contrib.monto_esperado, // Use the expected amount per month
+                    categoria: 'Aporte Mensual',
+                    cuenta_id: targetAccountId,
+                    url_comprobante: targetContribs[0].comprobante, // Use the shared voucher
+                    estado: 'validado',
+                    meses: [contrib.mes]
+                };
 
-            // For now, I will just return true as placeholder or whatever logic existed. 
-            // WAIT, I am REPLACING this block to ADD `getFines`. I should NOT change `validateContribution` logic if I can avoid it.
-            // But I need to anchor myself.
-            // I'll append `getFines` AFTER `validateContribution`.
-
-            // ... (keeping existing validateContribution logic roughly same if possible, or just append)
-            // It seems I selected a block containing validateContribution.
-            // I will implement getFines AFTER it.
-
-            // ... existing logic ...
-
-            // Actually, to be safe, I will target the END of validateContribution or add it before. 
-            // Let's add it BEFORE `validateContribution` or AFTER `addFine`.
-            const transaction = {
-                fecha: new Date().toISOString().split('T')[0],
-                descripcion: `Aporte Validado ${mesLabels} - ${targetContribs[0].organizador_nombre}`,
-                monto: totalAmount,
-                categoria: 'Aporte Mensual',
-                cuenta_id: targetAccountId,
-                url_comprobante: targetContribs[0].comprobante, // Use the first one (they should be grouped)
-                estado: 'validado',
-                meses: mesArray
-            };
-
-            const newTx = await api.treasury.addTransactionV2(transaction);
+                const newTx = await api.treasury.addTransactionV2(transaction);
+                createdTransactions.push({
+                    monthId: contrib.mes,
+                    txId: newTx.id,
+                    txDate: newTx.fecha
+                });
+            }
 
             const updatedPlan = plan.map(c => {
                 if (c.organizador_id === organizadorId && mesArray.includes(c.mes)) {
-                    return { ...c, estado: 'pagado', transaccion_id: newTx.id, fecha_pago: newTx.fecha };
+                    const matchingTx = createdTransactions.find(t => t.monthId === c.mes);
+                    if (matchingTx) {
+                        return {
+                            ...c,
+                            estado: 'pagado',
+                            transaccion_id: matchingTx.txId,
+                            fecha_pago: matchingTx.txDate
+                        };
+                    }
                 }
                 return c;
             });
             storage.set(STORAGE_KEYS.TREASURY_CONTRIBUTION_PLAN, updatedPlan);
 
             return {
-                transaction: newTx,
+                transactions: createdTransactions,
                 updatedPlan
             };
         },
@@ -2146,7 +2166,10 @@ export const api = {
 
             // Notify Organizer
             const organizerName = plan.find(c => c.organizador_id === organizadorId)?.organizador_nombre || 'Organizador';
-            const mesLabels = plan.filter(c => mesArray.includes(c.mes)).map(c => c.mes_label).join(', ');
+            const mesLabels = [...new Set(
+                plan.filter(c => c.organizador_id === organizadorId && mesArray.includes(c.mes))
+                    .map(c => c.mes_label)
+            )].join(', ');
 
             await api.notifications.add({
                 type: 'contribution_rejection',
@@ -2157,6 +2180,70 @@ export const api = {
             });
 
             return updatedPlan;
+        },
+
+        validateFine: async (fineId, accountId) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const fineIndex = fines.findIndex(f => f.id === fineId);
+            if (fineIndex === -1) throw new Error('Penalidad no encontrada');
+
+            const fine = fines[fineIndex];
+
+            // update fine status
+            fines[fineIndex] = { ...fine, estado: 'pagado', validatedAt: new Date().toISOString() };
+            storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+
+            // create transaction
+            const transaction = {
+                id: crypto.randomUUID(),
+                date: new Date().toISOString().split('T')[0],
+                amount: parseFloat(fine.monto || fine.amount || 0),
+                type: 'income',
+                category: 'Penalidades',
+                description: `Pago de penalidad: ${fine.reason || fine.descripcion || 'Penalidad'} - ${fine.userName || 'Usuario'}`,
+                accountId: accountId || '1',
+                status: 'completed',
+                relatedFineId: fineId
+            };
+
+            const transactions = storage.get(STORAGE_KEYS.TREASURY_TRANSACTIONS, []);
+            transactions.unshift(transaction);
+            storage.set(STORAGE_KEYS.TREASURY_TRANSACTIONS, transactions);
+
+            return fines[fineIndex];
+        },
+
+        rejectFine: async (fineId, reason) => {
+            await delay();
+            const fines = storage.get(STORAGE_KEYS.TREASURY_FINES, []);
+            const fineIndex = fines.findIndex(f => f.id === fineId);
+            if (fineIndex === -1) throw new Error('Penalidad no encontrada');
+
+            const fine = fines[fineIndex];
+
+            // revert status
+            fines[fineIndex] = {
+                ...fine,
+                estado: 'pendiente',
+                voucher: null,
+                rejectedAt: new Date().toISOString(),
+                rejectionReason: reason
+            };
+            storage.set(STORAGE_KEYS.TREASURY_FINES, fines);
+
+            // Notify User
+            if (fine.userId) {
+                await api.notifications.add({
+                    type: 'fine_rejection',
+                    title: 'Pago de Penalidad Rechazado',
+                    message: `Tu pago para la penalidad "${fine.reason || fine.descripcion || 'Penalidad'}" fue rechazado. ${reason ? `Motivo: ${reason}` : ''}`,
+                    link: `?view=tasks-dashboard&tab=payments`,
+                    userId: fine.userId
+                });
+            }
+
+            return fines[fineIndex];
         },
 
         // Budget Plan

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp, Wallet } from 'lucide-react';
+import { Save, RefreshCw, Calendar, DollarSign, Settings, Layers, X, Trash2, Edit2, TrendingUp, Wallet, Landmark, Smartphone, Upload, Image as ImageIcon } from 'lucide-react';
 import { Button, Card, FormField, LoadingSpinner } from '../ui';
 import { showSuccess, showError, showConfirm } from '../../utils/alerts';
 import { api } from '../../services/api';
@@ -18,7 +18,9 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
     const [inscriptionAccounts, setInscriptionAccounts] = useState(config?.contribution?.inscriptionAccounts || []);
 
     // Financial Assets Config State
-    const [financialAssets, setFinancialAssets] = useState(config?.financialAssets || []);
+    // Banks & Wallets Config State
+    const [banks, setBanks] = useState(config?.banks || []);
+    const [wallets, setWallets] = useState(config?.wallets || []);
 
     const [saving, setSaving] = useState(false);
 
@@ -31,7 +33,9 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
             setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
             setDefaultContributionAccount(config.contribution.defaultContributionAccount || '');
             setInscriptionAccounts(config.contribution.inscriptionAccounts || []);
-            setFinancialAssets(config.financialAssets || []);
+            setInscriptionAccounts(config.contribution.inscriptionAccounts || []);
+            setBanks(config.banks || []);
+            setWallets(config.wallets || []);
         }
     }, [config]);
 
@@ -99,7 +103,8 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                     defaultContributionAccount,
                     inscriptionAccounts
                 },
-                financialAssets // Save the assets definitions
+                banks,
+                wallets
             });
             showSuccess('Configuración actualizada correctamente.', 'Configuración guardada');
         } catch (error) {
@@ -107,6 +112,44 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
         } finally {
             setSaving(false);
         }
+    };
+
+    // Auto-save helper for Banks and Wallets
+    const saveAutoConfig = async (updates) => {
+        try {
+            // Re-generate months array just in case
+            const months = generateMonthsArray(startMonth, endMonth, parseInt(monthlyDeadlineDay));
+
+            const payload = {
+                contribution: {
+                    monthlyAmount: parseFloat(monthlyAmount),
+                    monthlyDeadlineDay: parseInt(monthlyDeadlineDay),
+                    startMonth,
+                    endMonth,
+                    months,
+                    defaultContributionAccount,
+                    inscriptionAccounts
+                },
+                banks: updates.banks || banks,
+                wallets: updates.wallets || wallets
+            };
+
+            await onUpdateConfig(payload);
+            showSuccess('Configuración guardada automáticamente.', 'Guardado');
+        } catch (error) {
+            console.error("Auto-save failed", error);
+            showError('Error al guardar automáticamente.', 'Error');
+        }
+    };
+
+    const handleBanksChange = (newBanks) => {
+        setBanks(newBanks);
+        saveAutoConfig({ banks: newBanks });
+    };
+
+    const handleWalletsChange = (newWallets) => {
+        setWallets(newWallets);
+        saveAutoConfig({ wallets: newWallets });
     };
 
     return (
@@ -194,18 +237,33 @@ const TreasurySettings = ({ config, accounts = [], onUpdateConfig, onInitializeP
                         </Card>
 
                         {/* 2. Cuentas Financieras (Asset Definitions) */}
-                        <Card className="p-6 border-t-4 border-t-purple-500">
+                        {/* 2. Configuración de Bancos */}
+                        <Card className="p-6 border-t-4 border-t-blue-500">
                             <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
-                                <Wallet className="text-purple-600" size={20} />
-                                Cuentas Financieras
+                                <Landmark className="text-blue-600" size={20} />
+                                Configuración de Bancos
                             </h3>
                             <p className="text-sm text-gray-500 mb-6">
-                                Define aquí tus cuentas bancarias, billeteras digitales y cajas.
+                                Define los bancos disponibles para crear cuentas.
                             </p>
+                            <BankConfigManager
+                                items={banks}
+                                onChange={handleBanksChange}
+                            />
+                        </Card>
 
-                            <FinancialAssetsManager
-                                assets={financialAssets}
-                                onChange={setFinancialAssets}
+                        {/* 3. Configuración de Billeteras */}
+                        <Card className="p-6 border-t-4 border-t-purple-500">
+                            <h3 className="text-lg font-bold text-gray-900 mb-2 flex items-center gap-2">
+                                <Smartphone className="text-purple-600" size={20} />
+                                Configuración de Billeteras
+                            </h3>
+                            <p className="text-sm text-gray-500 mb-6">
+                                Define las billeteras digitales disponibles.
+                            </p>
+                            <WalletConfigManager
+                                items={wallets}
+                                onChange={handleWalletsChange}
                             />
                         </Card>
                     </div>
@@ -497,183 +555,135 @@ const CategoryList = ({ type, items, onDelete, onAdd, onRename }) => {
 
 export default TreasurySettings;
 
-const FinancialAssetsManager = ({ assets, onChange }) => {
+const SimpleConfigManager = ({ items, onChange, typeLabel, icon: Icon, placeholderExample }) => {
     const [isEditing, setIsEditing] = useState(false);
-    const [currentAsset, setCurrentAsset] = useState(null);
-    const [formData, setFormData] = useState({
-        id: '',
-        type: 'banco',
-        subtype: '',
-        name: '',
-        number: '',
-        cci: '',
-        phone: ''
-    });
-
-    const ASSET_TYPES = [
-        { value: 'banco', label: 'Cuenta Bancaria' },
-        { value: 'billetera', label: 'Billetera Digital' },
-        { value: 'efectivo', label: 'Efectivo / Caja' }
-    ];
-
-    const BANKS = ['BCP', 'Interbank', 'BBVA', 'Scotiabank', 'Banco de la Nación', 'Otro'];
-    const WALLETS = ['Yape', 'Plin', 'Agora / OH!', 'Ligo', 'Otro'];
+    const [currentItem, setCurrentItem] = useState(null);
+    const [formData, setFormData] = useState({ name: '', shortName: '', logo: '' });
+    const fileInputRef = React.useRef(null);
 
     const handleAddNew = () => {
-        setFormData({
-            id: '',
-            type: 'banco',
-            subtype: 'BCP',
-            name: '',
-            number: '',
-            cci: '',
-            phone: ''
-        });
-        setCurrentAsset(null);
+        setFormData({ name: '', shortName: '', logo: '' });
+        setCurrentItem(null);
         setIsEditing(true);
     };
 
-    const handleEdit = (asset) => {
-        setFormData({ ...asset });
-        setCurrentAsset(asset);
+    const handleEdit = (item) => {
+        setFormData({ ...item });
+        setCurrentItem(item);
         setIsEditing(true);
     };
 
     const handleDelete = (id) => {
-        onChange(assets.filter(a => a.id !== id));
+        onChange(items.filter(i => i.id !== id));
+    };
+
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 512 * 1024) {
+            alert('El archivo es demasiado grande. Máximo 500KB. Por favor, optimiza tu imagen.');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            setFormData(prev => ({ ...prev, logo: reader.result }));
+        };
+        reader.readAsDataURL(file);
     };
 
     const handleSave = () => {
-        // Validation
-        if (!formData.name) return alert('El nombre es requerido'); // Simple alert for now or use toast
+        if (!formData.name) return;
 
-        const newAsset = {
+        const newItem = {
             ...formData,
-            id: currentAsset ? currentAsset.id : `asset-${Date.now()}`
+            id: currentItem ? currentItem.id : `${typeLabel.toLowerCase()}-${Date.now()}`
         };
 
-        if (currentAsset) {
-            onChange(assets.map(a => a.id === currentAsset.id ? newAsset : a));
+        if (currentItem) {
+            onChange(items.map(i => i.id === currentItem.id ? newItem : i));
         } else {
-            onChange([...assets, newAsset]);
+            onChange([...items, newItem]);
         }
         setIsEditing(false);
     };
 
-    const getLogoPlaceholder = (type, subtype) => {
-        // Simple visual placeholder logic
-        let color = 'bg-gray-200';
-        let text = subtype ? subtype.substring(0, 2) : '??';
-
-        if (subtype === 'BCP') { color = 'bg-orange-500 text-white'; text = 'BCP'; }
-        if (subtype === 'Interbank') { color = 'bg-green-600 text-white'; text = 'IB'; }
-        if (subtype === 'BBVA') { color = 'bg-blue-600 text-white'; text = 'BBVA'; }
-        if (subtype === 'Yape') { color = 'bg-purple-600 text-white'; text = 'Y'; }
-        if (subtype === 'Plin') { color = 'bg-cyan-500 text-white'; text = 'Plin'; }
-
-        return (
-            <div className={`w-10 h-10 rounded-lg ${color} flex items-center justify-center font-bold text-xs shadow-sm`}>
-                {text}
-            </div>
-        );
-    };
-
     if (isEditing) {
         return (
-            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 transition-all animate-in fade-in zoom-in-95 duration-200">
+            <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 animate-in fade-in zoom-in-95 duration-200">
                 <div className="flex justify-between items-center mb-4">
-                    <h4 className="font-bold text-gray-800">{currentAsset ? 'Editar Cuenta' : 'Nueva Cuenta Financiera'}</h4>
+                    <h4 className="font-bold text-gray-800">{currentItem ? 'Editar' : 'Agregar'} {typeLabel}</h4>
                     <button onClick={() => setIsEditing(false)} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
                 </div>
-
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Tipo de Activo</label>
-                        <select
-                            className="w-full p-2 border rounded-lg bg-white"
-                            value={formData.type}
-                            onChange={(e) => setFormData({ ...formData, type: e.target.value, subtype: e.target.value === 'banco' ? 'BCP' : e.target.value === 'billetera' ? 'Yape' : '' })}
-                        >
-                            {ASSET_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                        </select>
-                    </div>
-
-                    {formData.type === 'banco' && (
-                        <>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Banco</label>
-                                <select
-                                    className="w-full p-2 border rounded-lg bg-white"
-                                    value={formData.subtype}
-                                    onChange={(e) => setFormData({ ...formData, subtype: e.target.value })}
-                                >
-                                    {BANKS.map(b => <option key={b} value={b}>{b}</option>)}
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">Nro. Cuenta</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 border rounded-lg"
-                                        value={formData.number}
-                                        onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                                        placeholder="000-000..."
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-bold text-gray-500 mb-1">CCI</label>
-                                    <input
-                                        type="text"
-                                        className="w-full p-2 border rounded-lg"
-                                        value={formData.cci}
-                                        onChange={(e) => setFormData({ ...formData, cci: e.target.value })}
-                                        placeholder="002-..."
-                                    />
-                                </div>
-                            </div>
-                        </>
-                    )}
-
-                    {formData.type === 'billetera' && (
-                        <>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Billetera</label>
-                                <select
-                                    className="w-full p-2 border rounded-lg bg-white"
-                                    value={formData.subtype}
-                                    onChange={(e) => setFormData({ ...formData, subtype: e.target.value })}
-                                >
-                                    {WALLETS.map(w => <option key={w} value={w}>{w}</option>)}
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Nro. Celular</label>
-                                <input
-                                    type="text"
-                                    className="w-full p-2 border rounded-lg"
-                                    value={formData.phone}
-                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    placeholder="999..."
-                                />
-                            </div>
-                        </>
-                    )}
-
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Identificador</label>
+                        <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Completo</label>
                         <input
                             type="text"
-                            className="w-full p-2 border rounded-lg"
+                            className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                            placeholder="Ej: BCP Principal Soles"
+                            placeholder={placeholderExample}
                         />
                     </div>
-
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Nombre Corto</label>
+                            <input
+                                type="text"
+                                className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                value={formData.shortName}
+                                onChange={(e) => setFormData({ ...formData, shortName: e.target.value })}
+                                placeholder="Ej. BCP"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 mb-1">Logo (Max 500KB)</label>
+                            <div className="flex items-center gap-3">
+                                <div
+                                    className="w-10 h-10 rounded-lg bg-white border border-gray-200 flex items-center justify-center overflow-hidden cursor-pointer hover:border-blue-400 transition-colors"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    title="Click para subir logo"
+                                >
+                                    {formData.logo ? (
+                                        <img src={formData.logo} alt="Logo" className="w-full h-full object-contain" />
+                                    ) : (
+                                        <ImageIcon size={16} className="text-gray-400" />
+                                    )}
+                                </div>
+                                <div className="flex-1">
+                                    <input
+                                        ref={fileInputRef}
+                                        type="file"
+                                        accept="image/png, image/jpeg, image/svg+xml"
+                                        className="hidden"
+                                        onChange={handleFileChange}
+                                    />
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full text-xs h-8"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <Upload size={12} className="mr-1" /> Subir
+                                    </Button>
+                                    {formData.logo && (
+                                        <button
+                                            onClick={() => setFormData(prev => ({ ...prev, logo: '' }))}
+                                            className="text-[10px] text-red-500 hover:underline mt-1 block text-center w-full"
+                                        >
+                                            Eliminar logo
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                     <div className="flex gap-2 pt-2">
-                        <Button onClick={handleSave} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
-                            {currentAsset ? 'Actualizar' : 'Agregar'}
+                        <Button onClick={handleSave} className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
+                            {currentItem ? 'Actualizar' : 'Agregar'}
                         </Button>
                         <Button onClick={() => setIsEditing(false)} variant="outline" className="flex-1">
                             Cancelar
@@ -685,41 +695,58 @@ const FinancialAssetsManager = ({ assets, onChange }) => {
     }
 
     return (
-        <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-3">
-                {assets.map(asset => (
-                    <div key={asset.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:shadow-md transition-shadow">
-                        <div className="flex items-center gap-3">
-                            {getLogoPlaceholder(asset.type, asset.subtype)}
-                            <div>
-                                <p className="font-bold text-sm text-gray-900">{asset.name}</p>
-                                <div className="flex items-center gap-2 text-xs text-gray-500">
-                                    <span className="capitalize">{asset.type} {asset.subtype}</span>
-                                    {asset.number && <span>• {asset.number}</span>}
-                                    {asset.phone && <span>• {asset.phone}</span>}
-                                </div>
-                            </div>
+        <div className="space-y-3">
+            {items.map(item => (
+                <div key={item.id} className="flex items-center justify-between p-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm transition-shadow">
+                    <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center font-bold text-xs text-gray-600 shadow-sm overflow-hidden bg-white border border-gray-100">
+                            {item.logo ? (
+                                <img src={item.logo} alt={item.shortName} className="w-full h-full object-contain p-1" />
+                            ) : (
+                                item.shortName || item.name.substring(0, 2)
+                            )}
                         </div>
-                        <div className="flex gap-1">
-                            <button onClick={() => handleEdit(asset)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
-                                <Edit2 size={16} />
-                            </button>
-                            <button onClick={() => handleDelete(asset.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
-                                <Trash2 size={16} />
-                            </button>
+                        <div>
+                            <p className="font-bold text-sm text-gray-900">{item.name}</p>
+                            <p className="text-xs text-gray-500">{item.shortName}</p>
                         </div>
                     </div>
-                ))}
-            </div>
-
+                    <div className="flex gap-1">
+                        <button onClick={() => handleEdit(item)} className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
+                            <Edit2 size={16} />
+                        </button>
+                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                            <Trash2 size={16} />
+                        </button>
+                    </div>
+                </div>
+            ))}
             <Button
                 onClick={handleAddNew}
-                className="w-full border-2 border-dashed border-gray-300 text-gray-500 hover:border-purple-500 hover:text-purple-600 hover:bg-purple-50"
+                className="w-full border-2 border-dashed border-gray-300 text-gray-500 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50"
                 variant="ghost"
             >
-                <DollarSign size={18} className="mr-2" />
-                Agregar Nueva Cuenta Financiera
+                <Icon size={18} className="mr-2" />
+                Agregar {typeLabel}
             </Button>
         </div>
     );
 };
+
+const BankConfigManager = (props) => (
+    <SimpleConfigManager
+        {...props}
+        typeLabel="Banco"
+        icon={Landmark}
+        placeholderExample="Ej. Banco de Crédito del Perú"
+    />
+);
+
+const WalletConfigManager = (props) => (
+    <SimpleConfigManager
+        {...props}
+        typeLabel="Billetera"
+        icon={Smartphone}
+        placeholderExample="Ej. Yape"
+    />
+);

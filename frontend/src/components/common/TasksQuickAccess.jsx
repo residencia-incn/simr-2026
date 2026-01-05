@@ -34,27 +34,46 @@ const TasksQuickAccess = ({ user }) => {
 
     // Helper to render destination account
     const renderDestinationAccount = () => {
-        if (!treasuryConfig?.contribution?.defaultContributionAccount || !accounts || !treasuryConfig?.financialAssets) return null;
+        if (!treasuryConfig?.contribution?.defaultContributionAccount || !accounts) return null;
 
         const accountId = treasuryConfig.contribution.defaultContributionAccount;
         const account = accounts.find(a => a.id === accountId);
         if (!account) return null;
 
-        const asset = treasuryConfig.financialAssets.find(a => a.id === account.financialAssetId);
+        // Determine icon and color based on account details
+        const isWallet = account.tipo === 'billetera';
+        const name = account.bank_name || account.wallet_name || account.nombre || '';
+        const lowerName = name.toLowerCase();
 
-        // Determine icon and color
-        const isWallet = account.tipo !== 'banco'; // Or check asset.type
-        const subtype = asset?.subtype || '';
+        // Try to find configured logo
+        let configuredLogo = null;
+        if (treasuryConfig?.banks && account.tipo === 'banco') {
+            const bank = treasuryConfig.banks.find(b => b.name === account.bank_name);
+            if (bank?.logo) configuredLogo = bank.logo;
+        } else if (treasuryConfig?.wallets && account.tipo === 'billetera') {
+            const wallet = treasuryConfig.wallets.find(w => w.name === account.wallet_name);
+            if (wallet?.logo) configuredLogo = wallet.logo;
+        }
 
         let colorClass = 'bg-gray-100 text-gray-600';
         let Icon = Building;
+        let shortName = name;
+        let LogoContent = null;
 
-        if (subtype === 'Yape') { colorClass = 'bg-purple-600 text-white'; Icon = Smartphone; }
-        else if (subtype === 'Plin') { colorClass = 'bg-cyan-500 text-white'; Icon = Smartphone; }
-        else if (subtype === 'Agora / OH!') { colorClass = 'bg-pink-600 text-white'; Icon = Smartphone; }
-        else if (subtype === 'BCP') { colorClass = 'bg-orange-500 text-white'; Icon = Building; }
-        else if (subtype === 'Interbank') { colorClass = 'bg-green-600 text-white'; Icon = Building; }
-        else if (subtype === 'BBVA') { colorClass = 'bg-blue-600 text-white'; Icon = Building; }
+        if (configuredLogo) {
+            LogoContent = (
+                <div className="w-full h-full bg-white rounded-lg flex items-center justify-center p-1 overflow-hidden">
+                    <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain" />
+                </div>
+            );
+        } else {
+            if (lowerName.includes('yape')) { colorClass = 'bg-purple-600 text-white'; Icon = Smartphone; shortName = 'Yape'; }
+            else if (lowerName.includes('plin')) { colorClass = 'bg-cyan-500 text-white'; Icon = Smartphone; shortName = 'Plin'; }
+            else if (lowerName.includes('agora') || lowerName.includes('oh')) { colorClass = 'bg-pink-600 text-white'; Icon = Smartphone; shortName = 'Agora'; }
+            else if (lowerName.includes('bcp') || lowerName.includes('crédito')) { colorClass = 'bg-orange-500 text-white'; Icon = Building; shortName = 'BCP'; }
+            else if (lowerName.includes('interbank')) { colorClass = 'bg-green-600 text-white'; Icon = Building; shortName = 'IB'; }
+            else if (lowerName.includes('bbva')) { colorClass = 'bg-blue-600 text-white'; Icon = Building; shortName = 'BBVA'; }
+        }
 
         return (
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 mb-6 shadow-sm">
@@ -66,33 +85,56 @@ const TasksQuickAccess = ({ user }) => {
                         </h4>
 
                         <div className="flex items-center gap-4">
-                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${colorClass}`}>
-                                {['Yape', 'Plin', 'Agora / OH!', 'BCP', 'BBVA', 'Interbank'].includes(subtype) ? (
-                                    <span className="font-bold text-xs">{subtype.substring(0, 4)}</span>
-                                ) : (
-                                    <Icon size={24} />
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${!LogoContent ? colorClass : 'bg-transparent'}`}>
+                                {LogoContent ? LogoContent : (
+                                    ['Yape', 'Plin', 'Agora', 'BCP', 'BBVA', 'IB'].includes(shortName) ? (
+                                        <span className="font-bold text-xs">{shortName.substring(0, 4)}</span>
+                                    ) : (
+                                        <Icon size={24} />
+                                    )
                                 )}
                             </div>
 
-                            <div>
-                                <p className="font-bold text-gray-900 text-lg leading-tight">{asset?.name || account.nombre}</p>
-                                <div className="text-sm text-gray-600 font-medium mt-1">
-                                    <p className="flex items-center gap-1">
-                                        <span className="text-xs uppercase bg-gray-100 px-1.5 rounded text-gray-500 font-bold tracking-wider">{asset?.subtype || account.tipo}</span>
-                                        <span className="font-mono text-gray-800 tracking-wide">{account.numero_cuenta}</span>
-                                    </p>
-                                    {/* Show CCI if it's a bank account and available in asset */}
-                                    {asset?.cci && (
-                                        <p className="flex items-center gap-1 mt-0.5">
-                                            <span className="text-[10px] uppercase bg-blue-50 px-1.5 rounded text-blue-600 font-bold tracking-wider">CCI</span>
-                                            <span className="font-mono text-gray-600 text-xs tracking-wide">{asset.cci}</span>
+                            <div className="min-w-0">
+                                {isWallet ? (
+                                    <>
+                                        <p className="font-bold text-gray-900 text-2xl leading-none tracking-tight mb-1">
+                                            {account.phone_number || account.account_number}
                                         </p>
-                                    )}
-                                </div>
+                                        <p className="text-sm text-gray-600 font-medium uppercase tracking-wide">
+                                            {account.holder_name || 'Titular no registrado'}
+                                        </p>
+                                        <div className="mt-1 flex items-center gap-2">
+                                            <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">
+                                                {name}
+                                            </span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="font-bold text-gray-900 text-lg leading-tight mb-0.5">
+                                            {name || account.nombre}
+                                        </p>
+                                        <p className="text-sm text-gray-600 font-medium uppercase mb-2">
+                                            {account.holder_name || 'Titular no registrado'}
+                                        </p>
+
+                                        <div className="space-y-1">
+                                            <p className="flex items-center gap-2">
+                                                <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold tracking-wider min-w-[60px] text-center">Cuenta</span>
+                                                <span className="font-mono text-gray-800 text-xs tracking-wide">{account.account_number || account.numero_cuenta}</span>
+                                            </p>
+                                            {account.cci && (
+                                                <p className="flex items-center gap-2">
+                                                    <span className="text-[10px] uppercase bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-bold tracking-wider min-w-[60px] text-center">CCI</span>
+                                                    <span className="font-mono text-gray-600 text-xs tracking-wide">{account.cci}</span>
+                                                </p>
+                                            )}
+                                        </div>
+                                    </>
+                                )}
                             </div>
                         </div>
-
-                        {/* Description hidden as requested */}
                     </div>
                 </div>
                 <div className="mt-3 text-xs text-blue-600 bg-blue-100/50 px-3 py-1.5 rounded-lg border border-blue-100 inline-flex items-center gap-2">

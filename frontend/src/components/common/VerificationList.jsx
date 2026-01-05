@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Check, X, Eye, FileText, Calendar, User, CreditCard, DollarSign, Award, Wifi, Briefcase, Building } from 'lucide-react';
 import { Button, Card, EmptyState, Modal } from '../ui';
+import Swal from 'sweetalert2';
 
 // Constants for display mapping (mirrors RegistrationView)
 
@@ -100,9 +101,22 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                             </Button>
 
                             <button
-                                onClick={(e) => {
+                                onClick={async (e) => {
                                     e.stopPropagation();
-                                    onReject(reg.id);
+                                    const { value: reason, isDismissed } = await Swal.fire({
+                                        title: 'Motivo del Rechazo',
+                                        text: `¿Por qué rechazas el pago de ${reg.name}?`,
+                                        input: 'text',
+                                        inputPlaceholder: 'Ej. Voucher ilegible, monto incorrecto...',
+                                        showCancelButton: true,
+                                        confirmButtonText: 'Rechazar',
+                                        cancelButtonText: 'Cancelar',
+                                        confirmButtonColor: '#dc2626',
+                                        cancelButtonColor: '#6b7280'
+                                    });
+
+                                    if (isDismissed || reason === undefined) return;
+                                    onReject(reg.id, reason);
                                 }}
                                 className="p-2.5 text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
                                 title="Rechazar"
@@ -131,7 +145,7 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                 <Modal
                     isOpen={!!selectedRegistration}
                     onClose={() => setSelectedRegistration(null)}
-                    title="Detalle de Inscripción"
+                    title={selectedRegistration.type === 'Contribution' ? "Detalle de Aporte" : "Detalle de Inscripción"}
                     size="3xl"
                 >
                     {/* Container with negative margin to counteract Modal's default padding */}
@@ -194,10 +208,31 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                             <Award size={20} className="text-orange-600" /> Detalle de Pago
                                         </h4>
                                         <div className="space-y-4 bg-gray-50 p-5 rounded-xl border border-gray-200 shadow-sm">
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
-                                                <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
-                                            </div>
+                                            {selectedRegistration.type === 'Contribution' ? (
+                                                <div className="space-y-3">
+                                                    <div className="flex justify-between items-center text-sm border-b border-gray-200 pb-3">
+                                                        <span className="text-gray-700 font-medium text-base">Concepto General</span>
+                                                        <span className="font-bold text-gray-900 text-base text-right">{selectedRegistration.modalidad}</span>
+                                                    </div>
+
+                                                    {selectedRegistration.breakdown && (
+                                                        <div className="space-y-3 pt-2">
+                                                            <p className="text-xs font-bold text-gray-500 uppercase">Desglose de Aportes</p>
+                                                            {selectedRegistration.breakdown.map((item, idx) => (
+                                                                <div key={idx} className="flex justify-between items-center text-sm pl-2">
+                                                                    <span className="text-gray-700">• {item.label}</span>
+                                                                    <span className="font-semibold text-gray-900">+ S/ {item.price.toFixed(2)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="flex justify-between items-center text-sm">
+                                                    <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
+                                                    <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
+                                                </div>
+                                            )}
 
                                             {selectedRegistration.workshops && selectedRegistration.workshops.length > 0 && (
                                                 <div className="space-y-3 pt-3 border-t border-gray-200">
@@ -266,12 +301,26 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                 </Button>
                                 <Button
                                     className="bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-100 border border-red-600"
-                                    onClick={() => {
-                                        onReject(selectedRegistration.id);
+                                    onClick={async () => {
+                                        const { value: reason, isDismissed } = await Swal.fire({
+                                            title: 'Motivo del Rechazo',
+                                            text: `¿Por qué rechazas el registro de ${selectedRegistration.name}?`,
+                                            input: 'text',
+                                            inputPlaceholder: 'Ej. Voucher ilegible, monto incorrecto...',
+                                            showCancelButton: true,
+                                            confirmButtonText: 'Rechazar',
+                                            cancelButtonText: 'Cancelar',
+                                            confirmButtonColor: '#dc2626',
+                                            cancelButtonColor: '#6b7280'
+                                        });
+
+                                        if (isDismissed || reason === undefined) return;
+
+                                        onReject(selectedRegistration.id, reason);
                                         setSelectedRegistration(null);
                                     }}
                                 >
-                                    <X size={18} className="mr-2" /> Rechazar Inscripción
+                                    <X size={18} className="mr-2" /> {selectedRegistration.type === 'Contribution' ? 'Rechazar Pago' : 'Rechazar Inscripción'}
                                 </Button>
                                 <Button
                                     className="bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-200 px-6"
@@ -280,7 +329,7 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                         setSelectedRegistration(null);
                                     }}
                                 >
-                                    <Check size={18} className="mr-2" /> Aprobar Inscripción
+                                    <Check size={18} className="mr-2" /> {selectedRegistration.type === 'Contribution' ? 'Validar Pago' : 'Aprobar Inscripción'}
                                 </Button>
                             </div>
                         </div>

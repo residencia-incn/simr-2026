@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon, AlertTriangle, Search, Printer, FileText } from 'lucide-react';
 import { Button, Card, FormField, Modal } from '../ui';
 import { showError, showSuccess } from '../../utils/alerts';
+import Swal from 'sweetalert2';
 import { api } from '../../services/api';
 
 const ContributionsManager = ({
@@ -159,62 +160,180 @@ const ContributionsManager = ({
                 <head>
                     <title>Estado de Cuenta - ${selectedOrganizer.organizador_nombre}</title>
                     <style>
-                        body { font-family: sans-serif; padding: 40px; }
-                        h1 { color: #1e3a8a; border-bottom: 2px solid #1e3a8a; padding-bottom: 10px; }
-                        .header { display: flex; justify-content: space-between; margin-bottom: 30px; }
-                        .card { border: 1px solid #ccc; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
-                        .status-box { background-color: ${status.isClean ? '#f0fdf4' : '#fef2f2'}; padding: 20px; border-radius: 8px; text-align: right; }
-                        .total { font-size: 24px; font-weight: bold; color: ${status.isClean ? '#166534' : '#991b1b'}; }
-                        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-                        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-                        th { background-color: #f3f4f6; }
-                        .footer { margin-top: 40px; font-size: 12px; text-align: center; color: #666; }
+                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+                        
+                        body { 
+                            font-family: 'Inter', sans-serif; 
+                            background: white;
+                            color: #111827;
+                            padding: 20px 40px;
+                        }
+
+                        /* Print Settings */
+                        @page {
+                            size: A4;
+                            margin: 10mm 15mm;
+                        }
+
+                        /* Header */
+                        .header { 
+                            display: flex; 
+                            justify-content: space-between; 
+                            align-items: center; 
+                            border-bottom: 2px solid #2563eb; 
+                            padding-bottom: 15px; 
+                            margin-bottom: 25px;
+                        }
+                        .header h1 { 
+                            margin: 0; 
+                            font-size: 24px; 
+                            color: #1e3a8a; 
+                            font-weight: 800;
+                        }
+                        .header p { 
+                            margin: 5px 0 0; 
+                            color: #6b7280; 
+                            font-size: 12px; 
+                            text-transform: uppercase; 
+                            letter-spacing: 0.05em;
+                        }
+
+                        /* Card Info */
+                        .card { 
+                            background: #f9fafb; 
+                            border: 1px solid #e5e7eb; 
+                            padding: 15px 20px; 
+                            border-radius: 12px; 
+                            margin-bottom: 25px; 
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .card h2 { margin: 0; font-size: 18px; color: #111827; }
+                        .card p { margin: 2px 0 0; color: #4b5563; font-size: 13px; }
+
+                        /* Status Box */
+                        .status-box { 
+                            background-color: ${status.isClean ? '#f0fdf4' : '#fef2f2'}; 
+                            border: 1px solid ${status.isClean ? '#bbf7d0' : '#fecaca'}; 
+                            padding: 15px 20px; 
+                            border-radius: 12px; 
+                            margin-bottom: 30px; 
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+                        .status-label { font-weight: 600; color: #374151; font-size: 14px; }
+                        .total { 
+                            font-size: 28px; 
+                            font-weight: 800; 
+                            color: ${status.isClean ? '#166534' : '#dc2626'}; 
+                            text-align: right;
+                        }
+                        .status-sub { font-size: 12px; color: #6b7280; text-align: right; margin-top: 4px; }
+
+                        /* Section Titles */
+                        h3 { 
+                            font-size: 16px; 
+                            color: #111827; 
+                            margin-bottom: 12px; 
+                            border-left: 4px solid #2563eb; 
+                            padding-left: 10px;
+                            text-transform: uppercase;
+                            letter-spacing: 0.05em;
+                        }
+
+                        /* Tables */
+                        table { width: 100%; border-collapse: collapse; margin-bottom: 25px; font-size: 13px; }
+                        th { 
+                            background-color: #f3f4f6; 
+                            color: #374151; 
+                            font-weight: 600; 
+                            text-align: left; 
+                            padding: 10px 12px;
+                            border-bottom: 2px solid #e5e7eb;
+                        }
+                        td { 
+                            padding: 10px 12px; 
+                            border-bottom: 1px solid #e5e7eb; 
+                            color: #4b5563; 
+                        }
+                        tr:last-child td { border-bottom: none; }
+                        
+                        /* Status Badges */
+                        .badge {
+                            display: inline-block;
+                            padding: 2px 8px;
+                            border-radius: 9999px;
+                            font-size: 11px;
+                            font-weight: 600;
+                            text-transform: uppercase;
+                        }
+                        .badge-paid { background: #dcfce7; color: #166534; }
+                        .badge-pending { background: #fee2e2; color: #991b1b; }
+                        .badge-validating { background: #fef9c3; color: #854d0e; }
+
+                        /* Footer */
+                        .footer { 
+                            margin-top: 40px; 
+                            padding-top: 20px;
+                            border-top: 1px solid #e5e7eb;
+                            font-size: 11px; 
+                            text-align: center; 
+                            color: #9ca3af; 
+                        }
                     </style>
                 </head>
                 <body>
                     <div class="header">
                         <div>
                             <h1>SIMR 2026</h1>
-                            <p>Reporte de Estado de Cuenta</p>
+                            <p>Reporte de Tesorería</p>
                         </div>
                         <div style="text-align: right;">
-                            <p><strong>Fecha:</strong> ${new Date().toLocaleDateString()}</p>
+                            <p><strong>Generado:</strong> ${new Date().toLocaleDateString('es-PE')} ${new Date().toLocaleTimeString('es-PE')}</p>
                         </div>
                     </div>
 
                     <div class="card">
-                        <h2>${selectedOrganizer.organizador_nombre}</h2>
-                        <p><strong>Rol:</strong> ${selectedOrganizer.organizador_rol || 'Organizador'}</p>
+                        <div>
+                            <h2>${selectedOrganizer.organizador_nombre}</h2>
+                            <p>${selectedOrganizer.organizador_rol || 'Miembro del Comité Organizador'}</p>
+                        </div>
+                        <div style="text-align: right">
+                             <p><strong>Cód:</strong> ${selectedOrganizer.organizador_id.substring(0, 8)}...</p>
+                        </div>
                     </div>
 
-                    <h3>Resumen Financiero</h3>
+                    <h3>Estado Financiero</h3>
                     <div class="status-box">
-                        <p>Total Pendiente a Pagar</p>
-                        <div class="total">S/ ${status.totalPending.toFixed(2)}</div>
-                        <p style="font-size: 14px; color: #666;">
-                            incluye ${status.pendingContributionsCount} cuotas y S/ ${status.totalFinesPending} en penalidades
-                        </p>
+                        <span class="status-label">Balance Total Pendiente</span>
+                        <div>
+                            <div class="total">S/ ${status.totalPending.toFixed(2)}</div>
+                            <div class="status-sub">
+                                ${status.isClean ? '¡Cuenta al día!' : `Incluye ${status.pendingContributionsCount} cuotas y S/ ${status.totalFinesPending} en penalidades`}
+                            </div>
+                        </div>
                     </div>
 
-                    <h3>Detalle de Aportes</h3>
+                    <h3>Registro de Aportes Mensuales</h3>
                     <table>
                         <thead>
                             <tr>
-                                <th>Mes</th>
-                                <th>Estado</th>
-                                <th>Monto</th>
+                                <th style="width: 40%">Mes</th>
+                                <th style="width: 30%">Estado</th>
+                                <th style="width: 30%; text-align: right">Monto</th>
                             </tr>
                         </thead>
                         <tbody>
                             ${months.map(m => {
             const st = getCellStatus(selectedOrganizer.organizador_id, m.id);
+            const badgeClass = st === 'pagado' ? 'badge-paid' : st === 'pendiente' ? 'badge-pending' : 'badge-validating';
             return `
                                     <tr>
-                                        <td>${m.label}</td>
-                                        <td style="color: ${st === 'pagado' ? 'green' : st === 'pendiente' ? 'red' : 'orange'}">
-                                            ${st.toUpperCase()}
-                                        </td>
-                                        <td>S/ ${config?.contribution?.monthlyAmount}</td>
+                                        <td><strong>${m.label}</strong></td>
+                                        <td><span class="badge ${badgeClass}">${st}</span></td>
+                                        <td style="text-align: right; font-family: monospace; font-size: 14px">S/ ${config?.contribution?.monthlyAmount}</td>
                                     </tr>
                                 `;
         }).join('')}
@@ -222,31 +341,31 @@ const ContributionsManager = ({
                     </table>
 
                     ${fines.length > 0 ? `
-                        <h3>Detalle de Penalidades</h3>
+                        <h3>Historial de Penalidades</h3>
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Concepto</th>
-                                    <th>Fecha</th>
-                                    <th>Estado</th>
-                                    <th>Monto</th>
+                                    <th style="width: 40%">Concepto</th>
+                                    <th style="width: 20%">Fecha</th>
+                                    <th style="width: 20%">Estado</th>
+                                    <th style="width: 20%; text-align: right">Monto</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 ${fines.map(f => `
                                     <tr>
                                         <td>${f.descripcion}</td>
-                                        <td>${f.fecha}</td>
-                                        <td style="color: ${f.estado === 'pagado' ? 'green' : 'red'}">${f.estado.toUpperCase()}</td>
-                                        <td>S/ ${f.monto}</td>
+                                        <td>${new Date(f.dueDate || f.fecha).toLocaleDateString()}</td>
+                                        <td><span class="badge ${f.estado === 'pagado' ? 'badge-paid' : f.estado === 'pendiente' ? 'badge-pending' : 'badge-validating'}">${f.estado}</span></td>
+                                        <td style="text-align: right; font-family: monospace; font-size: 14px">S/ ${f.monto}</td>
                                     </tr>
                                 `).join('')}
                             </tbody>
                         </table>
-                    ` : '<p>No hay penalidades registradas.</p>'}
+                    ` : ''}
 
                     <div class="footer">
-                        Generado automáticamente por el sistema de tesorería SIMR 2026
+                        <p>Documento generado automáticamente por el Sistema de Gestión SIMR 2026</p>
                     </div>
                 </body>
             </html>
@@ -375,7 +494,13 @@ const ContributionsManager = ({
         const currentStatus = getCellStatus(selectedOrganizer.organizador_id, monthId);
 
         // If it's validating, open validation modal and select ALL months with same voucher
-        if (currentStatus === 'validando' && selectedMonths.length === 0) {
+        if (currentStatus === 'validando') {
+            // Check if we have 'pendiente' items selected - Prevent mixing
+            const hasPendingSelected = selectedMonths.some(id => getCellStatus(selectedOrganizer.organizador_id, id) === 'pendiente');
+            if (hasPendingSelected) {
+                showError('No puedes mezclar meses pendientes con validaciones en curso.', 'Selección Inválida');
+                return;
+            }
             // Find the contribution for this month
             const clickedContrib = contributionPlan.find(
                 c => c.organizador_id === selectedOrganizer.organizador_id && c.mes === monthId
@@ -416,6 +541,13 @@ const ContributionsManager = ({
                 });
                 setSelectedMonths(newSelection);
             } else {
+                // Check if we have 'validando' items selected - Prevent mixing
+                const hasValidatingSelected = selectedMonths.some(id => getCellStatus(selectedOrganizer.organizador_id, id) === 'validando');
+                if (hasValidatingSelected) {
+                    showError('No puedes mezclar meses pendientes con validaciones en curso.', 'Selección Inválida');
+                    return;
+                }
+
                 // If we select, we must ensure all previous months are either Green, Yellow, or already selected
                 const monthIdx = months.findIndex(m => m.id === monthId);
 
@@ -503,6 +635,42 @@ const ContributionsManager = ({
             setVoucherPreview(null);
         } catch (error) {
             showError(error.message, 'Error al registrar pago');
+        } finally {
+            setIsUploading(false);
+        }
+    };
+
+    const handleReject = async () => {
+        try {
+            if (!selectedOrganizer) return;
+
+            const { value: reason, isDismissed } = await Swal.fire({
+                title: 'Motivo del Rechazo',
+                text: 'Ingresa la razón por la cual se rechaza este pago (opcional):',
+                input: 'text',
+                inputPlaceholder: 'Ej. Voucher ilegible, monto incorrecto...',
+                showCancelButton: true,
+                confirmButtonText: 'Rechazar Pago',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#dc2626', // red-600
+                cancelButtonColor: '#6b7280'
+            });
+
+            if (isDismissed || reason === undefined) return; // Cancelled
+
+            setIsUploading(true);
+            await api.treasury.rejectContribution(selectedOrganizer.organizador_id, selectedMonths, reason);
+
+            // Reload data to show updated status
+            if (onReload) {
+                await onReload();
+            }
+
+            await showSuccess('El pago ha sido rechazado y regresado a pendiente.', 'Pago Rechazado');
+            setIsValidatingModalOpen(false);
+            setSelectedMonths([]);
+        } catch (error) {
+            showError(error.message, 'Error al rechazar');
         } finally {
             setIsUploading(false);
         }
@@ -701,13 +869,22 @@ const ContributionsManager = ({
                                     </div>
 
                                     {selectedMonths.length > 0 && (
-                                        <Button
-                                            onClick={handleStartPayment}
-                                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg animate-bounce-subtle"
-                                        >
-                                            <DollarSign size={18} className="mr-2" />
-                                            Registrar {selectedMonths.length} {selectedMonths.length === 1 ? 'Mes' : 'Meses'}
-                                        </Button>
+                                        (() => {
+                                            // Determine if we are validating or paying based on first selected month
+                                            const firstMonthId = selectedMonths[0];
+                                            const status = getCellStatus(selectedOrganizer.organizador_id, firstMonthId);
+                                            const isValidating = status === 'validando';
+
+                                            return (
+                                                <Button
+                                                    onClick={isValidating ? () => setIsValidatingModalOpen(true) : handleStartPayment}
+                                                    className={`${isValidating ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'} text-white shadow-lg animate-bounce-subtle`}
+                                                >
+                                                    {isValidating ? <CheckCircle size={18} className="mr-2" /> : <DollarSign size={18} className="mr-2" />}
+                                                    {isValidating ? 'Validar' : 'Registrar'} {selectedMonths.length} {selectedMonths.length === 1 ? 'Mes' : 'Meses'}
+                                                </Button>
+                                            );
+                                        })()
                                     )}
 
                                     <button
@@ -975,78 +1152,151 @@ const ContributionsManager = ({
 
                         {/* File Upload Section */}
                         {/* Voucher Upload Section - Hide if validating an existing payment */}
+                        {/* Voucher Upload Section - Hide if validating an existing payment */}
                         {selectedFine?.estado !== 'validando' && (
                             <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
                                 <label className="block text-sm font-medium text-gray-700">
                                     Comprobante de Pago (Imagen) <span className="text-red-500">*</span>
                                 </label>
-                                <label className="block cursor-pointer group">
-                                    <div className={`border-2 border-dashed rounded-xl p-8 text-center transition-all ${voucherFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}>
-                                        <input
-                                            type="file"
-                                            accept="image/*"
-                                            onChange={handleFileChange}
-                                            className="hidden"
-                                            required={!selectedFine}
-                                        />
-                                        <div className="space-y-3">
-                                            {voucherFile ? (
-                                                <>
-                                                    <div className="w-12 h-12 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto">
-                                                        <CheckCircle size={24} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-green-800">{voucherFile.name}</p>
+
+                                <div className="flex gap-4">
+                                    {/* Left Column: Dropzone */}
+                                    <label className="flex-1 block cursor-pointer group">
+                                        <div className={`h-32 border-2 border-dashed rounded-xl flex flex-col items-center justify-center text-center transition-all ${voucherFile ? 'border-green-400 bg-green-50' : 'border-gray-300 hover:border-blue-400 hover:bg-blue-50'}`}>
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                onChange={handleFileChange}
+                                                className="hidden"
+                                                required={!selectedFine}
+                                            />
+                                            <div className="space-y-2">
+                                                {voucherFile ? (
+                                                    <>
+                                                        <div className="flex items-center justify-center gap-2 text-green-600">
+                                                            <CheckCircle size={20} />
+                                                            <span className="text-sm font-bold truncate max-w-[150px]">{voucherFile.name}</span>
+                                                        </div>
                                                         <p className="text-xs text-green-600">{(voucherFile.size / 1024).toFixed(1)} KB</p>
-                                                    </div>
-                                                    <p className="text-xs text-gray-400">Click para cambiar archivo</p>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <div className="w-12 h-12 bg-gray-100 text-gray-400 group-hover:bg-blue-100 group-hover:text-blue-500 rounded-full flex items-center justify-center mx-auto transition-colors">
-                                                        <Upload size={24} />
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-sm font-bold text-gray-700 group-hover:text-blue-700">
-                                                            Click para subir <span className="font-normal text-gray-500">o arrastra la imagen</span>
-                                                        </p>
-                                                        <p className="text-xs text-gray-400 mt-1">PNG, JPG hasta 5MB</p>
-                                                    </div>
-                                                </>
-                                            )}
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <div className="text-gray-400 group-hover:text-blue-500 transition-colors">
+                                                            <Upload size={24} className="mx-auto mb-1" />
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-sm font-bold text-gray-700 group-hover:text-blue-700">
+                                                                Click para subir
+                                                            </p>
+                                                            <p className="text-xs text-gray-400">PNG, JPG</p>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </div>
                                         </div>
-                                    </div>
-                                </label>
-                            </div>
-                        )}
-                        {voucherPreview && (
-                            <div className="w-32 h-32 border-2 border-gray-200 rounded-xl overflow-hidden flex-shrink-0">
-                                <img
-                                    src={voucherPreview}
-                                    alt="Preview"
-                                    className="w-full h-full object-cover"
-                                />
+                                    </label>
+
+                                    {/* Right Column: Preview */}
+                                    {voucherPreview && (
+                                        <div className="w-32 h-32 border-2 border-gray-200 rounded-xl overflow-hidden flex-shrink-0 bg-gray-50 flex items-center justify-center shadow-sm">
+                                            <img
+                                                src={voucherPreview}
+                                                alt="Preview"
+                                                className="w-full h-full object-contain"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
-                        <div className="flex gap-4 pt-4">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                className="flex-1"
-                                onClick={() => setIsRecordModalOpen(false)}
-                            >
-                                Cancelar
-                            </Button>
-                            <Button
-                                className="flex-1 bg-green-600 hover:bg-green-700 text-white"
-                                type="submit"
-                                loading={isUploading}
-                            >
-                                <CheckCircle size={18} className="mr-2" />
-                                {selectedFine?.estado === 'validando' ? 'Aprobar Pago' : 'Confirmar Pago'}
-                            </Button>
-                        </div>
+                        {/* Footer Buttons for Fine Validation */}
+                        {selectedFine?.estado === 'validando' && (
+                            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                                <Button
+                                    type="button"
+                                    onClick={() => {
+                                        setIsRecordModalOpen(false);
+                                        setSelectedFine(null);
+                                    }}
+                                    className="flex-1"
+                                >
+                                    Cerrar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100 border border-red-200"
+                                    onClick={async () => {
+                                        const { value: reason, isDismissed } = await Swal.fire({
+                                            title: 'Motivo del Rechazo',
+                                            text: '¿Por qué rechazas este pago de penalidad?',
+                                            input: 'text',
+                                            showCancelButton: true,
+                                            confirmButtonText: 'Rechazar',
+                                            confirmButtonColor: '#dc2626'
+                                        });
+                                        if (isDismissed || reason === undefined) return;
+
+                                        try {
+                                            setIsUploading(true);
+                                            await api.treasury.rejectFine(selectedFine.id, reason);
+                                            const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                                            setFines(updatedFines);
+                                            if (onReload) await onReload();
+                                            showSuccess('Penalidad rechazada.', 'Rechazado');
+                                            setIsRecordModalOpen(false);
+                                        } catch (e) { showError(e.message); }
+                                        finally { setIsUploading(false); }
+                                    }}
+                                >
+                                    <XCircle size={18} className="mr-2" /> Rechazar
+                                </Button>
+                                <Button
+                                    type="button"
+                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                                    onClick={async () => {
+                                        try {
+                                            setIsUploading(true);
+                                            await api.treasury.validateFine(selectedFine.id, formAccountId || accounts[0]?.id);
+                                            const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                                            setFines(updatedFines);
+                                            if (onReload) await onReload();
+                                            showSuccess('Penalidad validada correctamente.', 'Validado');
+                                            setIsRecordModalOpen(false);
+                                        } catch (e) { showError(e.message); }
+                                        finally { setIsUploading(false); }
+                                    }}
+                                >
+                                    <CheckCircle size={18} className="mr-2" /> Validar
+                                </Button>
+                            </div>
+                        )}
+
+                        {/* Footer Buttons for Record/Upload */}
+                        {selectedFine?.estado !== 'validando' && (
+                            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        setIsRecordModalOpen(false);
+                                        setSelectedFine(null);
+                                    }}
+                                    className="flex-1"
+                                >
+                                    Cancelar
+                                </Button>
+                                <Button
+                                    onClick={handleApproveSubmit}
+                                    className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                                    loading={isUploading}
+                                    disabled={!voucherFile && !selectedFine}
+                                >
+                                    <Upload size={18} className="mr-2" />
+                                    {selectedFine ? 'Enviar Pago' : 'Registrar Pago'}
+                                </Button>
+                            </div>
+                        )}
                     </form>
                 )}
             </Modal >
@@ -1054,7 +1304,10 @@ const ContributionsManager = ({
             {/* Validation Modal */}
             < Modal
                 isOpen={isValidatingModalOpen}
-                onClose={() => setIsValidatingModalOpen(false)}
+                onClose={() => {
+                    setIsValidatingModalOpen(false);
+                    setSelectedMonths([]); // Clear selection when closing validation modal
+                }}
                 title="Validar Aporte de Organizador"
             >
                 {selectedOrganizer && selectedMonths.length > 0 && (
@@ -1100,11 +1353,24 @@ const ContributionsManager = ({
                                         <Button
                                             type="button"
                                             variant="ghost"
-                                            onClick={() => setIsValidatingModalOpen(false)}
+                                            onClick={() => {
+                                                setIsValidatingModalOpen(false);
+                                                setSelectedMonths([]); // Clear selection on cancel
+                                            }}
                                             className="flex-1"
                                         >
                                             Cerrar
                                         </Button>
+
+                                        <Button
+                                            type="button"
+                                            className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100 border border-red-200"
+                                            onClick={handleReject}
+                                            disabled={isUploading}
+                                        >
+                                            <XCircle size={18} className="mr-2" /> Rechazar
+                                        </Button>
+
                                         <Button
                                             onClick={handleApproveSubmit}
                                             className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg"

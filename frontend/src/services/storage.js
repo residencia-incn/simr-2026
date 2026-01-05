@@ -2,7 +2,7 @@
  * Recursively scans and truncates strings that are too large (likely base64 images)
  * to prevent QuotaExceededError in LocalStorage.
  */
-function sanitizeData(data, maxStringLength = 102400) { // 100KB limit per string
+function sanitizeData(data, maxStringLength = 5242880) { // 5MB limit per string (effectively defer to localStorage quota)
     if (typeof data === 'string') {
         if (data.length > maxStringLength) {
             console.warn(`[Storage] Truncating large string (${data.length} bytes). Original content likely an oversized base64 image.`);

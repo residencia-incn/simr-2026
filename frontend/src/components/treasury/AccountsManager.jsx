@@ -3,31 +3,33 @@ import { Plus, Edit2, Trash2, DollarSign, Building, Wallet, ArrowRightLeft, Arro
 import { Button, Card, FormField, Modal, ConfirmDialog, Table } from '../ui';
 import { showError } from '../../utils/alerts';
 
-const AccountsManager = ({ accounts, financialAssets = [], transactions = [], onCreateAccount, onUpdateAccount, onDeleteAccount, onTransfer }) => {
+const AccountsManager = ({ accounts, banks = [], wallets = [], transactions = [], onCreateAccount, onUpdateAccount, onDeleteAccount, onTransfer }) => {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
     const [editingAccount, setEditingAccount] = useState(null);
     const [formData, setFormData] = useState({
         nombre: '',
-        tipo: 'banco', // Legacy default
-        numero_cuenta: '',
-        descripcion: '',
-        financialAssetId: ''
+        tipo: 'banco',
+        currency: 'PEN',
+        // Bank specific
+        bank_name: '',
+        account_number: '',
+        cci: '',
+        // Wallet specific
+        wallet_name: '',
+        phone_number: '',
+        // Common
+        holder_name: '',
+        descripcion: ''
     });
     const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, account: null });
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            // Find selected asset details to save snapshot/derived values
-            const selectedAsset = financialAssets.find(a => a.id === formData.financialAssetId);
-
             const accountData = {
                 ...formData,
-                // Ensure derived values are consistent if asset is selected
-                tipo: selectedAsset ? selectedAsset.type : formData.tipo,
-                numero_cuenta: selectedAsset ? (selectedAsset.number || selectedAsset.phone || '') : formData.numero_cuenta,
-                // If using backend, ensure these fields are expected.
+                createdAt: editingAccount ? editingAccount.createdAt : new Date().toISOString()
             };
 
             if (editingAccount) {
@@ -46,9 +48,14 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
         setFormData({
             nombre: account.nombre,
             tipo: account.tipo,
-            numero_cuenta: account.numero_cuenta || '',
-            descripcion: account.descripcion || '',
-            financialAssetId: account.financialAssetId || ''
+            currency: account.currency || 'PEN',
+            bank_name: account.bank_name || '',
+            account_number: account.account_number || account.numero_cuenta || '', // Fallback to legacy
+            cci: account.cci || '',
+            wallet_name: account.wallet_name || '',
+            phone_number: account.phone_number || '',
+            holder_name: account.holder_name || '',
+            descripcion: account.descripcion || ''
         });
         setIsModalOpen(true);
     };
@@ -68,28 +75,40 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
         setFormData({
             nombre: '',
             tipo: 'banco',
-            numero_cuenta: '',
-            descripcion: '',
-            financialAssetId: ''
+            currency: 'PEN',
+            bank_name: '',
+            account_number: '',
+            cci: '',
+            wallet_name: '',
+            phone_number: '',
+            holder_name: '',
+            descripcion: ''
         });
     };
 
-    const handleAssetChange = (assetId) => {
-        const asset = financialAssets.find(a => a.id === assetId);
-        if (asset) {
-            // Determine account number based on type or availability
-            const accountNumber = asset.number || asset.phone || '';
-
-            setFormData(prev => ({
-                ...prev,
-                financialAssetId: assetId,
-                nombre: asset.name, // Auto-fill name
-                tipo: asset.type,
-                numero_cuenta: accountNumber,
-                descripcion: `Cuenta basada en ${asset.subtype || asset.type}`
-            }));
-        } else {
-            setFormData(prev => ({ ...prev, financialAssetId: '' }));
+    const handleConfiguredAssetChange = (assetId, type) => {
+        if (type === 'banco') {
+            const bank = banks.find(b => b.id === assetId);
+            if (bank) {
+                setFormData(prev => ({
+                    ...prev,
+                    bank_name: bank.name,
+                    nombre: `${bank.shortName || bank.name} - ${prev.currency}`,
+                    // Reset others
+                    wallet_name: ''
+                }));
+            }
+        } else if (type === 'billetera') {
+            const wallet = wallets.find(w => w.id === assetId);
+            if (wallet) {
+                setFormData(prev => ({
+                    ...prev,
+                    wallet_name: wallet.name,
+                    nombre: `${wallet.shortName || wallet.name} - ${prev.phone_number || 'Principal'}`,
+                    // Reset others
+                    bank_name: ''
+                }));
+            }
         }
     };
 
@@ -99,19 +118,38 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
 
     // Helper to render logo/icon for a given account
     const renderAccountLogo = (account) => {
-        const asset = financialAssets.find(a => a.id === account.financialAssetId);
-        const subtype = asset ? asset.subtype : (account.descripcion?.includes('BCP') ? 'BCP' : ''); // Fallback guessing
+        const { tipo, bank_name, wallet_name, nombre } = account;
+
+        // Try to find configured logo
+        let configuredLogo = null;
+        if (tipo === 'banco' && bank_name) {
+            const bank = banks.find(b => b.name === bank_name);
+            if (bank?.logo) configuredLogo = bank.logo;
+        } else if (tipo === 'billetera' && wallet_name) {
+            const wallet = wallets.find(w => w.name === wallet_name);
+            if (wallet?.logo) configuredLogo = wallet.logo;
+        }
+
+        if (configuredLogo) {
+            return (
+                <div className="w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm bg-white border border-gray-100 overflow-hidden">
+                    <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain p-1" />
+                </div>
+            );
+        }
 
         let color = 'bg-gray-100 text-gray-600';
         let text = <Building size={24} />;
 
-        // Match logic from Settings (could be shared in utils)
-        if (subtype === 'BCP') { color = 'bg-orange-500 text-white'; text = 'BCP'; }
-        else if (subtype === 'Interbank') { color = 'bg-green-600 text-white'; text = 'IB'; }
-        else if (subtype === 'BBVA') { color = 'bg-blue-600 text-white'; text = 'BBVA'; }
-        else if (subtype === 'Yape') { color = 'bg-purple-600 text-white'; text = 'Y'; }
-        else if (subtype === 'Plin') { color = 'bg-cyan-500 text-white'; text = 'Plin'; }
-        else if (account.tipo === 'efectivo') { color = 'bg-green-100 text-green-700'; text = <DollarSign size={24} />; }
+        const lowerName = (bank_name || wallet_name || nombre || '').toLowerCase();
+
+        if (lowerName.includes('bcp') || lowerName.includes('crédito')) { color = 'bg-orange-500 text-white'; text = 'BCP'; }
+        else if (lowerName.includes('interbank')) { color = 'bg-green-600 text-white'; text = 'IB'; }
+        else if (lowerName.includes('bbva')) { color = 'bg-blue-600 text-white'; text = 'BBVA'; }
+        else if (lowerName.includes('scotia')) { color = 'bg-red-600 text-white'; text = 'S'; }
+        else if (lowerName.includes('yape')) { color = 'bg-purple-600 text-white'; text = 'Y'; }
+        else if (lowerName.includes('plin')) { color = 'bg-cyan-500 text-white'; text = 'Plin'; }
+        else if (tipo === 'efectivo') { color = 'bg-green-100 text-green-700'; text = <DollarSign size={24} />; }
 
         return (
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm ${color}`}>
@@ -157,7 +195,7 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
                                     <h4 className="font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{account.nombre}</h4>
                                     <p className="text-xs text-gray-500 capitalize flex items-center gap-1">
                                         {account.tipo}
-                                        {account.financialAssetId && <span className="text-xs text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full ml-1">Vinculada</span>}
+                                        {account.currency && <span className="font-mono text-gray-400">[{account.currency}]</span>}
                                     </p>
                                 </div>
                             </div>
@@ -179,10 +217,20 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
                             </div>
                         </div>
 
-                        {account.numero_cuenta && (
+                        {(account.account_number || account.numero_cuenta || account.phone_number) && (
                             <div className="mb-4 p-3 bg-gray-50 rounded-lg border border-gray-100">
-                                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">Número de Cuenta / Teléfono</p>
-                                <p className="text-sm font-mono text-gray-700 tracking-wide">{account.numero_cuenta}</p>
+                                <p className="text-[10px] text-gray-500 font-bold uppercase mb-1">
+                                    {account.tipo === 'billetera' ? 'Celular' : 'Número de Cuenta'}
+                                </p>
+                                <p className="text-sm font-mono text-gray-700 tracking-wide">
+                                    {account.account_number || account.numero_cuenta || account.phone_number}
+                                </p>
+                                {account.cci && (
+                                    <>
+                                        <p className="text-[10px] text-gray-500 font-bold uppercase mb-1 mt-2">CCI</p>
+                                        <p className="text-xs font-mono text-gray-600">{account.cci}</p>
+                                    </>
+                                )}
                             </div>
                         )}
 
@@ -286,68 +334,125 @@ const AccountsManager = ({ accounts, financialAssets = [], transactions = [], on
                     {/* Simplified for brevity in replacement, but I must match exact target content to keep it safe. */}
                     {/* Actually I'll use the existing 'Create/Edit Modal' block as target to append the TransferModal after it */}
 
-                    {/* 1. Asset Selection */}
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            Institución / Activo Financiero <span className="text-red-500">*</span>
-                        </label>
-                        {financialAssets.length > 0 ? (
-                            <select
-                                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                                value={formData.financialAssetId}
-                                onChange={(e) => handleAssetChange(e.target.value)}
-                                required
-                            >
-                                <option value="">Seleccionar Institución...</option>
-                                {financialAssets.map(asset => (
-                                    <option key={asset.id} value={asset.id}>
-                                        {asset.subtype || asset.type} - {asset.name}
-                                    </option>
-                                ))}
-                            </select>
-                        ) : (
-                            <div className="p-3 bg-yellow-50 text-yellow-800 text-sm rounded-lg border border-yellow-200">
-                                No tienes cuentas financieras configuradas.
-                                <br />
-                                <span className="text-xs">Ve a <strong>Configuración {'>'} Cuentas Financieras</strong> para agregar bancos o billeteras.</span>
-                            </div>
-                        )}
-                        <p className="text-xs text-gray-500 mt-1">Elige la entidad financiera base para esta cuenta.</p>
+                    {/* 1. Account Configuration Flow */}
+                    <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                            label="Tipo de Cuenta"
+                            type="select"
+                            value={formData.tipo}
+                            onChange={(e) => setFormData({ ...formData, tipo: e.target.value })}
+                            options={[
+                                { value: 'banco', label: 'Cuenta Bancaria' },
+                                { value: 'billetera', label: 'Billetera Digital' },
+                                { value: 'efectivo', label: 'Efectivo / Caja' }
+                            ]}
+                            required
+                        />
+                        <FormField
+                            label="Moneda"
+                            type="select"
+                            value={formData.currency}
+                            onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
+                            options={[
+                                { value: 'PEN', label: 'Soles (S/)' },
+                                { value: 'USD', label: 'Dólares ($)' }
+                            ]}
+                            required
+                        />
                     </div>
 
-                    {/* 2. Account Name (Auto-filled but editable) */}
-                    <FormField
-                        label="Nombre Personalizado"
-                        name="nombre"
-                        value={formData.nombre}
-                        onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                        placeholder="Ej: BCP Principal Soles"
-                        required
-                        helpText="Un nombre para identificar esta cuenta en el sistema."
-                    />
-
-                    {/* 3. Read-only Details */}
-                    {formData.financialAssetId && (
-                        <div className="grid grid-cols-2 gap-4">
-                            <div className="p-3 bg-gray-50 rounded-lg">
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Tipo</label>
-                                <p className="text-sm font-medium capitalize">{formData.tipo}</p>
+                    {/* Bank Specific Fields */}
+                    {formData.tipo === 'banco' && (
+                        <div className="space-y-4 p-4 bg-blue-50 rounded-xl">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Entidad Bancaria</label>
+                                <select
+                                    className="w-full px-3 py-2 border rounded-lg bg-white"
+                                    value={banks.find(b => b.name === formData.bank_name)?.id || ''}
+                                    onChange={(e) => handleConfiguredAssetChange(e.target.value, 'banco')}
+                                >
+                                    <option value="">Seleccionar Banco...</option>
+                                    {banks.map(b => (
+                                        <option key={b.id} value={b.id}>{b.name}</option>
+                                    ))}
+                                </select>
                             </div>
-                            <div className="p-3 bg-gray-50 rounded-lg">
-                                <label className="block text-xs font-bold text-gray-500 mb-1">Número / Cuenta</label>
-                                <p className="text-sm font-mono">{formData.numero_cuenta || 'No especificado'}</p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                    label="Número de Cuenta"
+                                    value={formData.account_number}
+                                    onChange={(e) => setFormData({ ...formData, account_number: e.target.value })}
+                                    placeholder="000-000-000..."
+                                />
+                                <FormField
+                                    label="CCI (Interbancario)"
+                                    value={formData.cci}
+                                    onChange={(e) => setFormData({ ...formData, cci: e.target.value })}
+                                    placeholder="002-..."
+                                />
+                            </div>
+                            <FormField
+                                label="Titular de la Cuenta"
+                                value={formData.holder_name}
+                                onChange={(e) => setFormData({ ...formData, holder_name: e.target.value })}
+                                placeholder="Ej. Asociación SIMR"
+                            />
+                        </div>
+                    )}
+
+                    {/* Wallet Specific Fields */}
+                    {formData.tipo === 'billetera' && (
+                        <div className="space-y-4 p-4 bg-purple-50 rounded-xl">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Billetera Digital</label>
+                                <select
+                                    className="w-full px-3 py-2 border rounded-lg bg-white"
+                                    value={wallets.find(w => w.name === formData.wallet_name)?.id || ''}
+                                    onChange={(e) => handleConfiguredAssetChange(e.target.value, 'billetera')}
+                                >
+                                    <option value="">Seleccionar Billetera...</option>
+                                    {wallets.map(w => (
+                                        <option key={w.id} value={w.id}>{w.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField
+                                    label="Número de Celular"
+                                    value={formData.phone_number}
+                                    onChange={(e) => setFormData({ ...formData, phone_number: e.target.value })}
+                                    placeholder="999 888 777"
+                                />
+                                <FormField
+                                    label="A nombre de"
+                                    value={formData.holder_name}
+                                    onChange={(e) => setFormData({ ...formData, holder_name: e.target.value })}
+                                    placeholder="Nombre del titular"
+                                />
                             </div>
                         </div>
                     )}
 
-                    {/* 4. Description */}
-                    <FormField
-                        label="Descripción (Opcional)"
-                        name="descripcion"
-                        value={formData.descripcion}
-                        onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
-                        placeholder="Ej: Cuenta principal para ingresos de inscripciones"
-                    />
+                    {/* Common Fields */}
+                    <div className="space-y-4">
+                        <FormField
+                            label="Nombre para Mostrar (Alias)"
+                            name="nombre"
+                            value={formData.nombre}
+                            onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                            placeholder="Ej: BCP Principal Soles"
+                            required
+                            helpText="Este nombre se usará en los selectores de cuenta."
+                        />
+
+                        <FormField
+                            label="Descripción Adicional"
+                            name="descripcion"
+                            value={formData.descripcion}
+                            onChange={(e) => setFormData({ ...formData, descripcion: e.target.value })}
+                            placeholder="Ej: Cuenta para recepción de inscripciones..."
+                        />
+                    </div>
 
                     <div className="flex gap-3 pt-4 border-t border-gray-100">
                         <Button

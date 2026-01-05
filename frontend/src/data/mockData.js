@@ -789,7 +789,11 @@ export const INITIAL_ACCOUNTS = [
         nombre: 'BCP Principal',
         tipo: 'banco',
         saldo_actual: 0,
-        numero_cuenta: '191-XXXXXXXX-X-XX',
+        currency: 'PEN',
+        bank_name: 'Banco de Crédito del Perú',
+        account_number: '191-12345678-0-01',
+        cci: '002-191-001234567800-15',
+        holder_name: 'Asociación SIMR',
         descripcion: 'Cuenta principal para ingresos de inscripciones',
         createdAt: new Date().toISOString()
     },
@@ -798,16 +802,20 @@ export const INITIAL_ACCOUNTS = [
         nombre: 'Caja Chica',
         tipo: 'efectivo',
         saldo_actual: 0,
+        currency: 'PEN',
         descripcion: 'Efectivo para gastos menores',
         createdAt: new Date().toISOString()
     },
     {
         id: 'acc-3',
-        nombre: 'Interbank Eventos',
-        tipo: 'banco',
+        nombre: 'Billetera Digital Inscripciones',
+        tipo: 'billetera',
         saldo_actual: 0,
-        numero_cuenta: '898-XXXXXXXX-X-XX',
-        descripcion: 'Cuenta secundaria para patrocinios',
+        currency: 'PEN',
+        wallet_name: 'Yape',
+        phone_number: '999 888 777',
+        holder_name: 'Tesorero SIMR',
+        descripcion: 'Yape para recepción rápida',
         createdAt: new Date().toISOString()
     }
 ];
@@ -830,8 +838,23 @@ export const TREASURY_CONFIG = {
             { id: '2026-04', label: 'Abril', deadline: '2026-04-30' },
             { id: '2026-05', label: 'Mayo', deadline: '2026-05-31' },
             { id: '2026-06', label: 'Junio', deadline: '2026-06-30' }
-        ]
-    }
+        ],
+        // Default accounts for flows
+        defaultContributionAccount: 'acc-1',
+        inscriptionAccounts: ['acc-1', 'acc-3']
+    },
+    banks: [
+        { id: 'bank-1', name: 'Banco de Crédito del Perú', shortName: 'BCP', logo: 'BCP' },
+        { id: 'bank-2', name: 'Interbank', shortName: 'IBK', logo: 'IB' },
+        { id: 'bank-3', name: 'BBVA', shortName: 'BBVA', logo: 'BBVA' },
+        { id: 'bank-4', name: 'Scotiabank', shortName: 'Scotia', logo: 'S' },
+        { id: 'bank-5', name: 'Banco de la Nación', shortName: 'BN', logo: 'BN' }
+    ],
+    wallets: [
+        { id: 'wallet-1', name: 'Yape', shortName: 'Yape', logo: 'Y' },
+        { id: 'wallet-2', name: 'Plin', shortName: 'Plin', logo: 'P' },
+        { id: 'wallet-3', name: 'Agora', shortName: 'Agora', logo: 'A' }
+    ]
 };
 
 /**

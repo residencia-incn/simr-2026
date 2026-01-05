@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, Check, X, FileText, UserPlus, AlertCircle, Info, DollarSign } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
+import Swal from 'sweetalert2';
 
 const NotificationMenu = () => {
     const [isOpen, setIsOpen] = useState(false);
@@ -84,6 +85,21 @@ const NotificationMenu = () => {
                                             key={notif.id || idx}
                                             onClick={async () => {
                                                 await api.notifications.markAsRead(notif.id);
+
+                                                // Intercept rejections to show modal
+                                                if (notif.type === 'fine_rejection' || notif.type === 'contribution_rejection') {
+                                                    setIsOpen(false);
+                                                    await Swal.fire({
+                                                        title: notif.title,
+                                                        text: notif.message, // SweetAlert2 handles text escaping mostly, or use html if needed
+                                                        icon: 'error', // Rejection implies error/warning
+                                                        confirmButtonText: 'Entendido',
+                                                        confirmButtonColor: '#2563eb'
+                                                    });
+                                                    loadNotifications();
+                                                    return;
+                                                }
+
                                                 if (notif.link) {
                                                     // Redirection logic
                                                     if (notif.link.includes('?')) {

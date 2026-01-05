@@ -970,19 +970,52 @@ const RegistrationView = () => {
                                                 }
 
                                                 return validAccounts.map(account => {
-                                                    const asset = treasuryData.config?.financialAssets?.find(a => a.id === account.financialAssetId);
                                                     const isSelected = selectedPaymentAccount === account.id;
 
-                                                    // Determine visual style based on asset type/subtype
-                                                    const subtype = asset?.subtype || account.tipo;
+                                                    // Determine visual style based on account details
+                                                    const name = account.bank_name || account.wallet_name || account.nombre || '';
+                                                    const lowerName = name.toLowerCase();
+                                                    const displayType = account.tipo === 'billetera' ? 'Billetera' : 'Banco';
+
+                                                    // Try to find configured logo
+                                                    let configuredLogo = null;
+                                                    if (treasuryData.config?.banks && account.tipo === 'banco') {
+                                                        const bank = treasuryData.config.banks.find(b => b.name === account.bank_name);
+                                                        if (bank?.logo) configuredLogo = bank.logo;
+                                                    } else if (treasuryData.config?.wallets && account.tipo === 'billetera') {
+                                                        const wallet = treasuryData.config.wallets.find(w => w.name === account.wallet_name);
+                                                        if (wallet?.logo) configuredLogo = wallet.logo;
+                                                    }
+
                                                     let colorClass = 'bg-gray-50 border-gray-200';
                                                     let iconClass = 'bg-gray-200 text-gray-600';
+                                                    let shortName = displayType;
 
-                                                    if (subtype === 'Yape') { colorClass = 'bg-purple-50 border-purple-200'; iconClass = 'bg-purple-600 text-white'; }
-                                                    else if (subtype === 'Plin') { colorClass = 'bg-cyan-50 border-cyan-200'; iconClass = 'bg-cyan-500 text-white'; }
-                                                    else if (subtype === 'BCP') { colorClass = 'bg-orange-50 border-orange-200'; iconClass = 'bg-orange-500 text-white'; }
-                                                    else if (subtype === 'Interbank') { colorClass = 'bg-green-50 border-green-200'; iconClass = 'bg-green-600 text-white'; }
-                                                    else if (subtype === 'BBVA') { colorClass = 'bg-blue-50 border-blue-200'; iconClass = 'bg-blue-600 text-white'; }
+                                                    if (lowerName.includes('yape')) {
+                                                        colorClass = 'bg-purple-50 border-purple-200';
+                                                        iconClass = 'bg-purple-600 text-white';
+                                                        shortName = 'Yape';
+                                                    }
+                                                    else if (lowerName.includes('plin')) {
+                                                        colorClass = 'bg-cyan-50 border-cyan-200';
+                                                        iconClass = 'bg-cyan-500 text-white';
+                                                        shortName = 'Plin';
+                                                    }
+                                                    else if (lowerName.includes('bcp') || lowerName.includes('crédito')) {
+                                                        colorClass = 'bg-orange-50 border-orange-200';
+                                                        iconClass = 'bg-orange-500 text-white';
+                                                        shortName = 'BCP';
+                                                    }
+                                                    else if (lowerName.includes('interbank')) {
+                                                        colorClass = 'bg-green-50 border-green-200';
+                                                        iconClass = 'bg-green-600 text-white';
+                                                        shortName = 'IB';
+                                                    }
+                                                    else if (lowerName.includes('bbva')) {
+                                                        colorClass = 'bg-blue-50 border-blue-200';
+                                                        iconClass = 'bg-blue-600 text-white';
+                                                        shortName = 'BBVA';
+                                                    }
 
                                                     if (isSelected) {
                                                         colorClass = colorClass.replace('bg-', 'bg-opacity-50 ring-2 ring-blue-500 border-blue-500');
@@ -998,13 +1031,51 @@ const RegistrationView = () => {
                                                             className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'} ${showAccountError && !isSelected ? 'border-red-300 bg-red-50' : ''}`}
                                                         >
                                                             <div className="flex items-center gap-3">
-                                                                <div className={`w-10 h-10 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm ${iconClass}`}>
-                                                                    {subtype?.substring(0, 4) || '??'}
+                                                                <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${!configuredLogo ? iconClass : 'bg-white border border-gray-100'}`}>
+                                                                    {configuredLogo ? (
+                                                                        <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain p-1" />
+                                                                    ) : (
+                                                                        shortName.substring(0, 4)
+                                                                    )}
                                                                 </div>
-                                                                <div className="flex-1">
-                                                                    <p className="font-bold text-gray-900 leading-tight">{asset?.name || account.nombre}</p>
-                                                                    <p className="text-sm font-mono text-gray-700 mt-0.5">{account.numero_cuenta}</p>
-                                                                    {asset?.cci && <p className="text-xs text-gray-500 font-mono">CCI: {asset.cci}</p>}
+                                                                <div className="flex-1 min-w-0">
+                                                                    {displayType === 'Billetera' ? (
+                                                                        <>
+                                                                            <p className="font-bold text-gray-900 text-2xl leading-none tracking-tight mb-1">
+                                                                                {account.phone_number || account.account_number}
+                                                                            </p>
+                                                                            <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">
+                                                                                {account.holder_name || 'Titular no registrado'}
+                                                                            </p>
+                                                                            <div className="mt-1 flex items-center gap-2">
+                                                                                <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">
+                                                                                    {name}
+                                                                                </span>
+                                                                            </div>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <p className="font-bold text-gray-900 text-lg leading-tight mb-0.5">
+                                                                                {name || account.nombre}
+                                                                            </p>
+                                                                            <p className="text-xs text-gray-600 font-medium uppercase mb-2">
+                                                                                {account.holder_name || 'Titular no registrado'}
+                                                                            </p>
+
+                                                                            <div className="space-y-1">
+                                                                                <p className="flex items-center gap-2">
+                                                                                    <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold tracking-wider min-w-[50px] text-center">Cuenta</span>
+                                                                                    <span className="font-mono text-gray-800 text-xs tracking-wide">{account.account_number || account.numero_cuenta}</span>
+                                                                                </p>
+                                                                                {account.cci && (
+                                                                                    <p className="flex items-center gap-2">
+                                                                                        <span className="text-[10px] uppercase bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-bold tracking-wider min-w-[50px] text-center">CCI</span>
+                                                                                        <span className="font-mono text-gray-600 text-xs tracking-wide">{account.cci}</span>
+                                                                                    </p>
+                                                                                )}
+                                                                            </div>
+                                                                        </>
+                                                                    )}
                                                                 </div>
                                                                 {isSelected && <CheckCircle className="text-blue-600" size={24} />}
                                                             </div>
@@ -1035,7 +1106,11 @@ const RegistrationView = () => {
                                                             <div className="p-2 bg-white rounded-lg border border-green-100"><FileCheck className="text-green-500" size={20} /></div>
                                                             <div>
                                                                 <p className="text-xs font-bold text-gray-900">Archivo cargado</p>
-                                                                <button type="button" onClick={(e) => { e.stopPropagation(); clearVoucher(); }} className="text-xs text-red-500 hover:underline">Eliminar</button>
+                                                                <button type="button" onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    clearVoucher();
+                                                                    if (fileInputRef.current) fileInputRef.current.value = '';
+                                                                }} className="text-xs text-red-500 hover:underline">Eliminar</button>
                                                             </div>
                                                         </div>
                                                     </div>

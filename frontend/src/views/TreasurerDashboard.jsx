@@ -68,6 +68,7 @@ const TreasurerDashboard = ({ user }) => {
         budgetPlan = [],
         config = {},
         categories = { income: [], expense: [] },
+        fines = [], // Add fines here
         loading: treasuryLoading = false,
         totalBalance = 0,
         accountBalances = [],
@@ -105,19 +106,21 @@ const TreasurerDashboard = ({ user }) => {
 
     // Data Fetching (Legacy compatibility)
     const fetchDashboardData = React.useCallback(async () => {
-        const [txs, cats, pending, attendees, budgetsList] = await Promise.all([
+        const [txs, cats, pending, attendees, budgetsList, usersList] = await Promise.all([
             api.treasury.getTransactions(),
             api.treasury.getCategories(),
             api.registrations.getAll(),
             api.attendees.getAll(),
-            api.treasury.getBudgets()
+            api.treasury.getBudgets(),
+            api.users.getAll()
         ]);
         return {
             transactions: txs,
             categories: cats,
             pendingRegistrations: pending,
             confirmedAttendees: attendees,
-            budgets: budgetsList
+            budgets: budgetsList,
+            allUsers: usersList
         };
     }, []);
 
@@ -128,7 +131,8 @@ const TreasurerDashboard = ({ user }) => {
         categories: dashboardCategories = { income: [], expense: [] },
         pendingRegistrations = [],
         confirmedAttendees = [],
-        budgets = []
+        budgets = [],
+        allUsers = []
     } = data || {};
 
     // --- Validation Logic: Merge Registrations + Contributions ---
@@ -139,6 +143,7 @@ const TreasurerDashboard = ({ user }) => {
         contributionPlan.filter(c => c.estado === 'validando').forEach(c => {
             const key = `${c.organizador_id}-${c.voucheredAt || 'novoucher'}`;
             if (!groups[key]) {
+                const user = allUsers.find(u => u.id === c.organizador_id);
                 groups[key] = {
                     id: key,
                     type: 'Contribution', // Marker
@@ -151,27 +156,67 @@ const TreasurerDashboard = ({ user }) => {
                     mes_labels: [],
 
                     // Fields for VerificationList compatibility
-                    dni: 'Organizador',
-                    occupation: 'Comité Organizador',
-                    institution: 'SIMR 2026',
-                    modalidad: 'Aporte Mensual',
+                    dni: user?.documentId || user?.dni || 'Organizador',
+                    occupation: user?.occupation || user?.role || 'Comité Organizador',
+                    institution: user?.institution || 'SIMR 2026',
+                    modalidad: `Aporte: ${c.mes_label}`,
                     ticketType: null, // Use modalidad
-                    email: '-'
+                    email: user?.email || '-',
+                    breakdown: [] // Initialize breakdown array
                 };
             }
             groups[key].months.push(c.mes);
             groups[key].mes_labels.push(c.mes_label);
             groups[key].amount += c.monto_esperado;
+            groups[key].breakdown.push({
+                label: `Aporte ${c.mes_label}`,
+                price: c.monto_esperado
+            });
+            // Update modalida dynamically as we add months
+            groups[key].modalidad = `Aporte: ${groups[key].mes_labels.join(', ')}`;
         });
 
         return Object.values(groups).map(g => ({
             ...g,
             details: `Meses: ${g.mes_labels.join(', ')}`
         }));
-    }, [contributionPlan]);
+    }, [contributionPlan, allUsers]);
+
+    const pendingFines = useMemo(() => {
+        return fines.filter(f => f.estado === 'validando').map(f => {
+            const user = allUsers.find(u => u.id === f.userId);
+            const userName = user?.name || contributionPlan.find(c => c.organizador_id === f.userId)?.organizador_nombre || 'Usuario';
+            // Use fallbacks for monto/amount and reason/description to handle data inconsistency
+            const amountVal = parseFloat(f.monto || f.amount || 0);
+            const reasonVal = f.reason || f.descripcion || 'Sin motivo';
+
+            return {
+                id: f.id,
+                type: 'Contribution',
+                isFine: true,
+                organizerId: f.userId,
+                name: userName,
+                voucheredAt: f.paidAt,
+                voucherData: f.voucher,
+                amount: amountVal,
+                modalidad: `Penalidad: ${reasonVal}`,
+                details: `Penalidad`,
+
+                dni: user?.documentId || user?.dni || 'Organizador',
+                occupation: user?.occupation || user?.role || 'Comité Organizador',
+                institution: user?.institution || 'SIMR 2026',
+                ticketType: null,
+                email: user?.email || '-',
+                breakdown: [{
+                    label: `Penalidad: ${reasonVal}`,
+                    price: amountVal
+                }]
+            };
+        });
+    }, [fines, contributionPlan, allUsers]);
 
     // Combine for display (Contributions first)
-    const allPendingValidations = [...pendingContributions, ...pendingRegistrations];
+    const allPendingValidations = [...pendingContributions, ...pendingFines, ...pendingRegistrations];
 
     // Budget Update Handler
     const handleBudgetUpdate = async (category, amount) => {
@@ -645,8 +690,13 @@ const TreasurerDashboard = ({ user }) => {
             onConfirm: async () => {
                 try {
                     if (reg.type === 'Contribution') {
-                        await validateContribution(reg.organizerId, reg.months, null); // Default account
-                        showSuccess(`Aporte validado por S/ ${reg.amount.toFixed(2)}`, 'Aporte Validado');
+                        if (reg.isFine) {
+                            await api.treasury.validateFine(reg.id, accounts[0]?.id);
+                            showSuccess(`Penalidad validada por S/ ${reg.amount.toFixed(2)}`, 'Validado');
+                        } else {
+                            await validateContribution(reg.organizerId, reg.months, null);
+                            showSuccess(`Aporte validado por S/ ${reg.amount.toFixed(2)}`, 'Aporte Validado');
+                        }
                     } else {
                         // Validate that we have at least one account
                         if (accounts.length === 0) {
@@ -675,33 +725,28 @@ const TreasurerDashboard = ({ user }) => {
         });
     };
 
-    const handleRejectRegistration = async (id) => {
+    const handleRejectRegistration = async (id, reason) => {
         const item = allPendingValidations.find(i => i.id === id);
 
-        setConfirmConfig({
-            isOpen: true,
-            title: item?.type === 'Contribution' ? 'Rechazar Aporte' : 'Rechazar Inscripción',
-            message: item?.type === 'Contribution'
-                ? '¿Rechazar este comprobante? El estado volverá a pendiente.'
-                : '¿Rechazar esta inscripción? Se eliminará de la lista de pendientes.',
-            type: 'danger',
-            onConfirm: async () => {
-                try {
-                    if (item?.type === 'Contribution') {
-                        await rejectContribution(item.organizerId, item.months, 'Comprobante rechazado por tesorería');
-                        showSuccess('El aporte ha sido rechazado.', 'Rechazado');
-                    } else {
-                        await api.registrations.remove(id);
-                    }
-
-                    await Promise.all([loadData(), reloadTreasury()]);
-                    setConfirmConfig(prev => ({ ...prev, isOpen: false }));
-                } catch (err) {
-                    console.error(err);
-                    showError('Error al rechazar.', 'Error');
+        try {
+            if (item?.type === 'Contribution') {
+                if (item.isFine) {
+                    await api.treasury.rejectFine(item.id, reason || 'Rechazado por tesorería');
+                    showSuccess('La penalidad ha sido rechazada.', 'Rechazado');
+                } else {
+                    await rejectContribution(item.organizerId, item.months, reason || 'Rechazado por tesorería');
+                    showSuccess('El aporte ha sido rechazado.', 'Rechazado');
                 }
+            } else {
+                await api.registrations.remove(id);
+                showSuccess('La inscripción ha sido eliminada.', 'Rechazado');
             }
-        });
+
+            await Promise.all([loadData(), reloadTreasury()]);
+        } catch (err) {
+            console.error(err);
+            showError('Error al rechazar. ' + (err.message || ''), 'Error');
+        }
     };
 
     const manualIncome = transactions.filter(t => t.type === 'income').reduce((acc, curr) => acc + curr.amount, 0);
@@ -1200,7 +1245,8 @@ const TreasurerDashboard = ({ user }) => {
                     <AccountsManager
                         key={transactions.length} // Force re-render on transaction change
                         accounts={accounts}
-                        financialAssets={config?.financialAssets || []}
+                        banks={config?.banks || []}
+                        wallets={config?.wallets || []}
                         transactions={transactions}
                         onCreateAccount={createAccount}
                         onUpdateAccount={updateAccount}
