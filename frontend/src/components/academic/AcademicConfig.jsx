@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Plus, X, AlertTriangle, FileText, List, CheckSquare, Edit, Ban, Eye, Trash2, ChevronRight, Info, GripVertical, Check, Clock } from 'lucide-react';
+import { Save, Plus, X, AlertTriangle, FileText, List, CheckSquare, Edit, Ban, Eye, Trash2, ChevronRight, Info, GripVertical, Check, Clock, Upload } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { api } from '../../services/api';
@@ -13,7 +13,7 @@ const AcademicConfig = () => {
     // Local state for new items
     const [newWorkType, setNewWorkType] = useState("");
     const [newDeclaration, setNewDeclaration] = useState("");
-    const [newSection, setNewSection] = useState({ label: "", limit: 100 });
+    const [newSection, setNewSection] = useState({ label: "", limit: 100, type: 'text' });
     const [isAddingSection, setIsAddingSection] = useState(false);
 
     // Editing & Dragging State
@@ -154,11 +154,12 @@ const AcademicConfig = () => {
                 id,
                 label: newSection.label.trim(),
                 limit: parseInt(newSection.limit) || 0,
+                type: newSection.type || 'text',
                 active: true,
                 workTypes: config.workTypes || [] // Add to all by default or just selected? Let's add to all to avoid confusion
             };
             setConfig(prev => ({ ...prev, sections: [...(prev.sections || []), newItem] }));
-            setNewSection({ label: "", limit: 100 });
+            setNewSection({ label: "", limit: 100, type: 'text' });
             setIsAddingSection(false);
         }
     };
@@ -339,8 +340,8 @@ const AcademicConfig = () => {
                                 <input
                                     type="datetime-local"
                                     className={`w-full p-2 text-sm border rounded focus:ring-2 ${config.extensionEnabled
-                                            ? 'border-gray-300 focus:ring-orange-500 bg-white'
-                                            : 'border-gray-200 bg-gray-100 cursor-not-allowed'
+                                        ? 'border-gray-300 focus:ring-orange-500 bg-white'
+                                        : 'border-gray-200 bg-gray-100 cursor-not-allowed'
                                         }`}
                                     value={config.extensionDeadline || ''}
                                     onChange={(e) => handleConfigChange('extensionDeadline', e.target.value)}
@@ -367,8 +368,8 @@ const AcademicConfig = () => {
                                         step="0.1"
                                         min="0"
                                         className={`w-20 p-2 text-sm border rounded focus:ring-2 ${config.extensionEnabled
-                                                ? 'border-gray-300 focus:ring-red-500 bg-white'
-                                                : 'border-gray-200 bg-gray-100 cursor-not-allowed'
+                                            ? 'border-gray-300 focus:ring-red-500 bg-white'
+                                            : 'border-gray-200 bg-gray-100 cursor-not-allowed'
                                             }`}
                                         value={config.latePenalty || 0}
                                         onChange={(e) => handleConfigChange('latePenalty', parseFloat(e.target.value))}
@@ -466,16 +467,34 @@ const AcademicConfig = () => {
                                 <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 mb-6 animate-fadeIn">
                                     <h6 className="text-xs font-bold text-gray-500 uppercase mb-2">Definir Nueva Sección</h6>
                                     <div className="flex gap-2 mb-2">
+                                        <div className="w-1/4">
+                                            <select
+                                                className="w-full p-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                                value={newSection.type}
+                                                onChange={(e) => {
+                                                    const newType = e.target.value;
+                                                    setNewSection({
+                                                        ...newSection,
+                                                        type: newType,
+                                                        limit: newType === 'file' ? 5 : 100
+                                                    });
+                                                }}
+                                            >
+                                                <option value="text">Texto</option>
+                                                <option value="file">Archivo</option>
+                                            </select>
+                                        </div>
                                         <input
                                             className="flex-1 p-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Nombre de sección (Ej: Bibliografía)"
+                                            placeholder={newSection.type === 'file' ? "Nombre (ej: Consentimiento)" : "Nombre de sección"}
                                             value={newSection.label}
                                             onChange={(e) => setNewSection({ ...newSection, label: e.target.value })}
                                         />
                                         <input
                                             type="number"
                                             className="w-24 p-2 text-sm border rounded focus:ring-2 focus:ring-blue-500 outline-none"
-                                            placeholder="Límite"
+                                            placeholder={newSection.type === 'file' ? "MB" : "Límite"}
+                                            title={newSection.type === 'file' ? "Límite en MB" : "Límite de palabras"}
                                             value={newSection.limit}
                                             onChange={(e) => setNewSection({ ...newSection, limit: e.target.value })}
                                         />
@@ -491,6 +510,7 @@ const AcademicConfig = () => {
                             <div className="space-y-3">
                                 {config.sections && config.sections.map((section, index) => {
                                     const isActiveForType = section.workTypes && section.workTypes.includes(selectedWorkType);
+                                    const isFile = section.type === 'file';
 
                                     return (
                                         <div
@@ -542,6 +562,9 @@ const AcademicConfig = () => {
                                                     </div>
                                                 ) : (
                                                     <div className="flex items-center gap-2 group">
+                                                        <span className={`p-1 rounded ${isFile ? 'bg-purple-100 text-purple-600' : 'bg-blue-100 text-blue-600'}`}>
+                                                            {isFile ? <Upload size={14} /> : <FileText size={14} />}
+                                                        </span>
                                                         <span className={`font-medium ${isActiveForType ? 'text-gray-900' : 'text-gray-500'}`}>
                                                             {section.label}
                                                         </span>
@@ -559,7 +582,7 @@ const AcademicConfig = () => {
                                             {/* Config (Limit & Delete) - NOT draggable */}
                                             <div className="flex items-center gap-3">
                                                 <div className="flex items-center gap-2 bg-gray-50 px-2 py-1 rounded border border-gray-200">
-                                                    <span className="text-xs text-gray-500">Límite:</span>
+                                                    <span className="text-xs text-gray-500">{isFile ? 'Máx MB:' : 'Límite:'}</span>
                                                     <input
                                                         type="number"
                                                         value={section.limit}

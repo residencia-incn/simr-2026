@@ -56,7 +56,8 @@ export const MOCK_USERS = [
         status: 'Confirmado',
         amount: 0,
         image: null,
-        gender: 'unspecified'
+        gender: 'unspecified',
+        purchasedItems: ['presencial', 'presencial_cert', 'virtual', 'w_1767220000001', 'w_1767220000002', 'w_1767220000003'] // Superadmin has everything
     },
 
     // ============================================
@@ -92,7 +93,8 @@ export const MOCK_USERS = [
         attendancePercentage: 90,
         certificationApproved: true,
         image: null,
-        gender: 'male'
+        gender: 'male',
+        purchasedItems: ['presencial', 'w_1767220000001']
     },
     {
         id: 'user-2',
@@ -120,7 +122,8 @@ export const MOCK_USERS = [
         attendancePercentage: 85,
         certificationApproved: false,
         image: null,
-        gender: 'female'
+        gender: 'female',
+        purchasedItems: ['presencial_cert', 'w_1767220000002']
     },
     {
         id: 'user-3',
@@ -148,7 +151,8 @@ export const MOCK_USERS = [
         attendancePercentage: 30,
         certificationApproved: false,
         image: null,
-        gender: 'male'
+        gender: 'male',
+        purchasedItems: ['presencial_cert']
     },
     {
         id: 'user-4',

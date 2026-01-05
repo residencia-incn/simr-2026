@@ -41,6 +41,7 @@ interface AuthContextType {
     hasAnyPermission: (scopes: string[]) => boolean;
     hasModule: (module: string) => boolean;
     updateUserPermissions: (permissions: string[]) => void;
+    updateUser: (updates: Partial<User>) => Promise<void>;
 }
 
 // MODULE PERMISSIONS MAPPING
@@ -232,6 +233,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const updateUser = async (updates: Partial<User>) => {
+        if (!user) return;
+        const updatedUser = { ...user, ...updates };
+        setUser(updatedUser);
+        storage.set('simr_user', updatedUser);
+
+        // Persist to backend if needed
+        if (user.id) {
+            try {
+                // api.users.update supports partial updates or full object
+                await api.users.update(updatedUser);
+            } catch (error) {
+                console.error('Failed to update user:', error);
+            }
+        }
+    };
+
     const hasPermission = (scope: string): boolean => {
         if (!user || !user.permissions) return false;
         if (user.permissions.includes('admin:all')) return true;
@@ -264,7 +282,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hasAllPermissions,
             hasAnyPermission,
             hasModule,
-            updateUserPermissions
+            updateUserPermissions,
+            updateUser
         }}>
             {children}
         </AuthContext.Provider>

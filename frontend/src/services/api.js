@@ -73,9 +73,9 @@ const TICKET_OPTIONS = {
 };
 
 const WORKSHOP_OPTIONS = {
-    'workshop1': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
-    'workshop2': { name: 'Taller de Electroencefalografía', price: 20 },
-    'workshop3': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
+    'w_1767220000001': { name: 'Taller de Neuroimagen Avanzada', price: 20 },
+    'w_1767220000002': { name: 'Taller de Electroencefalografía', price: 20 },
+    'w_1767220000003': { name: 'Taller de Rehabilitación Neurológica', price: 20 }
 };
 
 /**
@@ -119,6 +119,50 @@ const getLocalUsers = () => {
         if (!success) {
             console.warn('[Migration] Failed to save migrated users to storage. Content might be too large.');
         }
+    }
+
+    // 3. Migration: Update legacy workshop IDs in purchasedItems/workshops
+    let hasChanges = false;
+    const updatedUsers = users.map(user => {
+        let changed = false;
+        let newItems = user.purchasedItems || [];
+
+        // Migrate purchasedItems
+        if (newItems.length > 0) {
+            const migratedItems = newItems.map(item => {
+                if (item === 'workshop1') { changed = true; return 'w_1767220000001'; }
+                if (item === 'workshop2') { changed = true; return 'w_1767220000002'; }
+                if (item === 'workshop3') { changed = true; return 'w_1767220000003'; }
+                return item;
+            });
+            if (changed) {
+                user = { ...user, purchasedItems: migratedItems };
+                hasChanges = true;
+            }
+        }
+
+        // Migrate workshops array if exists
+        if (user.workshops && user.workshops.length > 0) {
+            let wChanged = false;
+            const migratedWorkshops = user.workshops.map(item => {
+                if (item === 'workshop1') { wChanged = true; changed = true; return 'w_1767220000001'; }
+                if (item === 'workshop2') { wChanged = true; changed = true; return 'w_1767220000002'; }
+                if (item === 'workshop3') { wChanged = true; changed = true; return 'w_1767220000003'; }
+                return item;
+            });
+            if (wChanged) {
+                user = { ...user, workshops: migratedWorkshops };
+                hasChanges = true;
+            }
+        }
+
+        return user;
+    });
+
+    if (hasChanges) {
+        console.log('[Migration] Updated legacy workshop IDs for users.');
+        users = updatedUsers;
+        storage.set(STORAGE_KEYS.USERS, users);
     }
 
     // FILTRAR SUPERADMIN de las listas
@@ -2537,7 +2581,15 @@ export const api = {
         // --- Pricing Config ---
         getPricing: async () => {
             await delay();
-            return storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
+            const stored = storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
+            // Check for legacy data (names like workshop1)
+            const hasLegacy = stored.workshops.some(w => w.id === 'workshop1' || w.id === 'workshop2');
+            if (hasLegacy) {
+                console.log('Migrating legacy pricing config...');
+                storage.set(STORAGE_KEYS.PRICING, PRICING_CONFIG);
+                return PRICING_CONFIG;
+            }
+            return stored;
         },
         updatePricing: async (newPricing) => {
             await delay();

@@ -727,6 +727,7 @@ const SystemConfiguration = () => {
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-gray-100 text-gray-600 font-bold">
                                         <tr>
+                                            <th className="p-3 border-b">ID (Código)</th>
                                             <th className="p-3 border-b">Título</th>
                                             <th className="p-3 border-b">Subtítulo (Mostrar)</th>
                                             <th className="p-3 border-b">Precio (S/.)</th>
@@ -737,6 +738,9 @@ const SystemConfiguration = () => {
                                     <tbody>
                                         {pricingConfig?.ticketTypes?.map((ticket, idx) => (
                                             <tr key={ticket.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                <td className="p-3 text-xs font-mono text-gray-500">
+                                                    {ticket.id}
+                                                </td>
                                                 <td className="p-3">
                                                     <input
                                                         type="text"
@@ -781,7 +785,7 @@ const SystemConfiguration = () => {
                                         ))}
                                         {(!pricingConfig?.ticketTypes || pricingConfig.ticketTypes.length === 0) && (
                                             <tr>
-                                                <td colSpan="5" className="p-4 text-center text-gray-400 italic">No hay modalidades definidas.</td>
+                                                <td colSpan="6" className="p-4 text-center text-gray-400 italic">No hay modalidades definidas.</td>
                                             </tr>
                                         )}
                                     </tbody>
@@ -805,6 +809,7 @@ const SystemConfiguration = () => {
                                 <table className="w-full text-sm text-left">
                                     <thead className="bg-gray-100 text-gray-600 font-bold">
                                         <tr>
+                                            <th className="p-3 border-b">ID (Código)</th>
                                             <th className="p-3 border-b">Nombre del Taller</th>
                                             <th className="p-3 border-b">Precio (S/.)</th>
                                             <th className="p-3 border-b">Descripción</th>
@@ -814,6 +819,9 @@ const SystemConfiguration = () => {
                                     <tbody>
                                         {pricingConfig?.workshops?.map((workshop, idx) => (
                                             <tr key={workshop.id} className="border-b last:border-0 hover:bg-gray-50">
+                                                <td className="p-3 text-xs font-mono text-gray-500">
+                                                    {workshop.id}
+                                                </td>
                                                 <td className="p-3">
                                                     <input
                                                         type="text"
@@ -849,7 +857,7 @@ const SystemConfiguration = () => {
                                         ))}
                                         {(!pricingConfig?.workshops || pricingConfig.workshops.length === 0) && (
                                             <tr>
-                                                <td colSpan="4" className="p-4 text-center text-gray-400 italic">No hay talleres definidos.</td>
+                                                <td colSpan="5" className="p-4 text-center text-gray-400 italic">No hay talleres definidos.</td>
                                             </tr>
                                         )}
                                     </tbody>

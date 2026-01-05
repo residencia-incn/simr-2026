@@ -895,9 +895,9 @@ export const PRICING_CONFIG = {
         { id: 'virtual', title: 'Virtual', price: 70, subtitle: 'S/ 70.00', description: 'Acceso a transmisión en vivo y certificado' }
     ],
     workshops: [
-        { id: 'workshop1', name: 'Taller de Neuroimagen Avanzada', price: 20, description: 'Sábado 24 - 15:00 hrs' },
-        { id: 'workshop2', name: 'Taller de Electroencefalografía', price: 20, description: 'Viernes 23 - 09:00 hrs' },
-        { id: 'workshop3', name: 'Taller de Rehabilitación Neurológica', price: 20, description: 'Jueves 22 - 11:00 hrs' }
+        { id: 'w_1767220000001', name: 'Taller de Neuroimagen Avanzada', price: 20, description: 'Sábado 24 - 15:00 hrs' },
+        { id: 'w_1767220000002', name: 'Taller de Electroencefalografía', price: 20, description: 'Viernes 23 - 09:00 hrs' },
+        { id: 'w_1767220000003', name: 'Taller de Rehabilitación Neurológica', price: 20, description: 'Jueves 22 - 11:00 hrs' }
     ]
 
 };

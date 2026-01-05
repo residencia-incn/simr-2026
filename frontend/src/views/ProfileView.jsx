@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Ticket } from 'lucide-react';
 import { Card, Button, FormField, SectionHeader } from '../components/ui';
 import { useForm, useFileUpload, useApi } from '../hooks';
 import QRCode from 'react-qr-code';
@@ -7,6 +7,7 @@ import AttendanceScanner from '../components/common/AttendanceScanner';
 import { api } from '../services/api';
 import { showConfirm, showSuccess } from '../utils/alerts';
 import { UserAvatar } from '../components/common/UserAvatar';
+import ProfileUpgrades from '../components/profile/ProfileUpgrades';
 
 const ProfileView = ({ user, onSave }) => {
     const [isEditing, setIsEditing] = useState(false);
@@ -211,6 +212,15 @@ const ProfileView = ({ user, onSave }) => {
                         }`}
                 >
                     Asistencia y QR
+                </button>
+                <button
+                    onClick={() => setActiveTab('upgrades')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'upgrades'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                >
+                    Inscripciones y Talleres
                 </button>
             </div>
 
@@ -608,6 +618,21 @@ const ProfileView = ({ user, onSave }) => {
                                     </div>
                                 )}
                             </div>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Upgrades Tab Content */}
+                {activeTab === 'upgrades' && (
+                    <div className="md:col-span-2 space-y-6">
+                        <Card className="p-6">
+                            <div className="flex items-center justify-between mb-6">
+                                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                    <Ticket size={20} className="text-blue-600" />
+                                    Gestionar Inscripciones
+                                </h3>
+                            </div>
+                            <ProfileUpgrades />
                         </Card>
                     </div>
                 )}

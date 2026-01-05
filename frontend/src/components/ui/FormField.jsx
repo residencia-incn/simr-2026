@@ -14,6 +14,7 @@ const FormField = ({
     options = [], // for select
     rows = 3, // for textarea
     helpText,
+    subLabel, // Extract to prevent DOM warning
     ...props
 }) => {
     const baseInputStyles = `

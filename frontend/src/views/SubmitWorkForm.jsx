@@ -4,6 +4,7 @@ import Button from '../components/ui/Button';
 import Card from '../components/ui/Card';
 import FormField from '../components/ui/FormField';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import StorageUploader from '../components/common/StorageUploader';
 import { useForm } from '../hooks/useForm';
 import { api } from '../services/api';
 import { showSuccess } from '../utils/alerts';
@@ -147,9 +148,13 @@ const SubmitWorkForm = ({ navigate }) => {
             if (!val) {
                 errors[section.id] = 'Campo requerido';
             } else {
-                const limit = section.limit || 0;
-                if (limit > 0 && countWords(val) > limit) {
-                    errors[section.id] = `Excede el límite de ${limit} palabras`;
+                // If it is a file, the presence of the URL is enough (validated above).
+                // If it is text, we validate word limit.
+                if (section.type !== 'file') {
+                    const limit = section.limit || 0;
+                    if (limit > 0 && countWords(val) > limit) {
+                        errors[section.id] = `Excede el límite de ${limit} palabras`;
+                    }
                 }
             }
         });
@@ -244,8 +249,41 @@ const SubmitWorkForm = ({ navigate }) => {
 
     if (loading) return <LoadingSpinner text="Cargando formulario..." className="py-20" />;
 
-    const renderWordCounter = (section) => {
+    const renderSectionField = (section) => {
         const fieldName = section.id;
+        const isFile = section.type === 'file';
+
+        if (isFile) {
+            return (
+                <div key={section.id} className="mb-6">
+                    <label className="block text-sm font-bold text-gray-700 mb-2 uppercase">
+                        {section.label}
+                    </label>
+                    <div className="bg-white p-4 rounded-lg border border-gray-200">
+                        <StorageUploader
+                            path={`works/${currentUser.id}`}
+                            prefix={`${section.id}`}
+                            onUploadComplete={(url) => setFieldValue(fieldName, url)}
+                            onDelete={() => setFieldValue(fieldName, '')}
+                            initialUrl={values[fieldName]}
+                            maxSizeMB={section.limit || 5}
+                            acceptedFileTypes={['application/pdf', 'image/*']}
+                            label={`Subir ${section.label}`}
+                        />
+                    </div>
+                    {touched[fieldName] && errors[fieldName] && (
+                        <p className="mt-1 text-xs text-red-500 font-medium">
+                            {errors[fieldName]}
+                        </p>
+                    )}
+                    <p className="text-xs text-gray-400 mt-1 flex items-center justify-end">
+                        <Info size={12} className="mr-1" />
+                        Máximo {section.limit || 5} MB. Formatos permitidos: PDF, Imágenes.
+                    </p>
+                </div>
+            );
+        }
+
         const count = countWords(values[fieldName] || '');
         const limit = section.limit || 0;
         const isOver = limit > 0 && count > limit;
@@ -487,7 +525,7 @@ const SubmitWorkForm = ({ navigate }) => {
                         </h3>
 
                         {formSections.length > 0 ? (
-                            formSections.map(section => renderWordCounter(section))
+                            formSections.map(section => renderSectionField(section))
                         ) : (
                             <div className="text-center py-4 text-gray-500 italic">
                                 No hay secciones definidas para el resumen.

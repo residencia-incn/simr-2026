@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check } from 'lucide-react';
 import { Button, Card, Badge } from '../ui';
 import QRCode from 'react-qr-code';
+import { api } from '../../services/api';
 
 const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
     const printRef = useRef();
@@ -16,15 +17,46 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
         return () => window.removeEventListener('keydown', handleEsc);
     }, [isOpen, onClose]);
 
-    if (!isOpen || !attendee) return null;
+
 
     const handlePrint = () => {
         window.print();
     };
 
+    // State for resolved workshop names
+    const [workshopNames, setWorkshopNames] = useState({});
+
+    React.useEffect(() => {
+        const loadPricing = async () => {
+            try {
+                const pricing = await api.treasury.getPricing();
+                const map = {};
+
+                // Map ticket types (modalities)
+                if (pricing.ticketTypes) {
+                    pricing.ticketTypes.forEach(t => map[t.id] = t.title);
+                }
+
+                // Map workshops
+                if (pricing.workshops) {
+                    pricing.workshops.forEach(w => map[w.id] = w.name);
+                }
+                setWorkshopNames(map);
+            } catch (err) {
+                console.error("Failed to load workshop names", err);
+            }
+        };
+        loadPricing();
+    }, []);
+
     // Derived/Mock Data
+    if (!isOpen || !attendee) return null;
     const fullName = `${attendee.lastName || ''} ${attendee.firstName || ''}`.trim() || attendee.name;
-    const workshops = attendee.workshops || ['Taller de Neuroimagen', 'Taller de Ética']; // Mock if empty
+    // Map usage of purchasedItems if workshops is just IDs
+    const rawWorkshops = attendee.workshops || attendee.purchasedItems || [];
+    const workshops = rawWorkshops.map(id => workshopNames[id] || id);
+
+    // We will render mapped names later
     const attendancePercent = parseInt(attendee.attendancePercent || Math.floor(Math.random() * 40) + 60); // Mock
     const isApproved = attendancePercent >= 60;
 
