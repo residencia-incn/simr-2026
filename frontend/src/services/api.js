@@ -165,6 +165,96 @@ const getLocalUsers = () => {
         storage.set(STORAGE_KEYS.USERS, users);
     }
 
+    // 4. Reset Pending Items (Request from User to clear stuck states - FORCED V2)
+    if (!window.__pendingResetDone_V2) {
+        window.__pendingResetDone_V2 = true;
+        // Force clear for everyone regardless of previous state to be absolutely sure
+        if (users.some(u => u.pendingItems && u.pendingItems.length > 0)) {
+            console.log(`[Reset V2] Clearing pendingItems for all users to fix stuck states.`);
+            users = users.map(u => ({ ...u, pendingItems: [] }));
+            storage.set(STORAGE_KEYS.USERS, users);
+        }
+    }
+
+    // 5. Sync User Accesses (Legacy ID Migration - V1)
+    if (!window.__accessSyncDone_V1) {
+        window.__accessSyncDone_V1 = true;
+
+        // Define Mappings to NEW Valid IDs (from mockData PRICING_CONFIG)
+        const ID_MAP = {
+            'presencial': 't_1767220000003', // Presencial (Sin Certificado)
+            'presencial_nocert': 't_1767220000003', // Legacy: Presencial (Sin Certificado)
+            'presencial_cert': 't_1767220000004', // Legacy: Presencial + Certificado
+            'virtual': 't_1767220000002', // Virtual + Certificado
+            'virtual_nocert': 't_1767220000001', // Virtual (Sin Certificado)
+            'workshop1': 'w_1767220000001',
+            'workshop2': 'w_1767220000002',
+            'workshop3': 'w_1767220000003'
+        };
+
+        const VALID_IDS = [
+            't_1767220000001', 't_1767220000002', 't_1767220000003', 't_1767220000004',
+            'w_1767220000001', 'w_1767220000002', 'w_1767220000003'
+        ];
+
+        let syncChanged = false;
+
+        const syncedUsers = users.map(u => {
+            let uChanged = false;
+            let currentItems = new Set(u.purchasedItems || []);
+
+            // 1. Migrate Main Modality/TicketType
+            let ticketType = u.ticketType || u.registrationType;
+            // Map legacy main type
+            if (ID_MAP[ticketType]) {
+                ticketType = ID_MAP[ticketType];
+                uChanged = true;
+            } else if (ticketType && !VALID_IDS.includes(ticketType)) {
+                // Invalid main type and no map -> Default to Presencial Free
+                ticketType = 't_1767220000003';
+                uChanged = true;
+            }
+            // Ensure main type is in purchasedItems
+            if (ticketType && !currentItems.has(ticketType)) {
+                currentItems.add(ticketType);
+                uChanged = true;
+            }
+
+            // 2. Migrate List Items
+            const migratedItems = new Set();
+            currentItems.forEach(item => {
+                if (ID_MAP[item]) {
+                    migratedItems.add(ID_MAP[item]);
+                    uChanged = true;
+                } else if (VALID_IDS.includes(item)) {
+                    migratedItems.add(item);
+                } else {
+                    // Item is invalid/legacy and has no map -> REMOVE IT
+                    uChanged = true;
+                    console.log(`[Sync] Removing invalid item access for user ${u.email}: ${item}`);
+                }
+            });
+
+            // 3. Update User
+            if (uChanged) {
+                syncChanged = true;
+                return {
+                    ...u,
+                    purchasedItems: Array.from(migratedItems),
+                    ticketType: ticketType || 't_1767220000003', // Fallback
+                    registrationType: ticketType // Keep in sync
+                };
+            }
+            return u;
+        });
+
+        if (syncChanged) {
+            console.log('[Sync] Migrated legacy accesses for users.');
+            users = syncedUsers;
+            storage.set(STORAGE_KEYS.USERS, users);
+        }
+    }
+
     // FILTRAR SUPERADMIN de las listas
     return users.filter(u => !u.isSuperAdmin);
 };
@@ -182,7 +272,25 @@ export const api = {
             return new Promise((resolve, reject) => {
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
-                reader.onload = () => resolve(reader.result);
+                reader.onload = (event) => {
+                    const img = new Image();
+                    img.src = event.target.result;
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        const MAX_WIDTH = 800;
+                        const scaleSize = MAX_WIDTH / img.width;
+                        canvas.width = MAX_WIDTH;
+                        canvas.height = img.height * scaleSize;
+
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                        // Compress to JPEG 0.7
+                        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+                        resolve(compressedDataUrl);
+                    };
+                    img.onerror = (error) => reject(error);
+                };
                 reader.onerror = error => reject(error);
             });
         }
@@ -271,7 +379,13 @@ export const api = {
 
             // --- SIMULATED BACKEND VALIDATION REPEAT ---
             const normalize = (str) => str ? str.toString().trim().toLowerCase() : '';
-            if (current.some(r => normalize(r.dni) === normalize(registration.dni))) throw new Error("Ya registrado.");
+
+            // Allow multiple "Purchase" requests (e.g. workshops, upgrades) even if user has other pending requests
+            const isPurchase = registration.type === 'Purchase';
+
+            if (!isPurchase && current.some(r => normalize(r.dni) === normalize(registration.dni))) {
+                throw new Error("Ya registrado.");
+            }
             // ------------------------------------------
 
             const newReg = {
@@ -280,7 +394,11 @@ export const api = {
                 status: 'pending',
                 ...registration
             };
-            storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, [newReg, ...current]);
+            const success = storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, [newReg, ...current]);
+
+            if (!success) {
+                throw new Error("Error de almacenamiento: El sistema no pudo guardar el registro. Intente con una imagen más pequeña.");
+            }
 
             // Notify Admins/Treasurers
             await api.notifications.add({
@@ -347,7 +465,26 @@ export const api = {
                 voucherData: reg.voucherData,
                 image: reg.img, // Ensure image is preserved if present
                 ticketType: reg.ticketType,
-                workshops: reg.workshops
+                workshops: reg.workshops,
+                items: reg.items || [], // Persist full item details for display
+                // Critical: Persist purchased items (merge existing + new)
+                purchasedItems: [
+                    ...new Set([
+                        ...(existingUser?.purchasedItems || []),
+                        ...(reg.items?.map(i => i.id) || []),
+                        ...(reg.workshops || []),
+                        ...(reg.ticketType ? [reg.ticketType] : [])
+                    ])
+                ].filter(Boolean),
+                // Critical: Clear approved items from pending list
+                pendingItems: (existingUser?.pendingItems || []).filter(id => {
+                    const approvedIds = [
+                        ...(reg.items?.map(i => i.id) || []),
+                        ...(reg.workshops || []),
+                        ...(reg.ticketType ? [reg.ticketType] : [])
+                    ];
+                    return !approvedIds.includes(id);
+                })
             };
 
             if (existingUser) {
@@ -359,78 +496,70 @@ export const api = {
             // 2. Legacy: We NO LONGER need dedicated api.attendees.add here 
             // since Attendees.getAll now proxies to Users.getAll
 
-            // 3. Add to Treasury Income
             // 3. Add to Treasury Income (ITEMIZED SPLIT)
             const pricingConfig = await api.treasury.getPricing();
 
-            // 3.1. Main Ticket Income
-            let ticketAmount = 0;
-            let ticketTitle = '';
+            // Determine items to register (Prioritize cart items, fallback to legacy structure)
+            let itemsToRegister = [];
 
-            // Find ticket info from config
-            const ticketTypeInfo = pricingConfig?.ticketTypes?.find(t => t.id === reg.ticketType || t.key === reg.ticketType);
-
-            if (ticketTypeInfo) {
-                ticketAmount = ticketTypeInfo.price;
-                ticketTitle = ticketTypeInfo.title;
+            if (reg.items && reg.items.length > 0) {
+                // Use the explicit items from cart
+                itemsToRegister = reg.items;
             } else {
-                // Fallback for legacy or manual checks or default modality matching
-                // Try to find by title/modality if id match failed
-                const matchByTitle = pricingConfig?.ticketTypes?.find(t => t.title.toLowerCase() === (reg.modalidad || '').toLowerCase());
-                if (matchByTitle) {
-                    ticketAmount = matchByTitle.price;
-                    ticketTitle = matchByTitle.title;
-                } else {
-                    // Last resort fallback
-                    ticketAmount = reg.amount;
-                    if (reg.workshops && reg.workshops.length > 0) {
-                        // Safely subtract workshop costs if we can identify them
-                        const workshopsTotal = reg.workshops.reduce((sum, wid) => {
-                            const ws = pricingConfig?.workshops?.find(w => w.id === wid || w.id === wid);
-                            return sum + (ws ? ws.price : 0);
-                        }, 0);
-                        ticketAmount = reg.amount - workshopsTotal;
-                    }
-                    ticketTitle = reg.modalidad || 'Entrada General';
+                // Fallback: Reconstruct from ticketType + workshops
+                if (reg.ticketType) {
+                    const ticket = pricingConfig.ticketTypes.find(t => t.id === reg.ticketType);
+                    if (ticket && ticket.price > 0) itemsToRegister.push({ ...ticket, type: 'ticket' });
+                }
+                if (reg.workshops && reg.workshops.length > 0) {
+                    reg.workshops.forEach(wsId => {
+                        const ws = pricingConfig.workshops.find(w => w.id === wsId);
+                        if (ws) itemsToRegister.push({ ...ws, type: 'workshop' });
+                    });
                 }
             }
 
-            if (ticketAmount > 0) {
-                await api.treasury.addIncome(
-                    ticketAmount,
-                    `Inscripción: ${reg.name} - ${ticketTitle}`,
-                    'Inscripciones',
-                    reg.voucherData,
-                    reg.paymentAccountId // Use the configured 'Inscripciones' account
-                );
-            }
+            // Register each item as a separate income transaction
+            for (const item of itemsToRegister) {
+                const amount = parseFloat(item.price || item.amount || 0);
+                if (amount <= 0) continue; // Skip free items
 
-            // 3.2. Workshops Income
-            if (reg.workshops && reg.workshops.length > 0) {
-                // Iterate through ALL selected workshops
-                for (const workshopId of reg.workshops) {
-                    // Find workshop in dynamic config
-                    const ws = pricingConfig?.workshops?.find(w => w.id === workshopId || w.key === workshopId);
+                const isWorkshop = item.type === 'workshop' || (item.id && item.id.startsWith('w_'));
+                const category = isWorkshop ? 'Talleres' : 'Inscripciones';
+                const description = isWorkshop
+                    ? `Taller: ${reg.name} - ${item.name || item.title || 'Taller'}`
+                    : `Inscripción: ${reg.name} - ${item.title || item.name || 'Acceso'}`;
 
-                    if (ws) {
-                        await api.treasury.addIncome(
-                            ws.price,
-                            `Taller: ${reg.name} - ${ws.name}`,
-                            'Talleres',
-                            reg.voucherData,
-                            reg.paymentAccountId // Same account as Inscriptions
-                        );
-                    } else {
-                        console.warn(`Workshop ID ${workshopId} not found in pricing config during approval.`);
-                    }
+                try {
+                    // Use addIncome helper which handles account resolution automatically
+                    await api.treasury.addIncome(
+                        amount,
+                        description,
+                        category,
+                        reg.voucherData,
+                        reg.paymentAccountId // Pass the selected account ID
+                    );
+                } catch (err) {
+                    console.error("Error registering income for item:", item, err);
                 }
             }
 
-            // 4. Remove from Pending
-            await api.registrations.remove(reg.id);
+            // 4. Update Registration Status in Persistent Storage
+            const currentRegs = storage.get(STORAGE_KEYS.PENDING_REGISTRATIONS, []);
+            const updatedRegs = currentRegs.filter(r => r.id !== reg.id);
+            storage.set(STORAGE_KEYS.PENDING_REGISTRATIONS, updatedRegs);
+
+            // 5. Notify User
+            await api.notifications.add({
+                type: 'success',
+                title: 'Inscripción Aprobada',
+                message: `Bienvenido(a) ${reg.name}. Tu inscripción ha sido validada.`,
+                link: '?view=profile',
+                userId: userPayload.id
+            });
 
             return true;
-        }
+        },
     },
 
     // --- 2. Attendees (UNIFICADO CON USUARIOS) ---
@@ -2582,10 +2711,12 @@ export const api = {
         getPricing: async () => {
             await delay();
             const stored = storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
-            // Check for legacy data (names like workshop1)
-            const hasLegacy = stored.workshops.some(w => w.id === 'workshop1' || w.id === 'workshop2');
+            // Check for legacy data (names like workshop1 OR legacy text IDs)
+            const hasLegacy = stored.workshops.some(w => w.id === 'workshop1' || w.id === 'workshop2') ||
+                stored.ticketTypes.some(t => t.id === 'presencial_nocert' || t.id === 'presencial_cert');
+
             if (hasLegacy) {
-                console.log('Migrating legacy pricing config...');
+                console.log('Migrating pricing config (Legacy IDs detected)... Restoring default standard.');
                 storage.set(STORAGE_KEYS.PRICING, PRICING_CONFIG);
                 return PRICING_CONFIG;
             }

@@ -4,6 +4,7 @@ import html2pdf from 'html2pdf.js';
 import Button from '../components/ui/Button';
 import { api } from '../services/api';
 import { useApi } from '../hooks/useApi';
+import { useAccessControl } from '../hooks/useAccessControl';
 import { storage } from '../services/storage';
 import { INITIAL_PROGRAM } from '../data/mockData';
 
@@ -11,6 +12,10 @@ const ParticipantDashboard = ({ user, navigate }) => {
     // Session & Security State
     const [userIp, setUserIp] = useState('192.168.1.10'); // Simulated IP
     const [sessionStatus, setSessionStatus] = useState('active'); // active, duplicate
+
+    // Access Control
+    const { hasAccess } = useAccessControl();
+    const hasVirtualAccess = hasAccess('virtual_access');
 
     // UI State
     const [activeTab, setActiveTab] = useState('modules'); // modules, notes, chat
@@ -188,6 +193,28 @@ const ParticipantDashboard = ({ user, navigate }) => {
             </button>
         </div>
     );
+
+    if (!hasVirtualAccess) {
+        return (
+            <div className="min-h-screen bg-gray-900 flex items-center justify-center p-4">
+                <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-8 text-center">
+                    <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                        <Lock size={40} className="text-red-500" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Acceso Restringido</h2>
+                    <p className="text-gray-600 mb-6">No tienes habilitado el acceso al Aula Virtual. Por favor adquiere una entrada Virtual o verifica tu inscripción.</p>
+                    <div className="flex flex-col gap-3">
+                        <Button onClick={() => navigate('profile')} className="w-full justify-center">
+                            Gestionar Inscripción
+                        </Button>
+                        <button onClick={() => navigate('home')} className="text-gray-500 hover:text-gray-700 text-sm font-medium">
+                            Volver al Inicio
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="fixed inset-0 bg-[#0f1115] text-white z-50 overflow-hidden flex flex-col" >

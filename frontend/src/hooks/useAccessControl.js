@@ -2,42 +2,56 @@ import { useAuth } from '../context/AuthContext';
 import { useMemo } from 'react';
 
 /**
- * Hook to check if the current user has access to specific items.
- * @param {string | string[]} requiredItems - Single item ID or array of item IDs required.
- * @param {object} options - Options for the check.
- * @param {boolean} options.any - If true, returns true if user has ANY of the required items. Default is ALL.
- * @returns {object} { hasAccess, missingItems }
+ * Hook to check if the current user has access to a specific resource.
+ * Centralizes logic for 'purchasedItems', 'profiles', and legacy fields.
  */
-export const useAccessControl = (requiredItems, options = { any: false }) => {
+export const useAccessControl = () => {
     const { user } = useAuth();
 
-    const result = useMemo(() => {
-        if (!user) return { hasAccess: false, missingItems: requiredItems };
-        // Superadmin bypass
-        if (user.isSuperAdmin) return { hasAccess: true, missingItems: [] };
+    const entitlements = useMemo(() => {
+        if (!user) return new Set();
 
-        const itemsToCheck = Array.isArray(requiredItems) ? requiredItems : [requiredItems];
-        if (itemsToCheck.length === 0) return { hasAccess: true, missingItems: [] };
+        const items = new Set([
+            ...(user.purchasedItems || []),
+            ...(user.workshops || []),
+            ...(user.modality ? [user.modality.toLowerCase()] : []),
+            ...(user.ticketType ? [user.ticketType] : [])
+        ]);
 
-        const userItems = user.purchasedItems || [];
-
-        // Normalize for case insensitivity if needed, but IDs should be consistent.
-        // We assume IDs are consistent strings.
-
-        const missing = itemsToCheck.filter(id => !userItems.includes(id));
-
-        if (options.any) {
-            // Access if fewer missing items than total items (meaning at least one matches)
-            // Or if all match (missing 0)
-            const hasAtLeastOne = itemsToCheck.some(id => userItems.includes(id));
-            return { hasAccess: hasAtLeastOne, missingItems: missing };
-        } else {
-            // Access only if NO missing items
-            return { hasAccess: missing.length === 0, missingItems: missing };
+        // Add implicit entitlements based on roles
+        if (user.roles?.includes('aula_virtual') || user.profiles?.includes('aula_virtual')) {
+            items.add('virtual');
+            items.add('virtual_nocert');
+            items.add('virtual_cert');
         }
-    }, [user, requiredItems, options.any]);
 
-    return result;
+        return items;
+    }, [user]);
+
+    const hasAccess = (requiredInfo) => {
+        if (!user) return false;
+
+        // Admin override
+        if (user.roles?.includes('admin') || user.permissions?.includes('admin:all')) return true;
+
+        // If passing a single string
+        if (typeof requiredInfo === 'string') {
+            // Check for exact match or partial match for 'virtual'
+            if (requiredInfo === 'virtual_access') {
+                // Check if ANY entitlement string includes 'virtual' (case insensitive)
+                // This covers 'virtual_nocert', 'virtual_cert', 't_... (Virtual)', or just 'virtual'
+                return Array.from(entitlements).some(e => e.toLowerCase().includes('virtual'));
+            }
+            return entitlements.has(requiredInfo);
+        }
+
+        // If passing an array (at least one)
+        if (Array.isArray(requiredInfo)) {
+            return requiredInfo.some(r => hasAccess(r));
+        }
+
+        return false;
+    };
+
+    return { hasAccess, entitlements: Array.from(entitlements) };
 };
-
-export default useAccessControl;

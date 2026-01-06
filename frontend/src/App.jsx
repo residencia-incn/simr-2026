@@ -29,13 +29,18 @@ import SmartRegistrationForm from './views/RegistrationView';
 import DevelopmentView from './components/common/DevelopmentView';
 import { SmallUserAvatar } from './components/common/UserAvatar';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CartProvider, useCart } from './context/CartContext.jsx';
+import ShoppingCart from './components/checkout/ShoppingCart';
 import { PermissionGate } from './components/auth/PermissionGate';
 
 // Wrapper to provide Global Auth Context
 export default function SIMRApp() {
   return (
     <AuthProvider>
-      <SIMRAppContent />
+      <CartProvider>
+        <SIMRAppContent />
+        <ShoppingCart />
+      </CartProvider>
     </AuthProvider>
   );
 }
@@ -344,6 +349,9 @@ function SIMRAppContent() {
             {/* Notification Menu */}
             {user && <NotificationMenu user={user} />}
 
+            {/* Shopping Cart Trigger */}
+            {user && <CartTrigger />}
+
             {/* Tasks Quick Access */}
             {user && <TasksQuickAccess user={user} />}
 
@@ -587,3 +595,23 @@ function SIMRAppContent() {
     </div>
   );
 }
+
+// Helper Component for Cart Trigger
+const CartTrigger = () => {
+  const { cartItems, setIsCartOpen } = useCart();
+
+  return (
+    <button
+      onClick={() => setIsCartOpen(true)}
+      className="relative p-2 text-gray-400 hover:text-blue-600 transition-colors hover:bg-blue-50 rounded-full"
+      title="Carrito de Compras"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-shopping-cart"><circle cx="8" cy="21" r="1" /><circle cx="19" cy="21" r="1" /><path d="M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12" /></svg>
+      {cartItems.length > 0 && (
+        <span className="absolute top-1 right-1 w-4 h-4 bg-red-500 text-white text-[10px] font-bold flex items-center justify-center rounded-full shadow-sm animate-pulse">
+          {cartItems.length}
+        </span>
+      )}
+    </button>
+  );
+};

@@ -1441,6 +1441,27 @@ const TreasurerDashboard = ({ user }) => {
                                     <p className="text-xs text-gray-500 font-bold uppercase mb-1">Institución / Concepto</p>
                                     <p className="font-semibold text-gray-900">{selectedDetail.details || selectedDetail.institution || '-'}</p>
                                 </div>
+
+                                {/* Purchase Details List */}
+                                {(selectedDetail.items || (selectedDetail.original && selectedDetail.original.items)) && (
+                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                        <p className="text-xs text-blue-800 font-bold uppercase mb-2 border-b border-blue-200 pb-1">
+                                            Detalle de Ítems ({selectedDetail.items ? selectedDetail.items.length : selectedDetail.original.items.length})
+                                        </p>
+                                        <ul className="space-y-1">
+                                            {(selectedDetail.items || selectedDetail.original.items).map((item, idx) => {
+                                                const itemName = typeof item === 'string' ? item : (item.name || item.title || 'Item');
+                                                const itemPrice = typeof item === 'object' && item.price ? ` - S/ ${item.price}` : '';
+                                                return (
+                                                    <li key={idx} className="text-sm text-blue-900 flex items-start gap-2">
+                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-blue-400 rounded-full shrink-0"></span>
+                                                        <span>{itemName}{itemPrice}</span>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </div>
+                                )}
                                 {console.log('SelectedDetail Debug:', selectedDetail)}
 
                                 {/* Payment Breakdown Section */}
@@ -1460,15 +1481,18 @@ const TreasurerDashboard = ({ user }) => {
                                                 <span className="text-gray-700 font-medium text-base">
                                                     Ticket: {(() => {
                                                         const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                        const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
                                                         const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
-                                                        return option ? option.title : (type || 'Entrada General');
+                                                        return embedded?.name || embedded?.title || option?.title || type || 'Entrada General';
                                                     })()}
                                                 </span>
                                                 <span className="font-bold text-gray-900 text-base">
                                                     {(() => {
                                                         const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                        const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
                                                         const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
 
+                                                        if (embedded?.price !== undefined) return `S/ ${Number(embedded.price).toFixed(2)}`;
                                                         if (option) return `S/ ${option.price.toFixed(2)}`;
 
                                                         // Fallback: Calculate from total - workshops
@@ -1478,7 +1502,7 @@ const TreasurerDashboard = ({ user }) => {
                                                                 return sum + (ws?.price || 0);
                                                             }, 0);
                                                             const ticketPart = selectedDetail.amount - wsTotal;
-                                                            return `S/ ${ticketPart.toFixed(2)}`;
+                                                            return `S/ ${Math.max(0, ticketPart).toFixed(2)}`;
                                                         }
                                                         return '-';
                                                     })()}
@@ -1489,11 +1513,16 @@ const TreasurerDashboard = ({ user }) => {
                                                 <div className="space-y-2 pt-2 border-t border-gray-200 mt-2">
                                                     <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
                                                     {selectedDetail.original.workshops.map(wsId => {
-                                                        const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
+                                                        const embedded = selectedDetail.original.items?.find(i => i.id === wsId);
+                                                        const config = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
+
+                                                        const name = embedded?.name || embedded?.title || config?.name || wsId;
+                                                        const price = embedded?.price ?? config?.price;
+
                                                         return (
                                                             <div key={wsId} className="flex justify-between items-center text-sm pl-2">
-                                                                <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
-                                                                <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
+                                                                <span className="text-gray-700">• {name}</span>
+                                                                <span className="font-semibold text-gray-900">{price !== undefined ? `+ S/ ${Number(price).toFixed(2)}` : '-'}</span>
                                                             </div>
                                                         );
                                                     })}

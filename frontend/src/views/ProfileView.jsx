@@ -28,6 +28,15 @@ const ProfileView = ({ user, onSave }) => {
         }
     });
 
+    // Handle initial tab from URL
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab');
+        if (tab && ['personal', 'attendance', 'upgrades'].includes(tab)) {
+            setActiveTab(tab);
+        }
+    }, []);
+
     useEffect(() => {
         if (activeTab === 'attendance') {
             loadHistory();

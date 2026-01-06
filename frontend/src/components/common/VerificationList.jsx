@@ -82,7 +82,37 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                 <p className="font-bold text-gray-900 text-2xl">S/ {parseFloat(reg.amount || 0).toFixed(2)}</p>
                             </div>
                             <p className="text-sm text-blue-600 capitalize font-medium">
-                                {reg.ticketType ? getTicketInfo(reg.ticketType).title : reg.modalidad}
+                                {(() => {
+                                    // 0. CHECK FOR UPGRADE PATTERNS (Only for Purchases from Cart)
+                                    if (reg.type === 'Purchase') {
+                                        const hasWorkshops = (reg.workshops && reg.workshops.length > 0) || (reg.items && reg.items.some(i => i.type === 'workshop' || i.id?.startsWith('w_')));
+                                        const hasTicket = (reg.ticketType && reg.ticketType !== 'presencial') || (reg.items && reg.items.some(i => i.type === 'ticket'));
+
+                                        // If both workshops and ticket are present
+                                        if (hasWorkshops && hasTicket) return "UPGRADE: Talleres + Modalidad";
+
+                                        // If only workshops are present
+                                        if (hasWorkshops && (!reg.ticketType || reg.ticketType === 'presencial' || !hasTicket)) return "UPGRADE: Talleres";
+
+                                        // If only ticket is present
+                                        const onlyTicket = hasTicket && !hasWorkshops;
+                                        if (onlyTicket) return "UPGRADE: Modalidad";
+                                    }
+
+                                    // 1. Try to find embedded item name first (Gold Source)
+                                    const embeddedItem = reg.items?.find(i => i.id === reg.ticketType || i.type === 'ticket');
+                                    if (embeddedItem?.name || embeddedItem?.title) return embeddedItem.name || embeddedItem.title;
+
+                                    // 2. Try global config (Silver Source)
+                                    if (reg.ticketType) {
+                                        const info = getTicketInfo(reg.ticketType);
+                                        // Only return if it's NOT the raw ID (unless title happens to be the ID, which is rare)
+                                        if (info.title && info.title !== reg.ticketType) return info.title;
+                                    }
+
+                                    // 3. Fallback to descriptors
+                                    return reg.modalidad || reg.ticketType || 'Inscripción';
+                                })()}
                             </p>
                         </div>
 
@@ -228,25 +258,42 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                                     )}
                                                 </div>
                                             ) : (
-                                                <div className="flex justify-between items-center text-sm">
-                                                    <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
-                                                    <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
-                                                </div>
+                                                /* Only show Ticket line if it has cost or if it's the ONLY thing being bought */
+                                                (getTicketInfo(selectedRegistration.ticketType).price > 0 || (!selectedRegistration.items || selectedRegistration.items.length === 0)) && (
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
+                                                        <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
+                                                    </div>
+                                                )
                                             )}
 
-                                            {selectedRegistration.workshops && selectedRegistration.workshops.length > 0 && (
+                                            {/* General Items Breakdown (Works for both workshops and generic cart items) */}
+                                            {(selectedRegistration.items && selectedRegistration.items.length > 0) ? (
                                                 <div className="space-y-3 pt-3 border-t border-gray-200">
-                                                    <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
-                                                    {selectedRegistration.workshops.map(wsId => {
-                                                        const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
-                                                        return (
-                                                            <div key={wsId} className="flex justify-between items-center text-sm pl-2">
-                                                                <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
-                                                                <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
-                                                            </div>
-                                                        );
-                                                    })}
+                                                    <p className="text-xs font-bold text-gray-500 uppercase">Detalle de Ítems ({selectedRegistration.items.length})</p>
+                                                    {selectedRegistration.items.map((item, idx) => (
+                                                        <div key={idx} className="flex justify-between items-center text-sm pl-2">
+                                                            <span className="text-gray-700">• {item.name || item.title || 'Ítem'}</span>
+                                                            <span className="font-semibold text-gray-900">+ S/ {(item.price || 0).toFixed(2)}</span>
+                                                        </div>
+                                                    ))}
                                                 </div>
+                                            ) : (
+                                                /* Fallback for legacy workshop IDs */
+                                                selectedRegistration.workshops && selectedRegistration.workshops.length > 0 && (
+                                                    <div className="space-y-3 pt-3 border-t border-gray-200">
+                                                        <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
+                                                        {selectedRegistration.workshops.map(wsId => {
+                                                            const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
+                                                            return (
+                                                                <div key={wsId} className="flex justify-between items-center text-sm pl-2">
+                                                                    <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
+                                                                    <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )
                                             )}
 
                                             <div className="flex justify-between items-center pt-4 border-t-2 border-gray-200 mt-2">

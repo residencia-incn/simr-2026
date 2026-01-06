@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket } from 'lucide-react';
+import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket, ArrowUp, ArrowDown } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import CarouselManager from './CarouselManager';
@@ -85,6 +85,18 @@ const SystemConfiguration = () => {
         };
         loadConfig();
     }, []);
+
+    const moveItem = (listKey, index, direction) => {
+        const list = [...pricingConfig[listKey]];
+        if (direction === -1 && index === 0) return;
+        if (direction === 1 && index === list.length - 1) return;
+
+        const item = list[index];
+        list.splice(index, 1);
+        list.splice(index + direction, 0, item);
+
+        setPricingConfig({ ...pricingConfig, [listKey]: list });
+    };
 
     const handleSave = async () => {
         setIsSaving(true);
@@ -776,7 +788,24 @@ const SystemConfiguration = () => {
                                                         placeholder="Descripción breve..."
                                                     />
                                                 </td>
-                                                <td className="p-3 text-center">
+                                                <td className="p-3 text-center flex items-center justify-center gap-1">
+                                                    <button
+                                                        onClick={() => moveItem('ticketTypes', idx, -1)}
+                                                        disabled={idx === 0}
+                                                        className="text-gray-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:hover:text-gray-400"
+                                                        title="Mover arriba"
+                                                    >
+                                                        <ArrowUp size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveItem('ticketTypes', idx, 1)}
+                                                        disabled={idx === pricingConfig.ticketTypes.length - 1}
+                                                        className="text-gray-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:hover:text-gray-400"
+                                                        title="Mover abajo"
+                                                    >
+                                                        <ArrowDown size={16} />
+                                                    </button>
+                                                    <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                                     <button onClick={() => handleRemoveTicket(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors">
                                                         <X size={16} />
                                                     </button>
@@ -848,7 +877,24 @@ const SystemConfiguration = () => {
                                                         placeholder="Descripción..."
                                                     />
                                                 </td>
-                                                <td className="p-3 text-center">
+                                                <td className="p-3 text-center flex items-center justify-center gap-1">
+                                                    <button
+                                                        onClick={() => moveItem('workshops', idx, -1)}
+                                                        disabled={idx === 0}
+                                                        className="text-gray-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:hover:text-gray-400"
+                                                        title="Mover arriba"
+                                                    >
+                                                        <ArrowUp size={16} />
+                                                    </button>
+                                                    <button
+                                                        onClick={() => moveItem('workshops', idx, 1)}
+                                                        disabled={idx === pricingConfig.workshops.length - 1}
+                                                        className="text-gray-400 hover:text-blue-600 p-1 disabled:opacity-30 disabled:hover:text-gray-400"
+                                                        title="Mover abajo"
+                                                    >
+                                                        <ArrowDown size={16} />
+                                                    </button>
+                                                    <div className="w-px h-4 bg-gray-200 mx-1"></div>
                                                     <button onClick={() => handleRemoveWorkshop(idx)} className="text-red-500 hover:bg-red-50 p-2 rounded-full transition-colors">
                                                         <X size={16} />
                                                     </button>

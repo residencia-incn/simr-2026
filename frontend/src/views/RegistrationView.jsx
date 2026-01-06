@@ -462,12 +462,17 @@ const RegistrationView = () => {
         let icon = User;
         let color = 'blue';
 
+        if (ticket.title.toLowerCase().includes('certificado')) {
+            icon = Award;
+        }
+
         if (ticket.title.toLowerCase().includes('virtual')) {
             icon = Wifi;
             color = 'purple';
-        } else if (ticket.title.toLowerCase().includes('certificado')) {
-            icon = Award;
-            color = 'emerald';
+        }
+
+        if (ticket.price === 0) {
+            color = 'gray';
         }
 
         return {

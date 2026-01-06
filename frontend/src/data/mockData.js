@@ -844,16 +844,16 @@ export const TREASURY_CONFIG = {
         inscriptionAccounts: ['acc-1', 'acc-3']
     },
     banks: [
-        { id: 'bank-1', name: 'Banco de Crédito del Perú', shortName: 'BCP', logo: 'BCP' },
-        { id: 'bank-2', name: 'Interbank', shortName: 'IBK', logo: 'IB' },
-        { id: 'bank-3', name: 'BBVA', shortName: 'BBVA', logo: 'BBVA' },
-        { id: 'bank-4', name: 'Scotiabank', shortName: 'Scotia', logo: 'S' },
-        { id: 'bank-5', name: 'Banco de la Nación', shortName: 'BN', logo: 'BN' }
+        { id: 'bank-1', name: 'Banco de Crédito del Perú', shortName: 'BCP', logo: 'https://placehold.co/100x100/002e6e/ffffff/png?text=BCP' },
+        { id: 'bank-2', name: 'Interbank', shortName: 'IBK', logo: 'https://placehold.co/100x100/009639/ffffff/png?text=IBK' },
+        { id: 'bank-3', name: 'BBVA', shortName: 'BBVA', logo: 'https://placehold.co/100x100/004481/ffffff/png?text=BBVA' },
+        { id: 'bank-4', name: 'Scotiabank', shortName: 'Scotia', logo: 'https://placehold.co/100x100/ec111a/ffffff/png?text=Scotia' },
+        { id: 'bank-5', name: 'Banco de la Nación', shortName: 'BN', logo: 'https://placehold.co/100x100/9d0e12/ffffff/png?text=BN' }
     ],
     wallets: [
-        { id: 'wallet-1', name: 'Yape', shortName: 'Yape', logo: 'Y' },
-        { id: 'wallet-2', name: 'Plin', shortName: 'Plin', logo: 'P' },
-        { id: 'wallet-3', name: 'Agora', shortName: 'Agora', logo: 'A' }
+        { id: 'wallet-1', name: 'Yape', shortName: 'Yape', logo: 'https://placehold.co/100x100/742284/ffffff/png?text=Yape' },
+        { id: 'wallet-2', name: 'Plin', shortName: 'Plin', logo: 'https://placehold.co/100x100/00a0dc/ffffff/png?text=Plin' },
+        { id: 'wallet-3', name: 'Agora', shortName: 'Agora', logo: 'https://placehold.co/100x100/ff5500/ffffff/png?text=Agora' }
     ]
 };
 
@@ -890,9 +890,10 @@ export const INITIAL_TRANSACTIONS_V2 = [];
 
 export const PRICING_CONFIG = {
     ticketTypes: [
-        { id: 'presencial', title: 'Presencial', price: 0, subtitle: 'Gratis', description: 'Acceso a todas las conferencias presenciales' },
-        { id: 'presencial_cert', title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00', description: 'Incluye certificado digital oficial' },
-        { id: 'virtual', title: 'Virtual', price: 70, subtitle: 'S/ 70.00', description: 'Acceso a transmisión en vivo y certificado' }
+        { id: 't_1767220000001', title: 'Virtual (Sin Certificado)', price: 30, subtitle: 'S/ 30.00', description: 'Acceso a transmisión en vivo' },
+        { id: 't_1767220000002', title: 'Virtual + Certificado', price: 50, subtitle: 'S/ 50.00', description: 'Acceso a transmisión y certificado digital' },
+        { id: 't_1767220000003', title: 'Presencial (Sin Certificado)', price: 0, subtitle: 'Gratis', description: 'Acceso a conferencias' },
+        { id: 't_1767220000004', title: 'Presencial + Certificado', price: 50, subtitle: 'S/ 50.00', description: 'Acceso a conferencias y certificado digital' }
     ],
     workshops: [
         { id: 'w_1767220000001', name: 'Taller de Neuroimagen Avanzada', price: 20, description: 'Sábado 24 - 15:00 hrs' },
