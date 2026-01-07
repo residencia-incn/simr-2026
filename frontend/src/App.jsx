@@ -32,6 +32,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { CartProvider, useCart } from './context/CartContext.jsx';
 import ShoppingCart from './components/checkout/ShoppingCart';
 import { PermissionGate } from './components/auth/PermissionGate';
+import { checkAndResetStorage } from './utils/resetStorage';
 
 const AccessDeniedFallback = ({ message, navigate }) => {
   useEffect(() => {
@@ -96,6 +97,16 @@ function SIMRAppContent() {
     }
     return null;
   });
+
+  // Check database version and reset if needed (MUST RUN FIRST)
+  useEffect(() => {
+    const wasReset = checkAndResetStorage();
+    if (wasReset) {
+      // Force reload to ensure clean state
+      console.log('[App] Database was reset, reloading page...');
+      window.location.reload();
+    }
+  }, []); // Run once on mount
 
   // Sync local user state with AuthContext user (which has properly derived permissions)
   useEffect(() => {

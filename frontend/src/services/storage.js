@@ -88,6 +88,18 @@ export const storage = {
         } catch (e) {
             console.error(`Storage Error (REMOVE ${key}):`, e);
         }
+    },
+
+    /**
+     * Clear all storage
+     */
+    clearAll: () => {
+        try {
+            localStorage.clear();
+            console.log('[Storage] All localStorage data cleared');
+        } catch (e) {
+            console.error('Storage Error (CLEAR ALL):', e);
+        }
     }
 };
 
