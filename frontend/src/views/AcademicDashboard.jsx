@@ -35,7 +35,7 @@ const AcademicDashboard = ({ role }) => {
     // Reset tab when role changes to ensure permission compliance
     useEffect(() => {
         if (isCommittee) {
-            const committeeTabs = ['approved', 'observation', 'rubrics', 'juries', 'speakers', 'results'];
+            const committeeTabs = ['approved', 'speakers', 'juries', 'rubrics', 'results'];
             if (!committeeTabs.includes(activeTab)) {
                 setActiveTab('approved');
             }
@@ -411,14 +411,7 @@ const AcademicDashboard = ({ role }) => {
                             >
                                 Aceptados
                             </button>
-                            {role !== 'committee' && (
-                                <button
-                                    onClick={() => setActiveTab('observation')}
-                                    className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'observation' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                >
-                                    Observados
-                                </button>
-                            )}
+                            {/* Observados removed as per request */}
 
                             {isCommittee && (
                                 <>
@@ -427,6 +420,12 @@ const AcademicDashboard = ({ role }) => {
                                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'speakers' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
                                         Ponentes
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab('juries')}
+                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'juries' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                                    >
+                                        Jurados
                                     </button>
                                     <button
                                         onClick={() => setActiveTab('rubrics')}
@@ -439,12 +438,6 @@ const AcademicDashboard = ({ role }) => {
                                         className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'results' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                                     >
                                         Resultados
-                                    </button>
-                                    <button
-                                        onClick={() => setActiveTab('juries')}
-                                        className={`px-4 py-2 rounded-md text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'juries' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                                    >
-                                        Jurados
                                     </button>
                                 </>
                             )}
@@ -460,7 +453,7 @@ const AcademicDashboard = ({ role }) => {
                     </div>
 
                     {/* Bottom Row: Filters & Search */}
-                    {activeTab !== 'config' && activeTab !== 'rubrics' && activeTab !== 'juries' && activeTab !== 'results' && (
+                    {activeTab !== 'config' && activeTab !== 'rubrics' && activeTab !== 'juries' && activeTab !== 'results' && activeTab !== 'speakers' && (
                         <div className="flex flex-col md:flex-row justify-between items-center gap-4 pt-2 border-t border-gray-50">
                             <div className="flex items-center gap-2 w-full md:w-auto">
                                 <Filter size={16} className="text-gray-400" />

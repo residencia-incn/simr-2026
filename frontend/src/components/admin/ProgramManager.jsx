@@ -118,8 +118,10 @@ const ProgramManager = () => {
     const [activeDay, setActiveDay] = useState(null);
     const [program, setProgram] = useState({});
 
-    // Academic Works for linking
+    // Academic Works and Talks for linking
     const [works, setWorks] = useState([]);
+    const [speakers, setSpeakers] = useState([]);
+    const [importType, setImportType] = useState('works'); // 'works' | 'talks'
 
     // Schedule Config State
     const [scheduleConfig, setScheduleConfig] = useState({
@@ -150,6 +152,19 @@ const ProgramManager = () => {
     const availableSlots = useMemo(() => {
         return generateTimeSlots(scheduleConfig.startTime, scheduleConfig.endTime, scheduleConfig.interval);
     }, [scheduleConfig]);
+
+    // Flattened Talks List
+    const collectedTalks = useMemo(() => {
+        return speakers.flatMap(speaker =>
+            (speaker.talks || []).map(talk => ({
+                id: talk.id || `talk-${Date.now()}-${Math.random()}`,
+                title: talk.title,
+                author: `${speaker.firstName} ${speaker.lastName}`, // Using author field for compatibility with linkedWork logic
+                role: speaker.role || 'Ponente',
+                type: 'talk'
+            }))
+        );
+    }, [speakers]);
 
     const durationOptions = [
         { value: 15, label: '15 min' },
@@ -186,14 +201,15 @@ const ProgramManager = () => {
 
     // API
     const fetchProgramData = async () => {
-        const [daysData, progData, hallsData, worksData, configData] = await Promise.all([
+        const [daysData, progData, hallsData, worksData, configData, speakersData] = await Promise.all([
             api.program.getDays(),
             api.program.getAll(),
             api.program.getHalls(),
             api.works.getAll(),
-            api.program.getScheduleConfig ? api.program.getScheduleConfig() : Promise.resolve(null)
+            api.program.getScheduleConfig ? api.program.getScheduleConfig() : Promise.resolve(null),
+            api.speakers.getAll() // Fetch speakers
         ]);
-        return { days: daysData, program: progData, halls: hallsData, works: worksData, config: configData };
+        return { days: daysData, program: progData, halls: hallsData, works: worksData, config: configData, speakers: speakersData };
     };
 
     const { data, loading, execute: loadData } = useApi(fetchProgramData);
@@ -208,6 +224,7 @@ const ProgramManager = () => {
             setProgram(data.program);
             setHalls(data.halls || []);
             setWorks(data.works || []);
+            setSpeakers(data.speakers || []);
             if (data.config) setScheduleConfig(data.config);
             if (!activeDay && data.days.length > 0) setActiveDay(data.days[0].id);
         }
@@ -381,14 +398,14 @@ const ProgramManager = () => {
         setIsEditing(true);
     };
 
-    const handleDeleteBlock = (blockId) => {
+    const handleDeleteBlock = (index) => {
         setConfirmConfig({
             isOpen: true,
             title: 'Eliminar Bloque',
             message: '¿Eliminar este bloque horario?',
             type: 'danger',
             onConfirm: async () => {
-                const updatedDay = program[activeDay].filter(b => b.id !== blockId);
+                const updatedDay = program[activeDay].filter((_, i) => i !== index);
                 await saveProgram({ ...program, [activeDay]: updatedDay });
                 setConfirmConfig(prev => ({ ...prev, isOpen: false }));
             }
@@ -924,26 +941,71 @@ const ProgramManager = () => {
                 size="md"
             >
                 <div className="space-y-4">
-                    <p className="text-sm text-gray-600">Selecciona un trabajo aceptado para rellenar los datos de la sesión.</p>
-                    <div className="max-h-96 overflow-y-auto space-y-2">
-                        {works.filter(w => w.status === 'Aceptado').length === 0 && (
-                            <p className="text-center text-gray-500 py-4 italic">No hay trabajos aceptados disponibles.</p>
+                    <div className="flex bg-gray-100 p-1 rounded-lg mb-2">
+                        <button
+                            onClick={() => setImportType('works')}
+                            className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${importType === 'works' ? 'bg-white shadow text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Trabajos Académicos
+                        </button>
+                        <button
+                            onClick={() => setImportType('talks')}
+                            className={`flex-1 py-1.5 text-sm font-bold rounded-md transition-all ${importType === 'talks' ? 'bg-white shadow text-purple-600' : 'text-gray-500 hover:text-gray-700'}`}
+                        >
+                            Ponencias ({collectedTalks.length})
+                        </button>
+                    </div>
+
+                    <p className="text-sm text-gray-600">
+                        {importType === 'works'
+                            ? "Selecciona un trabajo aceptado para rellenar los datos de la sesión."
+                            : "Selecciona una ponencia asignada para rellenar los datos de la sesión."}
+                    </p>
+
+                    <div className="max-h-96 overflow-y-auto space-y-2 custom-scrollbar">
+                        {importType === 'works' ? (
+                            <>
+                                {works.filter(w => w.status === 'Aceptado').length === 0 && (
+                                    <p className="text-center text-gray-500 py-4 italic">No hay trabajos aceptados disponibles.</p>
+                                )}
+                                {works.filter(w => w.status === 'Aceptado').map(work => (
+                                    <button
+                                        key={work.id}
+                                        onClick={() => handleLinkWork(work)}
+                                        className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                                    >
+                                        <div className="font-bold text-sm text-gray-800 group-hover:text-blue-700 line-clamp-2">{work.title}</div>
+                                        <div className="flex justify-between mt-1 text-xs text-gray-500">
+                                            <span>{work.author}</span>
+                                            <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                <Check size={10} /> Aceptado
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </>
+                        ) : (
+                            <>
+                                {collectedTalks.length === 0 && (
+                                    <p className="text-center text-gray-500 py-4 italic">No hay ponencias registradas.</p>
+                                )}
+                                {collectedTalks.map((talk, idx) => (
+                                    <button
+                                        key={idx}
+                                        onClick={() => handleLinkWork(talk)}
+                                        className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-purple-500 hover:bg-purple-50 transition-all group"
+                                    >
+                                        <div className="font-bold text-sm text-gray-800 group-hover:text-purple-700 line-clamp-2">{talk.title}</div>
+                                        <div className="flex justify-between mt-1 text-xs text-gray-500">
+                                            <span>{talk.author}</span>
+                                            <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded flex items-center gap-1">
+                                                <BookOpen size={10} /> Ponencia
+                                            </span>
+                                        </div>
+                                    </button>
+                                ))}
+                            </>
                         )}
-                        {works.filter(w => w.status === 'Aceptado').map(work => (
-                            <button
-                                key={work.id}
-                                onClick={() => handleLinkWork(work)}
-                                className="w-full text-left p-3 rounded-lg border border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all group"
-                            >
-                                <div className="font-bold text-sm text-gray-800 group-hover:text-blue-700 line-clamp-2">{work.title}</div>
-                                <div className="flex justify-between mt-1 text-xs text-gray-500">
-                                    <span>{work.author}</span>
-                                    <span className="bg-green-100 text-green-700 px-1.5 py-0.5 rounded flex items-center gap-1">
-                                        <Check size={10} /> Aceptado
-                                    </span>
-                                </div>
-                            </button>
-                        ))}
                     </div>
                     <div className="flex justify-end pt-2">
                         <Button variant="ghost" onClick={() => { setIsLinkingWork(false); setLinkingTarget(null); }}>Cancelar</Button>
@@ -1058,7 +1120,7 @@ const ProgramManager = () => {
                                     <button onClick={() => handleEditBlock(block)} className="p-2 text-blue-600 hover:bg-blue-50 rounded-full">
                                         <Edit2 size={16} />
                                     </button>
-                                    <button onClick={() => handleDeleteBlock(block.id)} className="p-2 text-red-600 hover:bg-red-50 rounded-full">
+                                    <button onClick={() => handleDeleteBlock(idx)} className="p-2 text-red-600 hover:bg-red-50 rounded-full">
                                         <Trash2 size={16} />
                                     </button>
                                 </div>

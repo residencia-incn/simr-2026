@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Ticket, Laptop, Smartphone, Globe, LogOut } from 'lucide-react';
+import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Ticket, Laptop, Smartphone, Globe, LogOut, Upload } from 'lucide-react';
 import { Card, Button, FormField, SectionHeader, StyledDatePicker } from '../components/ui';
 import { useForm, useFileUpload, useApi } from '../hooks';
 import QRCode from 'react-qr-code';
@@ -133,15 +133,45 @@ const ProfileView = ({ user, onSave }) => {
     // Image handling
     const [currentImage, setCurrentImage] = useState(user?.image || null);
 
+    // DNI Upload removed per user request
     const {
-        file: imageFile,
+        file,
         preview: imagePreview,
         handleFileChange,
-        clear: clearImage
+        clear,
+        convertToBase64
     } = useFileUpload({
-        acceptedTypes: ['image/*'],
-        maxSize: 5 * 1024 * 1024 // 5MB
+        acceptedTypes: ['image/jpeg', 'image/png', 'image/gif'],
+        maxSize: 2 * 1024 * 1024 // 2MB
     });
+
+    const countries = [
+        "Perú", "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Paraguay", "Uruguay", "Venezuela", "Estados Unidos", "España", "Otro"
+    ];
+
+    const [participantSpecialties, setParticipantSpecialties] = useState([]);
+    const [institutions, setInstitutions] = useState([]);
+
+    useEffect(() => {
+        const fetchConfig = async () => {
+            try {
+                const config = await api.content.getConfig();
+                // Specialties
+                const specialitiesList = config?.participantSpecialties ||
+                    ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"];
+                setParticipantSpecialties(specialitiesList);
+
+                // Institutions
+                const institutionsList = config?.institutions || [];
+                setInstitutions(institutionsList);
+            } catch (error) {
+                console.error("Error loading config:", error);
+                setParticipantSpecialties(["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"]);
+                setInstitutions([]);
+            }
+        };
+        fetchConfig();
+    }, []);
 
     const { values: form, handleChange, setValues } = useForm({
         firstName: user?.firstName || '',
@@ -153,9 +183,11 @@ const ProfileView = ({ user, onSave }) => {
         dni: user?.dni || '',
         cmp: user?.cmp || '',
         rne: user?.rne || '',
-        rne: user?.rne || '',
+        specialty: user?.specialty || '', // Added specialty
         birthDate: user?.birthDate || '',
         gender: user?.gender || 'unspecified',
+        occupation: user?.occupation || '', // Added occupation
+        country: user?.country || 'Perú', // Added country with default
     }, null, 'user_profile_draft');
 
     useEffect(() => {
@@ -170,9 +202,11 @@ const ProfileView = ({ user, onSave }) => {
                 dni: user.dni || '',
                 cmp: user.cmp || '',
                 rne: user.rne || '',
-                rne: user.rne || '',
+                specialty: user.specialty || '',
                 birthDate: user.birthDate || '',
                 gender: user.gender || 'unspecified',
+                occupation: user.occupation || '',
+                country: user.country || 'Perú',
             });
             setCurrentImage(user.image || null);
         }
@@ -186,7 +220,7 @@ const ProfileView = ({ user, onSave }) => {
 
         if (result.isConfirmed) {
             setCurrentImage(null);
-            clearImage();
+            clear();
             // Immediately update the parent component to sync across the app
             if (onSave) {
                 onSave({ ...user, image: null });
@@ -230,12 +264,23 @@ const ProfileView = ({ user, onSave }) => {
         // Sync name field from firstName and lastName for backward compatibility
         const fullName = `${form.lastName} ${form.firstName}`.trim();
 
+        // Handle Profile Image conversion
+        let imageBase64 = currentImage; // Default to current image
+        if (file) {
+            try {
+                imageBase64 = await convertToBase64(file);
+            } catch (error) {
+                setMessage({ type: 'error', text: 'Error al procesar la imagen de perfil.' });
+                return;
+            }
+        }
+
         // Preserve all existing user data and only update changed fields
         const updatedProfile = {
             ...user, // Preserve all existing user data (id, roles, profiles, etc.)
             ...form, // Update form fields (firstName, lastName, email, phone, institution, etc.)
             name: fullName, // Sync combined name field
-            image: imagePreview || currentImage // Update image (imagePreview contains base64)
+            image: imageBase64 || null
         };
 
         try {
@@ -888,6 +933,25 @@ const ProfileView = ({ user, onSave }) => {
                                         readOnly={!isEditing}
                                         required
                                     />
+
+                                    <StyledDatePicker
+                                        label="Fecha de Nacimiento"
+                                        name="birthDate"
+                                        value={form.birthDate}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                    />
+
+                                    <FormField
+                                        label="DNI"
+                                        name="dni"
+                                        value={form.dni}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        className={!isEditing ? "bg-gray-100 opacity-75 cursor-not-allowed w-full" : "bg-white w-full"}
+                                        subLabel={!isEditing ? "(No editable)" : ""}
+                                    />
+
                                     <FormField
                                         label="Correo Electrónico"
                                         name="email"
@@ -897,6 +961,7 @@ const ProfileView = ({ user, onSave }) => {
                                         readOnly={!isEditing}
                                         required
                                     />
+
                                     <FormField
                                         label="Teléfono / Celular"
                                         name="phone"
@@ -909,33 +974,48 @@ const ProfileView = ({ user, onSave }) => {
                                         readOnly={!isEditing}
                                         placeholder="Ej. 987654321"
                                     />
-                                    {/* Gender and Birth Date */}
-                                    <div className="md:col-span-2 grid md:grid-cols-2 gap-5">
-                                        <div>
-                                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                                                Sexo
-                                            </label>
-                                            <select
-                                                name="gender"
-                                                value={form.gender}
-                                                onChange={handleChange}
-                                                disabled={!isEditing}
-                                                className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
-                                                    }`}
-                                            >
-                                                <option value="unspecified">No Especifica</option>
-                                                <option value="male">Hombre</option>
-                                                <option value="female">Mujer</option>
-                                            </select>
-                                        </div>
-                                        <StyledDatePicker
-                                            label="Fecha de Nacimiento"
-                                            name="birthDate"
-                                            value={form.birthDate}
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-5">
+                                    {/* Gender */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            Sexo
+                                        </label>
+                                        <select
+                                            name="gender"
+                                            value={form.gender}
                                             onChange={handleChange}
-                                            readOnly={!isEditing}
-                                        />
+                                            disabled={!isEditing}
+                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                }`}
+                                        >
+                                            <option value="unspecified">No Especifica</option>
+                                            <option value="male">Hombre</option>
+                                            <option value="female">Mujer</option>
+                                        </select>
                                     </div>
+
+                                    {/* Country Field */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                            País
+                                        </label>
+                                        <select
+                                            name="country"
+                                            value={form.country}
+                                            onChange={handleChange}
+                                            disabled={!isEditing}
+                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                }`}
+                                        >
+                                            {countries.map(c => (
+                                                <option key={c} value={c}>{c}</option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+
                                 </div>
 
                                 <div className="border-t border-gray-100 pt-6 mt-2">
@@ -943,61 +1023,149 @@ const ProfileView = ({ user, onSave }) => {
                                         <CreditCard size={18} className="text-gray-500" />
                                         Datos Profesionales
                                     </h4>
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-3 gap-4 mb-4">
-                                        <FormField
-                                            label="DNI"
-                                            name="dni"
-                                            value={form.dni}
-                                            readOnly={true}
-                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                            subLabel="(No editable)"
-                                        />
-                                        <FormField
-                                            label="CMP"
-                                            name="cmp"
-                                            value={form.cmp}
-                                            readOnly={true}
-                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                            subLabel="(No editable)"
-                                        />
-                                        <FormField
-                                            label="RNE"
-                                            name="rne"
-                                            value={form.rne}
-                                            readOnly={true}
-                                            className="bg-gray-100 opacity-75 cursor-not-allowed"
-                                            subLabel="(No editable)"
-                                        />
-                                    </div>
 
-                                    {/* Moved Institution Field */}
-                                    <FormField
-                                        label="Institución"
-                                        name="institution"
-                                        value={form.institution}
-                                        onChange={handleChange}
-                                        readOnly={!isEditing}
-                                        className="w-full"
-                                    />
+                                    <div className="grid md:grid-cols-2 gap-5 mb-5">
+
+                                        {/* Institution Field - Moved to top */}
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Institución
+                                            </label>
+                                            <input
+                                                list="institutions-list"
+                                                name="institution"
+                                                value={form.institution}
+                                                onChange={handleChange}
+                                                readOnly={!isEditing}
+                                                className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                    }`}
+                                                placeholder="Instituto Nacional de Ciencias Neurológicas"
+                                            />
+                                            <datalist id="institutions-list">
+                                                {institutions.map((inst, index) => (
+                                                    <option key={index} value={inst} />
+                                                ))}
+                                            </datalist>
+                                        </div>
+
+                                        {/* Occupation Field */}
+                                        <div className="md:col-span-2">
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Ocupación / Cargo
+                                            </label>
+                                            <select
+                                                name="occupation"
+                                                value={form.occupation}
+                                                onChange={handleChange}
+                                                disabled={!isEditing}
+                                                className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                    }`}
+                                            >
+                                                <option value="">Seleccione...</option>
+                                                <option value="Médico Especialista">Médico Especialista</option>
+                                                <option value="Médico Residente">Médico Residente</option>
+                                                <option value="Médico General">Médico General</option>
+                                                <option value="Estudiante de Medicina">Estudiante de Medicina</option>
+                                                <option value="Otro">Otro</option>
+                                            </select>
+                                        </div>
+
+                                        {/* Dynamic Professional Fields */}
+                                        {(form.occupation === 'Médico General' || form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
+                                            <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-2 gap-4">
+
+                                                {/* Specialty - First in subsection for Specialists and Residents */}
+                                                {(form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
+                                                    <div className="md:col-span-2">
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                            Especialidad
+                                                        </label>
+                                                        <select
+                                                            name="specialty"
+                                                            value={form.specialty}
+                                                            onChange={handleChange}
+                                                            disabled={!isEditing}
+                                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                                }`}
+                                                        >
+                                                            <option value="">Seleccione...</option>
+                                                            {participantSpecialties.map((spec, index) => (
+                                                                <option key={index} value={spec}>{spec}</option>
+                                                            ))}
+                                                        </select>
+                                                    </div>
+                                                )}
+
+                                                {/* CMP - Required for all doctors */}
+                                                <FormField
+                                                    label="CMP"
+                                                    name="cmp"
+                                                    value={form.cmp}
+                                                    onChange={handleChange}
+                                                    readOnly={!isEditing}
+                                                    className={!isEditing ? "bg-gray-100 opacity-75 cursor-not-allowed" : "bg-white"}
+                                                    placeholder="12345"
+                                                />
+
+                                                {/* RNE - Only for Specialists */}
+                                                {form.occupation === 'Médico Especialista' && (
+                                                    <FormField
+                                                        label="RNE"
+                                                        name="rne"
+                                                        value={form.rne}
+                                                        onChange={handleChange}
+                                                        readOnly={!isEditing}
+                                                        placeholder="54321"
+                                                    />
+                                                )}
+
+                                                {/* Residency Year - Only for Residents */}
+                                                {form.occupation === 'Médico Residente' && (
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                            Año de Residencia
+                                                        </label>
+                                                        <select
+                                                            name="residencyYear"
+                                                            value={form.residencyYear || ''} // Ensure controlled component
+                                                            onChange={handleChange}
+                                                            disabled={!isEditing}
+                                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                                }`}
+                                                        >
+                                                            <option value="">Seleccione...</option>
+                                                            <option value="R1">R1</option>
+                                                            <option value="R2">R2</option>
+                                                            <option value="R3">R3</option>
+                                                            <option value="R4">R4</option>
+                                                            <option value="R5">R5</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     <p className="text-xs text-gray-400 mt-2 ml-1">
                                         * Para modificar los datos de colegiatura, por favor contacte con el administrador del sistema.
                                     </p>
                                 </div>
 
-                                {isEditing && (
-                                    <div className="flex justify-end pt-4">
-                                        <Button type="submit" className="bg-blue-600 hover:bg-blue-700 gap-2">
-                                            <Save size={18} />
-                                            Guardar Cambios
-                                        </Button>
-                                    </div>
-                                )}
-                            </form>
-                        </Card>
+                                {
+                                    isEditing && (
+                                        <div className="flex justify-end pt-4">
+                                            <Button type="submit" className="bg-blue-600 hover:bg-blue-700 gap-2">
+                                                <Save size={18} />
+                                                Guardar Cambios
+                                            </Button>
+                                        </div>
+                                    )
+                                }
+                            </form >
+                        </Card >
 
                         {/* Change Password Section */}
-                        <Card className="p-6 mt-6">
+                        < Card className="p-6 mt-6" >
                             <div className="mb-6">
                                 <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
                                     <Lock size={20} className="text-blue-600" />
@@ -1006,12 +1174,14 @@ const ProfileView = ({ user, onSave }) => {
                                 <p className="text-sm text-gray-500 mt-1">Actualiza tu contraseña para mantener tu cuenta segura.</p>
                             </div>
 
-                            {passwordMessage && (
-                                <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
-                                    {passwordMessage.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
-                                    {passwordMessage.text}
-                                </div>
-                            )}
+                            {
+                                passwordMessage && (
+                                    <div className={`p-4 rounded-lg mb-6 flex items-center gap-2 ${passwordMessage.type === 'success' ? 'bg-green-50 text-green-700 border border-green-200' : 'bg-red-50 text-red-700 border border-red-200'}`}>
+                                        {passwordMessage.type === 'success' ? <div className="w-2 h-2 rounded-full bg-green-500"></div> : <div className="w-2 h-2 rounded-full bg-red-500"></div>}
+                                        {passwordMessage.text}
+                                    </div>
+                                )
+                            }
 
                             <form onSubmit={handlePasswordSubmit} className="space-y-5">
                                 <div className="relative">
@@ -1064,11 +1234,11 @@ const ProfileView = ({ user, onSave }) => {
                                     </Button>
                                 </div>
                             </form>
-                        </Card>
-                    </div>
+                        </Card >
+                    </div >
                 )}
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
 

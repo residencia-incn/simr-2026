@@ -80,6 +80,18 @@ function SIMRAppContent() {
       if (userData.role === 'accounting') {
         userData.role = 'treasurer';
       }
+      // Auto-clean: Remove phantom 'ponente' module if present in user data
+      if (userData.modules && Array.isArray(userData.modules)) {
+        userData.modules = userData.modules.filter(m => m !== 'ponente');
+
+        // Auto-heal: Ensure 'academico' is present for ponentes
+        const isPonente = (userData.eventRoles && userData.eventRoles.includes('ponente')) ||
+          (userData.roles && userData.roles.includes('ponente'));
+
+        if (isPonente && !userData.modules.includes('academico')) {
+          userData.modules.push('academico');
+        }
+      }
       return userData;
     }
     return null;
@@ -238,7 +250,7 @@ function SIMRAppContent() {
 
     // RBAC: Use modules instead of profiles for initial role determination
     // Modules are derived from eventRole + organizerFunction in AuthContext
-    const allModules = userData.modules || ['mi_perfil'];
+    const allModules = (userData.modules || ['mi_perfil']).filter(m => m !== 'ponente');
     const initialRole = allModules.find(m => m !== 'mi_perfil') || 'mi_perfil';
 
     setActiveRole(initialRole);
@@ -418,7 +430,7 @@ function SIMRAppContent() {
                           {(() => {
                             const uniqueLabels = new Set();
                             return user.modules
-                              .filter(m => m !== 'perfil_basico' && m !== 'mi_perfil')
+                              .filter(m => m !== 'perfil_basico' && m !== 'mi_perfil' && m !== 'ponente')
                               .filter(module => {
                                 const label = ROLE_LABELS[module] || module;
                                 if (uniqueLabels.has(label)) return false;

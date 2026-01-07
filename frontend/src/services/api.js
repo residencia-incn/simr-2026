@@ -100,8 +100,20 @@ const getRoleModules = async (roleName) => {
                 modality = presencialCertId;
             }
 
+            let modules = [];
+            if (Array.isArray(config.modules)) {
+                modules = config.modules;
+            } else if (typeof config.modules === 'object' && config.modules !== null) {
+                // Handle Object Schema: { moduleId: { enabled: true, ... } }
+                modules = Object.entries(config.modules)
+                    .filter(([_, conf]) => conf && conf.enabled)
+                    .map(([key]) => key);
+            } else {
+                modules = ['perfil_basico', 'aula_virtual'];
+            }
+
             return {
-                modules: Array.isArray(config.modules) ? config.modules : ['perfil_basico', 'aula_virtual'],
+                modules: modules,
                 modality: modality
             };
         }
@@ -113,7 +125,7 @@ const getRoleModules = async (roleName) => {
                 modality: presencialCertId
             },
             'ponente': {
-                modules: ['perfil_basico', 'aula_virtual', 'ponente', 'academico'], // Added academico
+                modules: ['perfil_basico', 'aula_virtual', 'academico'], // Removed 'ponente' phantom module
                 modality: presencialCertId
             },
             'asistente': {
@@ -418,14 +430,105 @@ export const api = {
     system: {
         getConfig: async () => {
             await delay(100);
+            const contentConfig = await api.content.getConfig();
             return {
-                occupations: EVENT_CONFIG.occupations,
-                institutions: EVENT_CONFIG.institutions
+                occupations: contentConfig.occupations || EVENT_CONFIG.occupations,
+                institutions: contentConfig.institutions || EVENT_CONFIG.institutions,
+                specialties: contentConfig.specialties || EVENT_CONFIG.specialties,
+                participantSpecialties: contentConfig.participantSpecialties || EVENT_CONFIG.participantSpecialties
             };
         },
         getRoleDefaults: async () => {
             await delay(100);
-            return storage.get(STORAGE_KEYS.ROLE_DEFAULTS, {});
+            let defaults = storage.get(STORAGE_KEYS.ROLE_DEFAULTS, {});
+
+            // Schema v2: Fallback Defaults (Object Schema)
+            // Used if local storage is empty or role key is missing
+            const fallbackModules = {
+                'jurado': {
+                    modules: {
+                        'perfil_basico': { enabled: true, locked: true },
+                        'aula_virtual': { enabled: true, locked: false },
+                        'jurado': { enabled: true, locked: true },
+                        'academico': { enabled: true, locked: true }
+                    }
+                },
+                'ponente': {
+                    modules: {
+                        'perfil_basico': { enabled: true, locked: true },
+                        'aula_virtual': { enabled: true, locked: false },
+                        'academico': { enabled: true, locked: true }
+                    }
+                },
+                'asistente': {
+                    modules: {
+                        'perfil_basico': { enabled: true, locked: true },
+                        'aula_virtual': { enabled: true, locked: false }
+                    }
+                },
+                'organizador': {
+                    modules: {
+                        'perfil_basico': { enabled: true, locked: true },
+                        'aula_virtual': { enabled: true, locked: false },
+                        'organizacion': { enabled: true, locked: true },
+                        'secretaria': { enabled: true, locked: true },
+                        'contabilidad': { enabled: true, locked: true },
+                        'investigacion': { enabled: true, locked: true },
+                        'jurado': { enabled: true, locked: true },
+                        'academico': { enabled: true, locked: true }
+                    }
+                }
+            };
+
+            let patched = false;
+
+            // 1. Initialize missing keys or Migrate Arrays
+            ['organizador', 'ponente', 'jurado', 'asistente'].forEach(role => {
+                if (!defaults[role]) {
+                    defaults[role] = fallbackModules[role] || { modules: {} };
+                    patched = true;
+                } else if (defaults[role].modules && Array.isArray(defaults[role].modules)) {
+                    // Migrate Legacy Array to Object Schema
+                    const modObj = {};
+                    defaults[role].modules.forEach(m => { modObj[m] = { enabled: true, locked: false }; });
+
+                    // Restore locks for core modules matching fallback
+                    const fallback = fallbackModules[role]?.modules || {};
+                    Object.keys(modObj).forEach(k => {
+                        if (fallback[k]?.locked) modObj[k].locked = true;
+                    });
+                    // Ensure core modules exist
+                    Object.entries(fallback).forEach(([k, v]) => {
+                        if (v.locked && !modObj[k]) modObj[k] = v;
+                    });
+
+                    defaults[role].modules = modObj;
+                    patched = true;
+                    console.log(`[System] Migrated ${role} defaults to Object Schema`);
+                }
+            });
+
+            // 2. Specific Patch: Enforce 'academico' for 'ponente'
+            // This runs effectively every time to ensure it's not accidentally disabled,
+            // but respects if it's already there (handled by fallback initialization above for new/empty).
+            if (defaults['ponente'] && defaults['ponente'].modules) {
+                const pMods = defaults['ponente'].modules;
+                // If missing or disabled, force enable it? 
+                // User workflow: Logic should be "Default is Enabled". User can disable if they want?
+                // Current requirement: "Persist config". If user disabled it, it should stay disabled.
+                // BUT Image 1 issue was "Reverts to Disabled (Opcional)".
+                // The fallback logic above sets it to enabled: true, locked: true.
+                // So if it was missing (Empty storage), it is now Enabled.
+                // So "reverting" issue is fixed by Fallback.
+                // We don't need aggressive overwriting here unless we want to FORCE it always.
+                // I will leave it to the Fallback Initialization logic.
+            }
+
+            if (patched) {
+                storage.set(STORAGE_KEYS.ROLE_DEFAULTS, defaults);
+            }
+
+            return defaults;
         },
         saveRoleDefaults: async (defaults) => {
             await delay(100);
@@ -1082,7 +1185,8 @@ export const api = {
 
                 // Add required profiles from role configuration
                 const roleConfig = await getRoleModules('ponente');
-                const newProfiles = [...new Set([...currentProfiles, ...roleConfig.modules])];
+                // Ensure 'ponente' string is NOT in the modules list (it's a role, not a module)
+                const newProfiles = [...new Set([...currentProfiles, ...roleConfig.modules])].filter(m => m !== 'ponente');
 
                 if (newProfiles.length !== currentProfiles.length) {
                     updates.profiles = newProfiles;
@@ -1125,6 +1229,10 @@ export const api = {
                     modality: roleConfig.modality // Secondary modality field
                 });
             }
+        },
+        update: async (speakerData) => {
+            await delay();
+            return await api.users.update(speakerData);
         },
         delete: async (id) => {
             await delay();
@@ -1991,6 +2099,17 @@ export const api = {
 
     // --- Treasury System ---
     treasury: {
+        // Pricing (Dynamic Pricing Configuration)
+        getPricing: async () => {
+            await delay(100);
+            return storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
+        },
+        updatePricing: async (newPricing) => {
+            await delay(100);
+            storage.set(STORAGE_KEYS.PRICING, newPricing);
+            return newPricing;
+        },
+
         // Configuration
         getConfig: async () => {
             await delay();

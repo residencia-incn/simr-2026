@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, User, Mail, Shield, Building, Search, UserPlus, CheckCircle, AlertCircle } from 'lucide-react';
+import { X, User, Mail, Shield, Building, Search, UserPlus, CheckCircle, AlertCircle, Globe } from 'lucide-react';
 import Button from '../ui/Button';
 import { api } from '../../services/api';
 
@@ -16,7 +16,8 @@ const AddSpeakerModal = ({ isOpen, onClose, onUpdate }) => {
         rne: '',
         residencyYear: '',
         specialty: '',
-        institution: ''
+        institution: '',
+        country: 'Perú' // Added country
     });
 
     // Search State
@@ -24,17 +25,14 @@ const AddSpeakerModal = ({ isOpen, onClose, onUpdate }) => {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
 
-    // Config State
-    const [config, setConfig] = useState({ occupations: [], institutions: [] });
-    // General State
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
-    const [successMessage, setSuccessMessage] = useState(null);
+    const countries = [
+        "Perú", "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Paraguay", "Uruguay", "Venezuela", "Estados Unidos", "España", "Otro"
+    ];
 
     useEffect(() => {
         if (isOpen) {
             // Reset state when opening
-            setFormData({ name: '', lastName: '', email: '', occupation: '', cmp: '', rne: '', residencyYear: '', specialty: '', institution: '' });
+            setFormData({ name: '', lastName: '', email: '', occupation: '', cmp: '', rne: '', residencyYear: '', specialty: '', institution: '', country: 'Perú' });
             setSearchQuery('');
             setSearchResults([]);
             setError(null);
@@ -242,6 +240,22 @@ const AddSpeakerModal = ({ isOpen, onClose, onUpdate }) => {
                                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                                 placeholder="correo@ejemplo.com"
                                             />
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">País</label>
+                                        <div className="relative">
+                                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                            <select
+                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none appearance-none bg-white"
+                                                value={formData.country}
+                                                onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                                            >
+                                                {countries.map(c => (
+                                                    <option key={c} value={c}>{c}</option>
+                                                ))}
+                                            </select>
                                         </div>
                                     </div>
 

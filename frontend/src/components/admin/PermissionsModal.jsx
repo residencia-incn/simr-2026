@@ -294,8 +294,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                                     Por defecto
                                                                 </span>
                                                             )}
-                                                            {isSelected && !isLocked && (
-                                                                <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                                                            {isSelected && (
+                                                                <span className={`px-2 py-0.5 text-xs rounded-full ${isLocked ? 'bg-gray-400 text-white' : 'bg-blue-500 text-white'}`}>
                                                                     ✓
                                                                 </span>
                                                             )}
@@ -345,8 +345,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                                     Por defecto
                                                                 </span>
                                                             )}
-                                                            {isSelected && !isLocked && (
-                                                                <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                                                            {isSelected && (
+                                                                <span className={`px-2 py-0.5 text-xs rounded-full ${isLocked ? 'bg-gray-400 text-white' : 'bg-blue-500 text-white'}`}>
                                                                     ✓
                                                                 </span>
                                                             )}
@@ -396,8 +396,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                                     Por defecto
                                                                 </span>
                                                             )}
-                                                            {isSelected && !isLocked && (
-                                                                <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
+                                                            {isSelected && (
+                                                                <span className={`px-2 py-0.5 text-xs rounded-full ${isLocked ? 'bg-gray-400 text-white' : 'bg-blue-500 text-white'}`}>
                                                                     ✓
                                                                 </span>
                                                             )}
