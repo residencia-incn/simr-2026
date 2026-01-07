@@ -219,8 +219,45 @@ const getLocalUsers = () => {
         }
     }
 
-    // 3. Migration: Update legacy workshop IDs in purchasedItems/workshops
+
+    // 3. Deduplication: Remove duplicate users by email or DNI
+    // Keep the first occurrence, remove subsequent duplicates
     let hasChanges = false;
+    const seenEmails = new Set();
+    const seenDNIs = new Set();
+    const deduplicatedUsers = [];
+
+    users.forEach(user => {
+        const email = (user.email || '').toLowerCase().trim();
+        const dni = (user.dni || '').trim();
+
+        // Skip if we've seen this email or DNI before
+        if (email && seenEmails.has(email)) {
+            console.log(`[Deduplication] Removing duplicate user by email: ${email} (${user.name || user.id})`);
+            hasChanges = true;
+            return;
+        }
+
+        if (dni && seenDNIs.has(dni)) {
+            console.log(`[Deduplication] Removing duplicate user by DNI: ${dni} (${user.name || user.id})`);
+            hasChanges = true;
+            return;
+        }
+
+        // Mark as seen and keep this user
+        if (email) seenEmails.add(email);
+        if (dni) seenDNIs.add(dni);
+        deduplicatedUsers.push(user);
+    });
+
+    if (deduplicatedUsers.length < users.length) {
+        users = deduplicatedUsers;
+        console.log(`[Deduplication] Removed ${users.length - deduplicatedUsers.length} duplicate users`);
+        storage.set(STORAGE_KEYS.USERS, users);
+        hasChanges = true;
+    }
+
+    // 4. Migration: Update legacy workshop IDs in purchasedItems/workshops
     const updatedUsers = users.map(user => {
         let changed = false;
         let newItems = user.purchasedItems || [];

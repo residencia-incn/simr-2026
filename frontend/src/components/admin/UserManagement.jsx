@@ -95,8 +95,8 @@ const UserManagement = () => {
         try {
             if (actionType === 'delete') {
                 // Delete from Users (Account)
-                if (selectedUser.userId) {
-                    await api.users.delete(selectedUser.userId);
+                if (selectedUser.id) {
+                    await api.users.delete(selectedUser.id);
                 }
 
                 // Delete from Attendees (Registration Record)
@@ -154,7 +154,24 @@ const UserManagement = () => {
             loadUsers();
         } catch (error) {
             console.error("Failed to update permissions", error);
-            showError('No se pudo actualizar los permisos', 'Error');
+
+            // Check for potential duplicate users causing conflict
+            if (error.message && error.message.includes('email')) {
+                const duplicate = users.find(u =>
+                    u.email?.toLowerCase().trim() === selectedUser.email?.toLowerCase().trim() &&
+                    u.id !== selectedUser.id
+                );
+
+                if (duplicate) {
+                    showError(
+                        `Conflicto de email: El correo ${selectedUser.email} ya está siendo usado por otro usuario: "${duplicate.name || duplicate.firstName}" (Rol: ${duplicate.eventRoles?.join(', ')}). Probablemente sea un registro duplicado antiguo.`,
+                        'Error de Duplicidad'
+                    );
+                    return;
+                }
+            }
+
+            showError(error.message || 'No se pudo actualizar los permisos. Verifique si existe un usuario duplicado.', 'Error');
         } finally {
             setSelectedUser(null);
             setActionType(null);
