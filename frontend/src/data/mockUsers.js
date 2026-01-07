@@ -655,5 +655,54 @@ export const MOCK_USERS = [
         modality: 'Presencial',
         registrationType: 'presencial',
         status: 'Confirmado'
+    },
+    {
+        id: 'user-lupo',
+        email: 'lupo@gmail.com',
+        password: '123456',
+        name: 'Dr. Lupo',
+        firstName: 'Lupo',
+        lastName: 'Usuario',
+        dni: '10101010',
+        eventRoles: ['organizador'],
+        organizerFunction: 'admin',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos', 'aula_virtual', 'contabilidad', 'asistencia', 'academico'],
+        permissions: ['admin:all'],
+        isSuperAdmin: true,
+
+        // Legacy
+        profiles: ['organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos', 'aula_virtual', 'contabilidad', 'asistencia', 'academico', 'perfil_basico'],
+
+        occupation: 'Organizador',
+        institution: 'SIMR 2026',
+        registrationType: 'presencial',
+        status: 'Confirmado',
+        image: null
+    },
+    {
+        id: 'user-trujillo',
+        email: 'trujillo@gmail.com',
+        password: '123456',
+        name: 'Dr. Trujillo',
+        firstName: 'Trujillo',
+        lastName: 'Usuario',
+        dni: '20202020',
+        eventRoles: ['organizador'],
+        organizerFunction: 'academico',
+        hasPaid: true,
+        modality: 'presencial',
+        modules: ['mi_perfil', 'academico', 'aula_virtual', 'trabajos'],
+        isSuperAdmin: false,
+
+        // Legacy
+        profiles: ['academico', 'aula_virtual', 'trabajos', 'perfil_basico'],
+
+        occupation: 'Académico',
+        institution: 'SIMR 2026',
+        registrationType: 'presencial',
+        status: 'Confirmado',
+        image: null
     }
 ];
