@@ -109,9 +109,20 @@ const RoleAccessConfiguration = () => {
                 const currentModules = roleConfig.modules || {};
                 const currentModuleConfig = currentModules[id] || { enabled: false, locked: false };
 
-                const updatedModuleConfig = property
-                    ? { ...currentModuleConfig, [property]: value }
-                    : { ...currentModuleConfig, enabled: value };
+                let updatedModuleConfig;
+                if (property === 'locked') {
+                    // When toggling 'locked', auto-enable the module if locked is being turned ON
+                    updatedModuleConfig = {
+                        ...currentModuleConfig,
+                        locked: value,
+                        // Auto-enable when locking, keep current state when unlocking
+                        enabled: value ? true : currentModuleConfig.enabled
+                    };
+                } else if (property) {
+                    updatedModuleConfig = { ...currentModuleConfig, [property]: value };
+                } else {
+                    updatedModuleConfig = { ...currentModuleConfig, enabled: value };
+                }
 
                 return {
                     ...prev,

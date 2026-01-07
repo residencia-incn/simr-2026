@@ -112,33 +112,39 @@ const deriveModulesAndPermissions = (userData: User): { modules: string[], permi
     let modules = new Set<string>();
     let permissions = new Set<string>();
 
-    // Add explicit modules and permissions if they exist
-    if (userData.modules) {
+    // PRIORITY 1: Use explicit modules if they exist (set by PermissionsModal)
+    // Do NOT auto-derive from role if user has explicit modules assigned
+    const hasExplicitModules = userData.modules && userData.modules.length > 0;
+
+    if (hasExplicitModules) {
+        // User has explicitly assigned modules - use them directly
         userData.modules.forEach(m => modules.add(m));
-    }
-    if (userData.permissions) {
-        userData.permissions.forEach(p => permissions.add(p));
-    }
+    } else {
+        // No explicit modules - derive from eventRole (legacy/fallback behavior)
+        if (userData.eventRole) {
+            const roleMapping = ROLE_MODULE_MAPPING[userData.eventRole];
 
-    // Derive from eventRole
-    if (userData.eventRole) {
-        const roleMapping = ROLE_MODULE_MAPPING[userData.eventRole];
+            if (roleMapping) {
+                // Add base modules
+                roleMapping.base?.forEach((m: string) => modules.add(m));
 
-        if (roleMapping) {
-            // Add base modules
-            roleMapping.base?.forEach((m: string) => modules.add(m));
+                // Add conditional modules (for asistente)
+                if (userData.eventRole === 'asistente' && userData.hasPaid) {
+                    roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
+                }
 
-            // Add conditional modules (for asistente)
-            if (userData.eventRole === 'asistente' && userData.hasPaid) {
-                roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
-            }
-
-            // Add function-specific modules (for organizador)
-            if (userData.eventRole === 'organizador' && userData.organizerFunction) {
-                const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
-                funcModules?.forEach((m: string) => modules.add(m));
+                // Add function-specific modules (for organizador)
+                if (userData.eventRole === 'organizador' && userData.organizerFunction) {
+                    const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
+                    funcModules?.forEach((m: string) => modules.add(m));
+                }
             }
         }
+    }
+
+    // Add explicit permissions if they exist
+    if (userData.permissions) {
+        userData.permissions.forEach(p => permissions.add(p));
     }
 
     // Legacy support: derive from profiles/roles

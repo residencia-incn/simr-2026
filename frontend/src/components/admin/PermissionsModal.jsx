@@ -33,7 +33,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
 
                 setLockedModules(newLockedModules);
 
-                // Initialize selected modules
+                // Initialize selected modules - ONLY show what user actually has
+                // Do NOT auto-add locked modules that user doesn't have
                 let initialModules = [];
                 if (user?.modules) {
                     initialModules = [...user.modules];
@@ -43,9 +44,9 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                     initialModules = ['mi_perfil'];
                 }
 
-                // Ensure locked modules are selected
-                const mergedModules = new Set([...initialModules, ...newLockedModules]);
-                setSelectedModules(Array.from(mergedModules));
+                // Set selected modules to EXACTLY what the user has
+                // Locked modules will be visually indicated but not auto-added
+                setSelectedModules(initialModules);
 
             } catch (error) {
                 console.error("Error loading role defaults:", error);
