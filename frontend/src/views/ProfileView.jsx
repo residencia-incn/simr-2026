@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Ticket } from 'lucide-react';
-import { Card, Button, FormField, SectionHeader } from '../components/ui';
+import { User, Mail, Phone, MapPin, Building, Save, Shield, CreditCard, FileText, Camera, Trash2, Lock, Eye, EyeOff, CheckCircle, AlertTriangle, Ticket, Laptop, Smartphone, Globe, LogOut } from 'lucide-react';
+import { Card, Button, FormField, SectionHeader, StyledDatePicker } from '../components/ui';
 import { useForm, useFileUpload, useApi } from '../hooks';
 import QRCode from 'react-qr-code';
 import AttendanceScanner from '../components/common/AttendanceScanner';
@@ -20,6 +20,81 @@ const ProfileView = ({ user, onSave }) => {
     const [currentPage, setCurrentPage] = useState(1); // Added for pagination
     const [isDownloadsActive, setIsDownloadsActive] = useState(false);
 
+    // Session & Device Management Logic
+    const [sessionData, setSessionData] = useState({
+        current: null,
+        others: [
+            { id: 1, device: 'iPhone 13 Pro', location: 'Lima, Peru', ip: '190.234.112.45', lastActive: 'Hace 2 horas', type: 'mobile' },
+            { id: 2, device: 'MacBook Air', location: 'Arequipa, Peru', ip: '181.65.200.12', lastActive: 'Hace 1 día', type: 'desktop' }
+        ],
+        history: [
+            { id: 101, device: 'Windows PC (Chrome)', location: 'Lima, Peru', ip: '190.234.xxx.xx', time: 'Hoy, 10:45 AM', status: 'active' },
+            { id: 102, device: 'iPhone 13 Pro', location: 'Lima, Peru', ip: '190.234.xxx.xx', time: 'Ayer, 08:30 PM', status: 'success' },
+            { id: 103, device: 'Windows PC (Firefox)', location: 'Trujillo, Peru', ip: '179.12.xxx.xx', time: '02 Ene, 03:15 PM', status: 'success' }
+        ]
+    });
+    const [loadingLocation, setLoadingLocation] = useState(false);
+
+    useEffect(() => {
+        if (activeTab === 'devices') {
+            const fetchLocation = async () => {
+                setLoadingLocation(true);
+                try {
+                    const res = await fetch('https://ipapi.co/json/');
+                    const data = await res.json();
+
+                    // Simple UA parser (mock)
+                    const ua = navigator.userAgent;
+                    let deviceType = 'desktop';
+                    let deviceName = 'Este Dispositivo';
+
+                    if (/mobile/i.test(ua)) {
+                        deviceType = 'mobile';
+                        deviceName = 'Dispositivo Móvil';
+                    }
+                    if (/Mac/i.test(ua)) deviceName = 'Mac/iOS Device';
+                    if (/Android/i.test(ua)) deviceName = 'Android Device';
+                    if (/Windows/i.test(ua)) deviceName = 'Windows PC';
+
+                    setSessionData(prev => ({
+                        ...prev,
+                        current: {
+                            ip: data.ip,
+                            city: data.city,
+                            region: data.region,
+                            country: data.country_name,
+                            device: deviceName,
+                            type: deviceType,
+                            browser: 'Navegador Actual'
+                        }
+                    }));
+                } catch (error) {
+                    console.error("Failed to fetch location", error);
+                    setSessionData(prev => ({
+                        ...prev,
+                        current: {
+                            ip: 'No disponible',
+                            location: 'Ubicación desconocida',
+                            device: 'Este dispositivo',
+                            type: 'desktop'
+                        }
+                    }));
+                } finally {
+                    setLoadingLocation(false);
+                }
+            };
+            fetchLocation();
+        }
+    }, [activeTab]);
+
+    const handleRevokeSession = (id) => {
+        setSessionData(prev => ({
+            ...prev,
+            others: prev.others.filter(s => s.id !== id)
+        }));
+        showSuccess('La sesión ha sido cerrada correctamente.', 'Dispositivo desconectado');
+    };
+
     // Fetch attendance history
     const { execute: loadHistory } = useApi(async () => {
         if (user?.id) {
@@ -32,7 +107,7 @@ const ProfileView = ({ user, onSave }) => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
-        if (tab && ['personal', 'attendance', 'upgrades'].includes(tab)) {
+        if (tab && ['personal', 'attendance', 'upgrades', 'devices'].includes(tab)) {
             setActiveTab(tab);
         }
     }, []);
@@ -78,6 +153,8 @@ const ProfileView = ({ user, onSave }) => {
         dni: user?.dni || '',
         cmp: user?.cmp || '',
         rne: user?.rne || '',
+        rne: user?.rne || '',
+        birthDate: user?.birthDate || '',
         gender: user?.gender || 'unspecified',
     }, null, 'user_profile_draft');
 
@@ -93,6 +170,8 @@ const ProfileView = ({ user, onSave }) => {
                 dni: user.dni || '',
                 cmp: user.cmp || '',
                 rne: user.rne || '',
+                rne: user.rne || '',
+                birthDate: user.birthDate || '',
                 gender: user.gender || 'unspecified',
             });
             setCurrentImage(user.image || null);
@@ -203,7 +282,7 @@ const ProfileView = ({ user, onSave }) => {
             <SectionHeader title="Mi Perfil" subtitle="Administra tu información personal, profesional y asistencia." />
 
             {/* Tabs */}
-            <div className="flex gap-2 border-b border-gray-200 mb-6">
+            <div className="flex gap-2 border-b border-gray-200 mb-6 flex-wrap">
                 <button
                     onClick={() => setActiveTab('personal')}
                     className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'personal'
@@ -230,6 +309,15 @@ const ProfileView = ({ user, onSave }) => {
                         }`}
                 >
                     Inscripciones y Talleres
+                </button>
+                <button
+                    onClick={() => setActiveTab('devices')}
+                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'devices'
+                        ? 'border-blue-600 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        }`}
+                >
+                    Mis Dispositivos
                 </button>
             </div>
 
@@ -646,6 +734,114 @@ const ProfileView = ({ user, onSave }) => {
                     </div>
                 )}
 
+
+
+                {/* Devices Tab Content */}
+                {activeTab === 'devices' && (
+                    <div className="md:col-span-2 space-y-6">
+                        {/* Current Session */}
+                        <Card className="p-6 border-l-4 border-l-green-500">
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                                    <Laptop size={20} className="text-green-600" />
+                                    Sesión Actual
+                                </h3>
+                                <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold border border-green-200 animate-pulse">
+                                    Activa Ahora
+                                </span>
+                            </div>
+
+                            {loadingLocation ? (
+                                <div className="text-center py-4 text-gray-500">Obteniendo información de ubicación...</div>
+                            ) : sessionData.current ? (
+                                <div className="flex flex-col md:flex-row gap-6 items-center">
+                                    <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center text-green-600">
+                                        {sessionData.current.type === 'mobile' ? <Smartphone size={32} /> : <Laptop size={32} />}
+                                    </div>
+                                    <div className="flex-grow space-y-1 text-center md:text-left">
+                                        <p className="font-bold text-gray-900 text-lg">{sessionData.current.device}</p>
+                                        <div className="flex flex-wrap gap-4 text-sm text-gray-600 justify-center md:justify-start">
+                                            <span className="flex items-center gap-1"><Globe size={14} /> {sessionData.current.ip}</span>
+                                            <span className="flex items-center gap-1"><MapPin size={14} /> {sessionData.current.city}, {sessionData.current.country}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-gray-500">Información no disponible.</p>
+                            )}
+                        </Card>
+
+                        {/* Active Sessions */}
+                        <Card className="p-6">
+                            <h3 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+                                <Shield size={20} className="text-blue-600" />
+                                Otras Sesiones Activas
+                            </h3>
+
+                            <div className="space-y-4">
+                                {sessionData.others.map(session => (
+                                    <div key={session.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-100">
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center text-gray-400 border border-gray-200">
+                                                {session.type === 'mobile' ? <Smartphone size={20} /> : <Laptop size={20} />}
+                                            </div>
+                                            <div>
+                                                <p className="font-semibold text-gray-900">{session.device}</p>
+                                                <p className="text-xs text-gray-500">{session.location} • {session.ip} • {session.lastActive}</p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="text-red-600 border-red-200 hover:bg-red-50"
+                                            onClick={() => handleRevokeSession(session.id)}
+                                        >
+                                            <LogOut size={16} className="mr-2" /> Cerrar Sesión
+                                        </Button>
+                                    </div>
+                                ))}
+                                {sessionData.others.length === 0 && (
+                                    <p className="text-gray-500 text-sm italic">No tienes otras sesiones activas.</p>
+                                )}
+                            </div>
+                        </Card>
+
+                        {/* History */}
+                        <Card className="p-6">
+                            <h3 className="font-bold text-lg text-gray-900 mb-4 flex items-center gap-2">
+                                <FileText size={20} className="text-gray-600" />
+                                Historial de Accesos
+                            </h3>
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
+                                        <tr>
+                                            <th className="p-3">Dispositivo</th>
+                                            <th className="p-3">Ubicación</th>
+                                            <th className="p-3">IP</th>
+                                            <th className="p-3">Fecha</th>
+                                            <th className="p-3">Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {sessionData.history.map(log => (
+                                            <tr key={log.id}>
+                                                <td className="p-3 font-medium text-gray-900">{log.device}</td>
+                                                <td className="p-3 text-gray-500">{log.location}</td>
+                                                <td className="p-3 text-gray-500 font-mono text-xs">{log.ip}</td>
+                                                <td className="p-3 text-gray-500">{log.time}</td>
+                                                <td className="p-3">
+                                                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Exitoso</span>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </Card>
+                    </div>
+                )}
+
                 {/* Personal Info Tab Content */}
                 {activeTab === 'personal' && (
                     <div className="md:col-span-2 space-y-6">
@@ -706,36 +902,39 @@ const ProfileView = ({ user, onSave }) => {
                                         name="phone"
                                         type="tel"
                                         value={form.phone}
-                                        onChange={handleChange}
+                                        onChange={(e) => {
+                                            const val = e.target.value.replace(/\D/g, '');
+                                            setValues(prev => ({ ...prev, phone: val }));
+                                        }}
                                         readOnly={!isEditing}
                                         placeholder="Ej. 987654321"
                                     />
-                                    <FormField
-                                        label="Institución"
-                                        name="institution"
-                                        value={form.institution}
-                                        onChange={handleChange}
-                                        readOnly={!isEditing}
-                                        className="md:col-span-2"
-                                    />
-
-                                    {/* Gender Selection */}
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                                            Sexo
-                                        </label>
-                                        <select
-                                            name="gender"
-                                            value={form.gender}
+                                    {/* Gender and Birth Date */}
+                                    <div className="md:col-span-2 grid md:grid-cols-2 gap-5">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-2">
+                                                Sexo
+                                            </label>
+                                            <select
+                                                name="gender"
+                                                value={form.gender}
+                                                onChange={handleChange}
+                                                disabled={!isEditing}
+                                                className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
+                                                    }`}
+                                            >
+                                                <option value="unspecified">No Especifica</option>
+                                                <option value="male">Hombre</option>
+                                                <option value="female">Mujer</option>
+                                            </select>
+                                        </div>
+                                        <StyledDatePicker
+                                            label="Fecha de Nacimiento"
+                                            name="birthDate"
+                                            value={form.birthDate}
                                             onChange={handleChange}
-                                            disabled={!isEditing}
-                                            className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${!isEditing ? 'bg-gray-50 cursor-not-allowed' : 'bg-white'
-                                                }`}
-                                        >
-                                            <option value="unspecified">No Especifica</option>
-                                            <option value="male">Hombre</option>
-                                            <option value="female">Mujer</option>
-                                        </select>
+                                            readOnly={!isEditing}
+                                        />
                                     </div>
                                 </div>
 
@@ -744,7 +943,7 @@ const ProfileView = ({ user, onSave }) => {
                                         <CreditCard size={18} className="text-gray-500" />
                                         Datos Profesionales
                                     </h4>
-                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-3 gap-4">
+                                    <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 grid md:grid-cols-3 gap-4 mb-4">
                                         <FormField
                                             label="DNI"
                                             name="dni"
@@ -770,8 +969,19 @@ const ProfileView = ({ user, onSave }) => {
                                             subLabel="(No editable)"
                                         />
                                     </div>
+
+                                    {/* Moved Institution Field */}
+                                    <FormField
+                                        label="Institución"
+                                        name="institution"
+                                        value={form.institution}
+                                        onChange={handleChange}
+                                        readOnly={!isEditing}
+                                        className="w-full"
+                                    />
+
                                     <p className="text-xs text-gray-400 mt-2 ml-1">
-                                        * Para modificar estos datos, por favor contacte con el administrador del sistema.
+                                        * Para modificar los datos de colegiatura, por favor contacte con el administrador del sistema.
                                     </p>
                                 </div>
 

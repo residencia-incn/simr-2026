@@ -35,7 +35,7 @@ const AcademicDashboard = ({ role }) => {
     // Reset tab when role changes to ensure permission compliance
     useEffect(() => {
         if (isCommittee) {
-            const committeeTabs = ['approved', 'rubrics', 'juries', 'speakers', 'results'];
+            const committeeTabs = ['approved', 'observation', 'rubrics', 'juries', 'speakers', 'results'];
             if (!committeeTabs.includes(activeTab)) {
                 setActiveTab('approved');
             }
@@ -45,7 +45,7 @@ const AcademicDashboard = ({ role }) => {
                 setActiveTab('pending');
             }
         }
-    }, [role, activeTab]);
+    }, [role, activeTab, isCommittee]);
 
     // Fetch Data
     const { data: works, loading, refetch } = useApi(api.works.getAll);

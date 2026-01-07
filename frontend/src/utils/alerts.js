@@ -21,14 +21,17 @@ const defaultConfig = {
  * @param {string} message - The success message to display
  * @param {string} title - Optional title (default: "¡Éxito!")
  */
-export const showSuccess = (message, title = '¡Éxito!') => {
+export const showSuccess = (message, title = '¡Éxito!', options = {}) => {
+    const { html: isHtml, ...restOptions } = options;
     return Swal.fire({
         icon: 'success',
         title,
-        text: message,
+        text: isHtml ? undefined : message,
+        html: isHtml ? message : undefined,
         confirmButtonText: 'Aceptar',
         ...defaultConfig,
         confirmButtonColor: '#16a34a', // green-600
+        ...restOptions
     });
 };
 

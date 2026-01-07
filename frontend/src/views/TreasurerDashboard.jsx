@@ -42,7 +42,14 @@ const TreasurerDashboard = ({ user }) => {
     useEffect(() => {
         const params = new URLSearchParams(window.location.search);
         const tab = params.get('tab');
-        if (tab && ['summary', 'income', 'expenses', 'reports', 'settings', 'contributions', 'accounts', 'verification'].includes(tab)) {
+
+        // Map 'verification' to 'validation' to handle links from specific notifications or cross-module navigation
+        if (tab === 'verification') {
+            setActiveTab('validation');
+            return;
+        }
+
+        if (tab && ['summary', 'income', 'expenses', 'reports', 'settings', 'contributions', 'accounts', 'validation'].includes(tab)) {
             setActiveTab(tab);
         }
     }, []);
@@ -339,9 +346,19 @@ const TreasurerDashboard = ({ user }) => {
             date: a.registrationDate || a.date || new Date().toISOString(),
             amount: parseFloat(a.amount || 0),
             voucher: a.voucherData || a.voucher,
-            coupon: a.coupon || a.couponCode,
+            coupon: a.coupon || a.couponCode || a.coupon_code || (a.appliedCoupon && a.appliedCoupon.code),
             original: a,
-            isContribution: false
+            isContribution: false,
+            // Critical Fields for Details
+            ticketType: a.ticketType,
+            modalidad: a.modalidad,
+            workshops: a.workshops,
+            items: a.items,
+            dni: a.dni,
+            email: a.email,
+            occupation: a.occupation,
+            cmp: a.cmp,
+            institution: a.institution // Ensure it's here
         }));
 
         // Valid contributions
@@ -353,12 +370,17 @@ const TreasurerDashboard = ({ user }) => {
                     type: 'Aporte',
                     name: c.organizador_nombre || 'Organizador',
                     secondary: c.mes_label,
-                    details: 'Cuota Mensual',
+                    details: 'Aporte Mensual',
                     date: c.fecha_pago || c.updated_at || new Date().toISOString(),
                     amount: parseFloat(c.monto || 0),
                     voucher: c.comprobante,
                     original: c,
-                    isContribution: true
+                    isContribution: true,
+                    // Contribution specific
+                    organizerId: c.organizador_id,
+                    months: [c.mes],
+                    mes_labels: [c.mes_label],
+                    modalidad: `Aporte: ${c.mes_label}`
                 }))
             : [];
 
@@ -1067,12 +1089,12 @@ const TreasurerDashboard = ({ user }) => {
                                             const item = {
                                                 name: attendee.name,
                                                 type: 'Inscripción',
-                                                secondary: attendee.role,
+                                                secondary: attendee.email,
                                                 details: attendee.institution,
                                                 date: attendee.registrationDate || attendee.date,
                                                 amount: parseFloat(attendee.amount || 0),
                                                 voucher: attendee.voucherData || attendee.voucher,
-                                                coupon: attendee.coupon || attendee.couponCode,
+                                                coupon: attendee.coupon || attendee.couponCode || attendee.coupon_code || (attendee.appliedCoupon && attendee.appliedCoupon.code),
                                                 email: attendee.email,
                                                 original: attendee // Pass full object for detail view
                                             };
@@ -1389,34 +1411,34 @@ const TreasurerDashboard = ({ user }) => {
                 size="3xl"
             >
                 {selectedDetail && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         {/* Columna Izquierda: Voucher */}
                         <div className="flex flex-col h-full md:order-2">
                             <h4 className="font-bold text-gray-700 mb-2">Comprobante de Pago</h4>
                             {selectedDetail.amount === 0 ? (
-                                <div className="bg-green-50 border border-green-200 rounded-lg p-6 flex flex-col items-center justify-center gap-4 h-full min-h-[300px]">
-                                    <div className="p-4 bg-green-100 rounded-full text-green-600">
-                                        <Tag size={48} />
+                                <div className="bg-green-50 border border-green-200 rounded-lg p-4 flex flex-col items-center justify-center gap-3 min-h-[364px]">
+                                    <div className="p-2.5 bg-green-100 rounded-full text-green-600">
+                                        <Tag size={32} />
                                     </div>
                                     <div className="text-center">
                                         <h4 className="text-lg font-bold text-green-800">CUPÓN APLICADO</h4>
-                                        <p className="text-green-600 mt-2">Descuento del 100%</p>
-                                        <div className="mt-4 px-4 py-2 bg-white rounded border border-green-200 font-mono font-bold text-lg text-green-700">
-                                            {selectedDetail.coupon || 'PROMOCIÓN'}
+                                        <p className="text-green-600 mt-1.5 text-sm">Descuento del 100%</p>
+                                        <div className="mt-3 px-3 py-1.5 bg-white rounded border border-green-200 font-mono font-bold text-base text-green-700">
+                                            {selectedDetail.coupon || selectedDetail.original?.coupon_code || selectedDetail.original?.appliedCoupon?.code || 'PROMOCIÓN'}
                                         </div>
                                     </div>
                                 </div>
                             ) : selectedDetail.voucher ? (
-                                <div className="bg-gray-100 rounded-lg p-2 flex items-center justify-center h-full min-h-[300px] bg-opacity-50">
+                                <div className="bg-gray-100 rounded-lg p-2 flex items-center justify-center h-full min-h-[200px] bg-opacity-50">
                                     <img
                                         src={selectedDetail.voucher}
                                         alt="Voucher"
-                                        className="max-w-full max-h-[400px] object-contain rounded shadow-sm hover:scale-105 transition-transform cursor-zoom-in"
+                                        className="max-w-full max-h-[300px] object-contain rounded shadow-sm hover:scale-105 transition-transform cursor-zoom-in"
                                         onClick={() => window.open(selectedDetail.voucher, '_blank')}
                                     />
                                 </div>
                             ) : (
-                                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center p-8 h-full min-h-[300px] text-gray-400">
+                                <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center p-6 h-full min-h-[200px] text-gray-400">
                                     <FileText size={48} className="mb-4 opacity-50" />
                                     <p>No hay voucher digital</p>
                                 </div>
@@ -1424,7 +1446,7 @@ const TreasurerDashboard = ({ user }) => {
                         </div>
 
                         {/* Columna Derecha: Datos */}
-                        <div className="space-y-6 md:order-1">
+                        <div className="space-y-4 md:order-1">
                             <div>
                                 <h4 className="text-xl font-bold text-gray-900 mb-1">{selectedDetail.name}</h4>
                                 <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${selectedDetail.type === 'Aporte' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'}`}>
@@ -1442,101 +1464,99 @@ const TreasurerDashboard = ({ user }) => {
                                     <p className="font-semibold text-gray-900">{selectedDetail.details || selectedDetail.institution || '-'}</p>
                                 </div>
 
-                                {/* Purchase Details List */}
-                                {(selectedDetail.items || (selectedDetail.original && selectedDetail.original.items)) && (
-                                    <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                        <p className="text-xs text-blue-800 font-bold uppercase mb-2 border-b border-blue-200 pb-1">
-                                            Detalle de Ítems ({selectedDetail.items ? selectedDetail.items.length : selectedDetail.original.items.length})
-                                        </p>
-                                        <ul className="space-y-1">
-                                            {(selectedDetail.items || selectedDetail.original.items).map((item, idx) => {
-                                                const itemName = typeof item === 'string' ? item : (item.name || item.title || 'Item');
-                                                const itemPrice = typeof item === 'object' && item.price ? ` - S/ ${item.price}` : '';
-                                                return (
-                                                    <li key={idx} className="text-sm text-blue-900 flex items-start gap-2">
-                                                        <span className="mt-1.5 w-1.5 h-1.5 bg-blue-400 rounded-full shrink-0"></span>
-                                                        <span>{itemName}{itemPrice}</span>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    </div>
-                                )}
-                                {console.log('SelectedDetail Debug:', selectedDetail)}
-
                                 {/* Payment Breakdown Section */}
                                 <div className="p-4 bg-gray-50 rounded-xl border border-gray-100 space-y-3">
                                     <p className="text-xs font-bold text-gray-500 uppercase flex items-center gap-2">
                                         <Award size={14} className="text-orange-600" /> Detalle de Pago
                                     </p>
 
-                                    {selectedDetail.original && (
-                                        selectedDetail.original.ticketType ||
-                                        selectedDetail.original.modalidad ||
-                                        selectedDetail.original.modality ||
-                                        (selectedDetail.original.workshops && selectedDetail.original.workshops.length > 0)
-                                    ) ? (
-                                        <>
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-gray-700 font-medium text-base">
-                                                    Ticket: {(() => {
-                                                        const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
-                                                        const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
-                                                        const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
-                                                        return embedded?.name || embedded?.title || option?.title || type || 'Entrada General';
-                                                    })()}
-                                                </span>
-                                                <span className="font-bold text-gray-900 text-base">
-                                                    {(() => {
-                                                        const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
-                                                        const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
-                                                        const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
+                                    {/* Ticket Display */
+                                        (selectedDetail.original?.ticketType || selectedDetail.original?.modalidad || selectedDetail.original?.modality || (selectedDetail.original?.workshops && selectedDetail.original.workshops.length > 0)) ? (
+                                            <>
+                                                {/* Ticket Info */}
+                                                {(selectedDetail.original?.ticketType || selectedDetail.original?.modalidad || selectedDetail.original?.modality) && (
+                                                    <div className="flex justify-between items-center text-sm">
+                                                        <span className="text-gray-700 font-medium text-base">
+                                                            Ticket: {(() => {
+                                                                const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                                const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
+                                                                const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
+                                                                return embedded?.name || embedded?.title || option?.title || type || 'Entrada General';
+                                                            })()}
+                                                        </span>
+                                                        <span className="font-bold text-gray-900 text-base">
+                                                            {(() => {
+                                                                const type = selectedDetail.original.ticketType || selectedDetail.original.modalidad || selectedDetail.original.modality;
+                                                                const embedded = selectedDetail.original.items?.find(i => i.id === type || i.type === 'ticket');
+                                                                const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
 
-                                                        if (embedded?.price !== undefined) return `S/ ${Number(embedded.price).toFixed(2)}`;
-                                                        if (option) return `S/ ${option.price.toFixed(2)}`;
+                                                                let price = 0;
+                                                                if (embedded?.price !== undefined) price = Number(embedded.price);
+                                                                else if (option) price = option.price;
 
-                                                        // Fallback: Calculate from total - workshops
-                                                        if (selectedDetail.amount && selectedDetail.original.workshops && pricingConfig?.workshops) {
-                                                            const wsTotal = selectedDetail.original.workshops.reduce((sum, wId) => {
-                                                                const ws = pricingConfig.workshops.find(w => w.id === wId || w.key === wId);
-                                                                return sum + (ws?.price || 0);
-                                                            }, 0);
-                                                            const ticketPart = selectedDetail.amount - wsTotal;
-                                                            return `S/ ${Math.max(0, ticketPart).toFixed(2)}`;
-                                                        }
-                                                        return '-';
-                                                    })()}
-                                                </span>
+                                                                // Display price if > 0 or if we want to show original price before discount
+                                                                return `S/ ${price.toFixed(2)}`;
+                                                            })()}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Coupon Discount for Ticket */}
+                                                {selectedDetail.amount === 0 && selectedDetail.coupon && (
+                                                    <div className="flex justify-between items-center text-sm bg-green-50 p-2 rounded border border-green-100 mt-2">
+                                                        <span className="text-green-700 font-medium flex items-center gap-2">
+                                                            <Tag size={14} /> Cupón: <b>{selectedDetail.coupon}</b>
+                                                        </span>
+                                                        <span className="font-bold text-green-700">
+                                                            - S/ {(() => {
+                                                                // Calculate ticket price to show as discount
+                                                                const type = selectedDetail.original?.ticketType || selectedDetail.original?.modalidad || selectedDetail.original?.modality;
+                                                                const embedded = selectedDetail.original?.items?.find(i => i.id === type || i.type === 'ticket');
+                                                                const option = pricingConfig?.ticketTypes?.find(t => t.id === type || t.key === type);
+                                                                return (Number(embedded?.price) || option?.price || 0).toFixed(2);
+                                                            })()}
+                                                        </span>
+                                                    </div>
+                                                )}
+
+                                                {/* Workshops / Additional Items */}
+                                                {selectedDetail.original?.workshops && selectedDetail.original.workshops.length > 0 && (
+                                                    <div className="space-y-2 pt-2 border-t border-gray-200 mt-2">
+                                                        <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
+                                                        {selectedDetail.original.workshops.map(wsId => {
+                                                            const embedded = selectedDetail.original.items?.find(i => i.id === wsId);
+                                                            const config = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId || w.id == wsId); // Loose equality for number/string mismatch
+
+                                                            const name = embedded?.name || embedded?.title || config?.name || wsId;
+                                                            const price = embedded?.price ?? config?.price ?? 0;
+
+                                                            return (
+                                                                <div key={wsId}>
+                                                                    <div className="flex justify-between items-center text-sm pl-2">
+                                                                        <span className="text-gray-700">• {name}</span>
+                                                                        <span className="font-semibold text-gray-900">+ S/ {Number(price).toFixed(2)}</span>
+                                                                    </div>
+                                                                    {/* Discount line for workshop if coupon applied (amount=0) */}
+                                                                    {selectedDetail.amount === 0 && selectedDetail.coupon && (
+                                                                        <div className="flex justify-between items-center text-xs pl-4 pr-1 mt-1 text-green-600">
+                                                                            <span>↳ Incluido en Cupón</span>
+                                                                            <span>- S/ {Number(price).toFixed(2)}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <div className="text-sm text-gray-500 italic">
+                                                <p>Detalle no disponible para este tipo de registro.</p>
+                                                <p className="text-xs mt-2 font-mono bg-gray-100 p-1 rounded break-all">
+                                                    Debug: {selectedDetail.original ? Object.keys(selectedDetail.original).filter(k => !['voucherData', 'image', 'paymentData'].includes(k)).join(', ') : 'No Data'}
+                                                </p>
                                             </div>
-
-                                            {selectedDetail.original.workshops && selectedDetail.original.workshops.length > 0 && (
-                                                <div className="space-y-2 pt-2 border-t border-gray-200 mt-2">
-                                                    <p className="text-xs font-bold text-gray-500 uppercase">Talleres Adicionales</p>
-                                                    {selectedDetail.original.workshops.map(wsId => {
-                                                        const embedded = selectedDetail.original.items?.find(i => i.id === wsId);
-                                                        const config = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
-
-                                                        const name = embedded?.name || embedded?.title || config?.name || wsId;
-                                                        const price = embedded?.price ?? config?.price;
-
-                                                        return (
-                                                            <div key={wsId} className="flex justify-between items-center text-sm pl-2">
-                                                                <span className="text-gray-700">• {name}</span>
-                                                                <span className="font-semibold text-gray-900">{price !== undefined ? `+ S/ ${Number(price).toFixed(2)}` : '-'}</span>
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                        </>
-                                    ) : (
-                                        <div className="text-sm text-gray-500 italic">
-                                            <p>Detalle no disponible para este tipo de registro.</p>
-                                            <p className="text-xs mt-2 font-mono bg-gray-100 p-1 rounded break-all">
-                                                Debug: {selectedDetail.original ? Object.keys(selectedDetail.original).filter(k => !['voucherData', 'image', 'paymentData'].includes(k)).join(', ') : 'No Data'}
-                                            </p>
-                                        </div>
-                                    )}
+                                        )}
 
                                     <div className="flex justify-between items-center pt-3 border-t-2 border-gray-200 mt-2">
                                         <span className="text-base font-bold text-gray-900">Total Pagado</span>
@@ -1550,15 +1570,11 @@ const TreasurerDashboard = ({ user }) => {
                                 </div>
                             </div>
 
-                            <div className="pt-8 flex justify-end">
-                                <Button variant="secondary" onClick={() => setDetailModalOpen(false)}>
-                                    Cerrar
-                                </Button>
-                            </div>
                         </div>
                     </div>
-                )}
-            </Modal>
+                )
+                }
+            </Modal >
 
             <ConfirmDialog
                 isOpen={confirmConfig.isOpen}

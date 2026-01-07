@@ -33,6 +33,25 @@ import { CartProvider, useCart } from './context/CartContext.jsx';
 import ShoppingCart from './components/checkout/ShoppingCart';
 import { PermissionGate } from './components/auth/PermissionGate';
 
+const AccessDeniedFallback = ({ message, navigate }) => {
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      navigate('home');
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [navigate]);
+
+  return (
+    <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center animate-fadeIn">
+      <div className="bg-red-50 p-4 rounded-full mb-4">
+        <Shield size={48} className="text-red-500" />
+      </div>
+      <h3 className="text-xl font-bold text-gray-900 mb-2">{message}</h3>
+      <p className="text-gray-500">Redireccionando al inicio en unos segundos...</p>
+    </div>
+  );
+};
+
 // Wrapper to provide Global Auth Context
 export default function SIMRApp() {
   return (
@@ -68,9 +87,14 @@ function SIMRAppContent() {
 
   // Sync local user state with AuthContext user (which has properly derived permissions)
   useEffect(() => {
-    // Sync if authUser exists AND (no local user OR different ID OR local user is missing modules)
-    if (authUser && (!user || user.id !== authUser.id || !user.modules || user.modules.length === 0)) {
-      setUser(authUser);
+    // Aggressively sync if authUser exists and is different from local user state (especially modules)
+    if (authUser) {
+      const hasDifferentModules = JSON.stringify(user?.modules) !== JSON.stringify(authUser.modules);
+      const hasDifferentPermissions = JSON.stringify(user?.permissions) !== JSON.stringify(authUser.permissions);
+
+      if (!user || user.id !== authUser.id || hasDifferentModules || hasDifferentPermissions) {
+        setUser(authUser);
+      }
     }
   }, [authUser, user]);
 
@@ -252,7 +276,6 @@ function SIMRAppContent() {
       case 'asistencia': return 'admission-dashboard';
       case 'academico': return 'academic-dashboard'; // Committee role
       case 'aula_virtual': return 'participant-dashboard';
-      case 'participant': return 'participant-dashboard'; // Legacy role mapping
       case 'trabajos': return 'resident-dashboard';
       default: return 'profile';
     }
@@ -290,7 +313,6 @@ function SIMRAppContent() {
     jurado: 'Jurado',
     contabilidad: 'Contabilidad',
     aula_virtual: 'Aula Virtual',
-    participant: 'Aula Virtual', // Legacy label
     trabajos: 'Trabajos',
     academico: 'Académico',
     perfil_basico: 'Mi Perfil'
@@ -304,7 +326,6 @@ function SIMRAppContent() {
     jurado: Award,
     contabilidad: DollarSign,
     aula_virtual: Users,
-    participant: Users, // Legacy icon
     trabajos: User,
     academico: BookOpen,
     perfil_basico: CircleUser
@@ -390,34 +411,45 @@ function SIMRAppContent() {
                       </button>
                     </div>
 
-                    {/* Use modules (RBAC) instead of profiles (legacy) */}
-                    {user.modules && user.modules.length > 0 && (
-                      <>
-                        <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                        {user.modules.filter(m => m !== 'perfil_basico' && m !== 'mi_perfil').map(module => {
-                          const Icon = ROLE_ICONS[module] || Users;
-                          const isDashboardActive = activeRole === module && currentView === getDashboardView(module);
-                          return (
-                            <button
-                              key={module}
-                              onClick={() => handleRoleSwitch(module)}
-                              className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
-                                     ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
-                                     `}
-                            >
-                              <div className="flex items-center gap-3">
-                                <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                                  <Icon size={16} />
-                                </div>
-                                {ROLE_LABELS[module] || module}
-                              </div>
-                              {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
-                            </button>
-                          );
-                        })}
-                        <div className="my-1 border-t border-gray-100"></div>
-                      </>
-                    )}
+                    {/* Use modules (RBAC) instead of profiles (legacy) */
+                      user.modules && user.modules.length > 0 && (
+                        <>
+                          <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
+                          {(() => {
+                            const uniqueLabels = new Set();
+                            return user.modules
+                              .filter(m => m !== 'perfil_basico' && m !== 'mi_perfil')
+                              .filter(module => {
+                                const label = ROLE_LABELS[module] || module;
+                                if (uniqueLabels.has(label)) return false;
+                                uniqueLabels.add(label);
+                                return true;
+                              })
+                              .map(module => {
+                                const Icon = ROLE_ICONS[module] || Users;
+                                const isDashboardActive = activeRole === module && currentView === getDashboardView(module);
+                                return (
+                                  <button
+                                    key={module}
+                                    onClick={() => handleRoleSwitch(module)}
+                                    className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
+                                           ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
+                                           `}
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
+                                        <Icon size={16} />
+                                      </div>
+                                      {ROLE_LABELS[module] || module}
+                                    </div>
+                                    {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
+                                  </button>
+                                );
+                              });
+                          })()}
+                          <div className="my-1 border-t border-gray-100"></div>
+                        </>
+                      )}
 
                     <button
                       onClick={() => { handleLogout(); setIsRoleMenuOpen(false); }}
@@ -499,13 +531,13 @@ function SIMRAppContent() {
         {currentView === 'registration' && <SmartRegistrationForm />}
 
         {currentView === 'resident-dashboard' && (
-          <PermissionGate scopes={['papers:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: No tienes permisos para ver Trabajos.</div>}>
+          <PermissionGate scopes={['papers:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: No tienes permisos para ver Trabajos." navigate={navigate} />}>
             <ResidentDashboard user={user} navigate={navigate} />
           </PermissionGate>
         )}
 
         {currentView === 'participant-dashboard' && (
-          <PermissionGate scopes={['classroom:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Aula Virtual no habilitada.</div>}>
+          <PermissionGate scopes={['classroom:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Aula Virtual no habilitada." navigate={navigate} />}>
             <ParticipantDashboard user={user} navigate={navigate} />
           </PermissionGate>
         )}
@@ -513,37 +545,37 @@ function SIMRAppContent() {
         {currentView === 'submit-work' && <SubmitWorkForm navigate={navigate} />}
 
         {currentView === 'jury-dashboard' && (
-          <PermissionGate scopes={['jury:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Panel de Jurado.</div>}>
+          <PermissionGate scopes={['jury:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Panel de Jurado." navigate={navigate} />}>
             <JuryDashboard user={user} />
           </PermissionGate>
         )}
 
         {currentView === 'admin-dashboard' && (
-          <PermissionGate scopes={['admin:all', 'users:manage']} requireAll={false} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Panel de Organización.</div>}>
+          <PermissionGate scopes={['admin:all', 'users:manage']} requireAll={false} fallback={<AccessDeniedFallback message="Acceso Denegado: Panel de Organización." navigate={navigate} />}>
             <AdminDashboard user={user} />
           </PermissionGate>
         )}
 
         {currentView === 'secretary-dashboard' && (
-          <PermissionGate scopes={['secretary:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Secretaría.</div>}>
+          <PermissionGate scopes={['secretary:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Secretaría." navigate={navigate} />}>
             <SecretaryDashboard user={user} navigate={navigate} />
           </PermissionGate>
         )}
 
         {currentView === 'admission-dashboard' && (
-          <PermissionGate scopes={['attendance:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Asistencia.</div>}>
+          <PermissionGate scopes={['attendance:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Asistencia." navigate={navigate} />}>
             <AdmissionDashboard />
           </PermissionGate>
         )}
 
         {currentView === 'academic-dashboard' && (
-          <PermissionGate scopes={['academic:read', 'research:read']} requireAll={false} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Académico/Investigación.</div>}>
+          <PermissionGate scopes={['academic:read', 'research:read']} requireAll={false} fallback={<AccessDeniedFallback message="Acceso Denegado: Académico/Investigación." navigate={navigate} />}>
             <AcademicDashboard role={activeRole} />
           </PermissionGate>
         )}
 
         {currentView === 'treasurer-dashboard' && (
-          <PermissionGate scopes={['accounting:read']} fallback={<div className="p-8 text-center text-red-500">Acceso Denegado: Tesorería.</div>}>
+          <PermissionGate scopes={['accounting:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Tesorería." navigate={navigate} />}>
             <TreasurerDashboard user={user} />
           </PermissionGate>
         )}
@@ -598,7 +630,16 @@ function SIMRAppContent() {
 
 // Helper Component for Cart Trigger
 const CartTrigger = () => {
+  const { user } = useAuth();
   const { cartItems, setIsCartOpen } = useCart();
+
+  // Hide cart for privileged roles (they have full access)
+  const isPrivileged = user && (
+    ['organizador', 'ponente', 'jurado'].includes(user.eventRole) ||
+    (user.eventRoles && user.eventRoles.some(r => ['organizador', 'ponente', 'jurado'].includes(r)))
+  );
+
+  if (isPrivileged) return null;
 
   return (
     <button

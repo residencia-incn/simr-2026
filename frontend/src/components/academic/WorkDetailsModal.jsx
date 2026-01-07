@@ -4,8 +4,7 @@ import {
     X, User, Calendar, FileText, Printer, CheckCircle,
     Download, Clock, BookOpen, Award, Users, AlertTriangle
 } from 'lucide-react';
-import { Button, Badge } from '../ui';
-import QRCode from 'react-qr-code';
+import { Button, Badge, CustomQRCode } from '../ui';
 import { useApi } from '../../hooks';
 import { api } from '../../services/api';
 
@@ -16,6 +15,15 @@ const WorkDetailsModal = ({ isOpen, onClose, work }) => {
     // For now we assume 'work' object has minimal jury info, or we resolve it.
     // In AcademicDashboard, 'works' items might have jury IDs.
     const { data: allJurors } = useApi(api.jurors.getAll);
+
+    // Close on Escape key
+    React.useEffect(() => {
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') onClose();
+        };
+        if (isOpen) window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [isOpen, onClose]);
 
     if (!isOpen || !work) return null;
 
@@ -114,7 +122,7 @@ const WorkDetailsModal = ({ isOpen, onClose, work }) => {
                         {/* Right: QR */}
                         <div className="flex flex-col gap-4 items-center flex-shrink-0">
                             <div className="bg-white p-3 rounded-xl border-2 border-dashed border-gray-200 shadow-sm">
-                                <QRCode value={JSON.stringify({ id: work.id, title: work.title, author: work.author })} size={120} level="M" />
+                                <CustomQRCode value={JSON.stringify({ id: work.id, title: work.title, author: work.author })} size={120} level="H" />
                             </div>
                             <span className="text-xs text-gray-400 font-mono tracking-wider">{work.id}</span>
                         </div>
@@ -180,7 +188,7 @@ const WorkDetailsModal = ({ isOpen, onClose, work }) => {
                                 <p className="text-xs text-gray-500 font-mono">ID: {work.id}</p>
                             </div>
                             <div className="bg-white p-2 border border-gray-200">
-                                <QRCode value={JSON.stringify({ id: work.id })} size={80} />
+                                <CustomQRCode value={JSON.stringify({ id: work.id, title: work.title, author: work.author })} size={80} level="H" />
                             </div>
                         </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar, AlertCircle, Send } from 'lucide-react';
+import { User, Award, Wifi, Upload, FileCheck, X, CheckCircle, Tag, Loader, ChevronRight, ChevronLeft, Building, Briefcase, DollarSign, Calendar, AlertCircle, Send, Users } from 'lucide-react';
 import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useFileUpload, useApi } from '../hooks';
@@ -20,7 +20,14 @@ const RegistrationView = () => {
     const [showSuccessModal, setShowSuccessModal] = useState(false);
 
     // Work submission specific state
-    const [viewMode, setViewMode] = useState('registration'); // 'registration' | 'work_submission'
+    const [viewMode, setViewMode] = useState(() => {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('mode') === 'work_submission' ? 'work_submission' : 'registration';
+    }); // 'registration' | 'work_submission'
+
+    // New Author Mode State
+    const [authorMode, setAuthorMode] = useState('single'); // 'single' | 'multiple'
+
     const [workForm, setWorkForm] = useState({
         type: '',
         specialty: '',
@@ -34,6 +41,7 @@ const RegistrationView = () => {
     const [academicConfig, setAcademicConfig] = useState(null);
     const [treasuryData, setTreasuryData] = useState({ config: null, accounts: [] });
     const [selectedPaymentAccount, setSelectedPaymentAccount] = useState(null);
+    const [specialties, setSpecialties] = useState([]);
 
     const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
 
@@ -50,6 +58,7 @@ const RegistrationView = () => {
             setAcademicConfig(acConfig);
             setTreasuryData({ config: trConfig, accounts: accs });
             setPricing(pricingConfig || { ticketTypes: [], workshops: [] });
+            setSpecialties(eventConfig.participantSpecialties || eventConfig.specialties || []);
         };
         loadConfig();
     }, []);
@@ -92,27 +101,92 @@ const RegistrationView = () => {
 
         // EMERGENCY LOCAL FALLBACK FOR DEBUGGING
         if (couponCode === 'BECA100') {
-            console.log('Applying BECA100 local fallback');
-            setAppliedCoupon({
+            const mockCoupon = {
                 code: 'BECA100',
                 type: 'percentage',
                 value: 100,
                 description: 'Beca 100% (Local)',
-                maxUses: 999
-            });
-            showSuccess('Beca Integral aplicada correctamente.', 'Cupón BECA100 aplicado');
+                maxUses: 999,
+                applicableModality: 't_presencial_certificado', // Update this ID based on your actual config if needed
+                workshopDiscounts: {}
+            };
+
+            // Auto-select for fallback
+            if (pricing.ticketTypes.find(t => t.id === mockCoupon.applicableModality)) {
+                setSelectedTicket(mockCoupon.applicableModality);
+            }
+
+            setAppliedCoupon(mockCoupon);
+            showSuccess('Beca Integral aplicada y modalidad actualizada.', 'Cupón BECA100 aplicado');
             return;
         }
 
         setValidatingCoupon(true);
-        setCouponError(''); // Clear previous errors
+        setCouponError('');
 
         try {
             console.log('Validating coupon:', couponCode);
             const coupon = await api.coupons.validate(couponCode);
-            console.log('Coupon valid:', coupon);
+
+            // --- AUTO-SELECTION LOGIC ---
+            let changesMade = [];
+            let benefitsList = [];
+
+            // 1. Auto-Select Modality if specified
+            if (coupon.applicableModality) {
+                const targetTicket = pricing.ticketTypes.find(t => t.id === coupon.applicableModality);
+                if (targetTicket) {
+                    if (selectedTicket !== coupon.applicableModality) {
+                        setSelectedTicket(coupon.applicableModality);
+                        changesMade.push(`Modalidad actualizada a: <b>${targetTicket.title}</b>`);
+                    }
+                    benefitsList.push(`<li>Ticket: <b>${targetTicket.title}</b></li>`);
+                }
+            } else if (selectedTicket) {
+                // If generic coupon, just mention current ticket
+                const current = pricing.ticketTypes.find(t => t.id === selectedTicket);
+                if (current) benefitsList.push(`<li>Ticket: <b>${current.title}</b></li>`);
+            }
+
+            // 2. Auto-Select Workshops if specified
+            if (coupon.workshopDiscounts && Object.keys(coupon.workshopDiscounts).length > 0) {
+                const newWorkshops = [...selectedWorkshops];
+                let addedAny = false;
+
+                Object.keys(coupon.workshopDiscounts).forEach(wsId => {
+                    // Auto-add workshops if they are part of the coupon
+                    // User request: "marcarse en automatico el acceso al que me dio el cupon"
+                    if (!newWorkshops.includes(wsId)) {
+                        newWorkshops.push(wsId);
+                        addedAny = true;
+                    }
+                    // Use loose equality for safety with object key strings vs number IDs
+                    const wsName = pricing.workshops.find(w => w.id == wsId)?.name || 'Taller';
+                    benefitsList.push(`<li>Taller: <b>${wsName}</b></li>`);
+                });
+
+                if (addedAny) {
+                    setSelectedWorkshops(newWorkshops);
+                    changesMade.push('Se han agregado los talleres incluidos en el cupón.');
+                }
+            }
+
+            // Message Construction
+            let successHtml = `<div class="text-left"><p class="mb-2">${coupon.description}</p>`;
+
+            if (benefitsList.length > 0) {
+                successHtml += `<p class="text-sm font-bold mt-3 mb-1">Items Cubiertos / Descontados:</p><ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">${benefitsList.join('')}</ul>`;
+            }
+
+            if (changesMade.length > 0) {
+                successHtml += `<div class="mt-4 p-3 bg-blue-50 text-blue-800 rounded-lg text-sm border border-blue-100">✨ <b>Actualización Automática:</b><br/>${changesMade.join('<br/>')}</div>`;
+            }
+
+            successHtml += '</div>';
+
             setAppliedCoupon(coupon);
-            window.alert(`Cupón "${coupon.code}" aplicado correctamente: ${coupon.description}`);
+            showSuccess(successHtml, 'Cupón Válido', { html: true });
+
         } catch (error) {
             console.error('Coupon error:', error);
             setCouponError(error.message || 'Cupón inválido o expirado');
@@ -136,31 +210,49 @@ const RegistrationView = () => {
     };
 
     const calculateAmount = () => {
-        let basePrice = 0;
+        let total = 0;
 
-        // Find selected ticket price
+        // 1. Calculate Ticket Price
         const ticket = pricing.ticketTypes.find(t => t.id === selectedTicket);
         if (ticket) {
-            basePrice = parseFloat(ticket.price) || 0; // Ensure it's a number
+            let ticketPrice = parseFloat(ticket.price) || 0;
+
+            // Check Granular Modality Discount
+            if (appliedCoupon && appliedCoupon.applicableModality === selectedTicket) {
+                const discountPercent = parseFloat(appliedCoupon.modalityDiscount) || 0;
+                ticketPrice = Math.max(0, ticketPrice * (1 - discountPercent / 100));
+            } else if (appliedCoupon && !appliedCoupon.applicableModality && !appliedCoupon.workshopDiscounts && appliedCoupon.type === 'percentage') {
+                // Legacy Global Percentage
+                ticketPrice = ticketPrice * (1 - appliedCoupon.value / 100);
+            }
+            total += ticketPrice;
         }
 
-        // Add workshops price
+        // 2. Calculate Workshops Price
         selectedWorkshops.forEach(workshopId => {
             const ws = pricing.workshops.find(w => w.id === workshopId);
             if (ws) {
-                basePrice += ws.price;
+                let wsPrice = parseFloat(ws.price) || 0;
+
+                // Check Granular Workshop Discount
+                if (appliedCoupon && appliedCoupon.workshopDiscounts && appliedCoupon.workshopDiscounts[workshopId] !== undefined) {
+                    const discountPercent = parseFloat(appliedCoupon.workshopDiscounts[workshopId]) || 0;
+                    wsPrice = Math.max(0, wsPrice * (1 - discountPercent / 100));
+                } else if (appliedCoupon && !appliedCoupon.workshopDiscounts && appliedCoupon.type === 'percentage') {
+                    // Legacy Global Percentage
+                    wsPrice = wsPrice * (1 - appliedCoupon.value / 100);
+                }
+                total += wsPrice;
             }
         });
 
-        if (basePrice > 0 && appliedCoupon) {
-            if (appliedCoupon.type === 'percentage') {
-                const discount = (basePrice * appliedCoupon.value) / 100;
-                return Math.max(0, basePrice - discount);
-            } else if (appliedCoupon.type === 'fixed') {
-                return Math.max(0, basePrice - appliedCoupon.value);
-            }
+        // 3. Legacy Fixed Discount (Global)
+        if (appliedCoupon && appliedCoupon.type === 'fixed') {
+            total = Math.max(0, total - appliedCoupon.value);
         }
-        return basePrice;
+
+        // Round to 2 decimals
+        return Math.round(total * 100) / 100;
     };
 
     const amount = calculateAmount();
@@ -295,9 +387,12 @@ const RegistrationView = () => {
                 wantsCertification: wantsCert,
                 coupon: appliedCoupon ? appliedCoupon.code : null,
                 voucherData: base64Voucher,
-                status: paymentNeeded ? 'pending_payment' : 'confirmed',
+                status: paymentNeeded ? 'pending_payment' : 'confirmed', // Auto-confirm if 0 amount
                 processedAt: new Date().toISOString(),
-                paymentAccountId: selectedPaymentAccount // Pass the selected account ID
+                paymentAccountId: selectedPaymentAccount, // Pass the selected account ID
+
+                // Add default Role 'asistente' explicitly if valid (or backend does it)
+                // We'll let backend handle default role assignment, but we ensure status is confirmed.
             };
 
             const result = await submitRegistration(registrationData);
@@ -487,11 +582,6 @@ const RegistrationView = () => {
 
     const availableWorkshops = pricing.workshops;
 
-    // Mock options for dropdowns (typically would come from config/api)
-    const specialties = [
-        'Neurología', 'Neurocirugía', 'Neuropediatría', 'Psiquiatría', 'Medicina Física y Rehabilitación', 'Otros'
-    ];
-
     // Example hospitals for datalist
     const institutions = [
         'Instituto Nacional de Ciencias Neurológicas',
@@ -521,7 +611,7 @@ const RegistrationView = () => {
                                     setViewMode('registration');
                                     setCurrentStep(1);
                                 }}
-                                className={`flex-1 px-8 py-6 font-bold text-lg transition-all ${viewMode === 'registration'
+                                className={`flex-1 px-8 py-4 font-bold text-lg transition-all ${viewMode === 'registration'
                                     ? 'text-white bg-blue-700 border-b-4 border-blue-900'
                                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 bg-white'
                                     }`}
@@ -534,7 +624,7 @@ const RegistrationView = () => {
                                     setViewMode('work_submission');
                                     setCurrentStep(1);
                                 }}
-                                className={`flex-1 px-8 py-6 font-bold text-lg transition-all ${viewMode === 'work_submission'
+                                className={`flex-1 px-8 py-4 font-bold text-lg transition-all ${viewMode === 'work_submission'
                                     ? 'text-white bg-blue-700 border-b-4 border-blue-900'
                                     : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50 bg-white'
                                     }`}
@@ -645,6 +735,8 @@ const RegistrationView = () => {
 
                                 {/* Form Content - Disabled if work submission is closed */}
                                 <div className={`space-y-6 ${viewMode === 'work_submission' && !getDeadlineStatus().allowed ? 'opacity-50 pointer-events-none' : ''}`}>
+
+
                                     <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
                                         <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
                                             <User size={24} />
@@ -852,6 +944,55 @@ const RegistrationView = () => {
                             <div className="animate-fadeIn space-y-6">
                                 {/* Work Form */}
                                 <div className="space-y-6">
+                                    {/* Authorship Section */}
+                                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                                        <label className="block text-sm font-bold text-gray-700 mb-4">Autoría del Trabajo</label>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                            <div
+                                                onClick={() => setAuthorMode('single')}
+                                                className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${authorMode === 'single'
+                                                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 hover:border-blue-200 text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 ${authorMode === 'single' ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-500'
+                                                    }`}>
+                                                    <User size={24} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-base">Solo Autor (Yo)</p>
+                                                    <p className="text-xs opacity-70">Soy el único autor del trabajo</p>
+                                                </div>
+                                                {authorMode === 'single' && (
+                                                    <div className="ml-auto w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                                                        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            <div
+                                                onClick={() => setAuthorMode('multiple')}
+                                                className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${authorMode === 'multiple'
+                                                    ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                                    : 'border-gray-200 hover:border-blue-200 text-gray-600 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 ${authorMode === 'multiple' ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-500'
+                                                    }`}>
+                                                    <Users size={24} />
+                                                </div>
+                                                <div>
+                                                    <p className="font-bold text-base">Varios Autores</p>
+                                                    <p className="text-xs opacity-70">Hay co-autores involucrados</p>
+                                                </div>
+                                                {authorMode === 'multiple' && (
+                                                    <div className="ml-auto w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                                                        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
                                     <div className="grid md:grid-cols-2 gap-6">
                                         <div>
                                             <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Trabajo *</label>
@@ -861,8 +1002,15 @@ const RegistrationView = () => {
                                                 className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50 focus:bg-white"
                                             >
                                                 <option value="">Seleccione...</option>
-                                                <option value="Trabajo Original">Trabajo Original</option>
-                                                <option value="Caso Clínico">Caso Clínico</option>
+                                                {academicConfig?.workTypes?.map((type, i) => (
+                                                    <option key={i} value={type}>{type}</option>
+                                                )) || (
+                                                        <>
+                                                            <option value="Trabajo Original">Trabajo Original</option>
+                                                            <option value="Caso Clínico">Caso Clínico</option>
+                                                            <option value="Revisión Sistemática">Revisión Sistemática</option>
+                                                        </>
+                                                    )}
                                             </select>
                                         </div>
                                         <div>
@@ -894,18 +1042,66 @@ const RegistrationView = () => {
 
                                     <div className="bg-gray-50 p-6 rounded-xl border border-gray-200 space-y-4">
                                         <h4 className="text-sm font-bold text-gray-700">Resumen Estructurado</h4>
-                                        {['introduccion', 'metodologia', 'resultados', 'conclusiones'].map((section) => (
-                                            <div key={section}>
-                                                <label className="block text-sm font-semibold text-gray-700 mb-2 capitalize">{section} *</label>
-                                                <textarea
-                                                    value={workForm[section]}
-                                                    onChange={(e) => setWorkForm({ ...workForm, [section]: e.target.value })}
-                                                    rows={4}
-                                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white resize-none"
-                                                />
-                                                <div className="text-xs text-right text-gray-400 mt-1">0 / 150 palabras</div>
+                                        {academicConfig?.sections
+                                            ?.filter(section => section.active && section.workTypes.includes(workForm.type))
+                                            .map((section) => (
+                                                <div key={section.id}>
+                                                    <label className="block text-sm font-semibold text-gray-700 mb-2 capitalize">
+                                                        {section.label} <span className="text-gray-500 font-normal ml-1">({section.type === 'file' ? 'Archivo PDF/Img' : `${section.limit || 150} palabras máx.`})</span> *
+                                                    </label>
+                                                    {section.type === 'file' ? (
+                                                        <div className="border-2 border-dashed border-gray-300 rounded-xl p-6 hover:bg-gray-50 transition-colors text-center cursor-pointer relative">
+                                                            <input
+                                                                type="file"
+                                                                accept={section.acceptedFileTypes || ".pdf,.jpg,.jpeg,.png"}
+                                                                onChange={(e) => {
+                                                                    const file = e.target.files[0];
+                                                                    // Handle file selection - In a real app, upload here or store file object
+                                                                    // For now, storing fake path or file name to simulate
+                                                                    if (file) {
+                                                                        setWorkForm({ ...workForm, [section.id]: file.name });
+                                                                    }
+                                                                }}
+                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                            />
+                                                            <div className="flex flex-col items-center gap-2">
+                                                                <Upload size={24} className="text-gray-400" />
+                                                                <p className="text-sm text-gray-600 font-medium">
+                                                                    {workForm[section.id] ? (
+                                                                        <span className="text-blue-600 font-bold flex items-center gap-2">
+                                                                            <FileCheck size={16} /> {workForm[section.id]}
+                                                                        </span>
+                                                                    ) : "Haga clic o arrastre para subir archivo"}
+                                                                </p>
+                                                                <p className="text-xs text-gray-400">Máx. 5MB (PDF, JPG, PNG)</p>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <>
+                                                            <textarea
+                                                                value={workForm[section.id] || ''}
+                                                                onChange={(e) => {
+                                                                    const text = e.target.value;
+                                                                    setWorkForm({ ...workForm, [section.id]: text });
+                                                                }}
+                                                                rows={4}
+                                                                placeholder={`Escriba el contenido de ${section.label}...`}
+                                                                className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white resize-none"
+                                                            />
+                                                            <div className="flex justify-end mt-1">
+                                                                <span className={`text-xs ${((workForm[section.id] || '').split(/\s+/).filter(w => w.length > 0).length) > (section.limit || 150) ? 'text-red-500 font-bold' : 'text-gray-400'}`}>
+                                                                    {(workForm[section.id] || '').split(/\s+/).filter(w => w.length > 0).length} / {section.limit || 150} palabras
+                                                                </span>
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        {!workForm.type && (
+                                            <div className="text-center py-8 text-gray-500 italic">
+                                                Seleccione un tipo de trabajo para ver la estructura requerida.
                                             </div>
-                                        ))}
+                                        )}
                                     </div>
 
                                     {/* Declaraciones Juradas */}
@@ -955,141 +1151,143 @@ const RegistrationView = () => {
                                     </div>
                                 </div>
 
-                                <div className="grid md:grid-cols-2 gap-8">
+                                <div className={requiresPayment ? "grid md:grid-cols-2 gap-8" : "max-w-xl mx-auto space-y-6"}>
                                     {/* Left Col: Bank Info - Dynamic */}
-                                    <div className="space-y-4" ref={accountsRef}>
-                                        <h4 className={`font-bold border-b pb-2 ${showAccountError ? 'text-red-600 border-red-300' : 'text-gray-800'}`}>
-                                            Cuentas Disponibles {showAccountError && <span className="text-xs font-normal text-red-500 float-right mt-1">* Requerido</span>}
-                                        </h4>
-                                        <p className="text-sm text-gray-600 mb-2">Selecciona la cuenta donde realizaste el pago:</p>
+                                    {requiresPayment && (
+                                        <div className="space-y-4" ref={accountsRef}>
+                                            <h4 className={`font-bold border-b pb-2 ${showAccountError ? 'text-red-600 border-red-300' : 'text-gray-800'}`}>
+                                                Cuentas Disponibles {showAccountError && <span className="text-xs font-normal text-red-500 float-right mt-1">* Requerido</span>}
+                                            </h4>
+                                            <p className="text-sm text-gray-600 mb-2">Selecciona la cuenta donde realizaste el pago:</p>
 
-                                        <div className="space-y-3">
-                                            {(() => {
-                                                const inscriptionAccountIds = treasuryData.config?.contribution?.inscriptionAccounts ||
-                                                    (treasuryData.config?.contribution?.defaultInscriptionAccount ? [treasuryData.config.contribution.defaultInscriptionAccount] : []);
+                                            <div className="space-y-3">
+                                                {(() => {
+                                                    const inscriptionAccountIds = treasuryData.config?.contribution?.inscriptionAccounts ||
+                                                        (treasuryData.config?.contribution?.defaultInscriptionAccount ? [treasuryData.config.contribution.defaultInscriptionAccount] : []);
 
-                                                const validAccounts = treasuryData.accounts.filter(acc => inscriptionAccountIds.includes(acc.id));
+                                                    const validAccounts = treasuryData.accounts.filter(acc => inscriptionAccountIds.includes(acc.id));
 
-                                                if (validAccounts.length === 0) {
-                                                    return <p className="text-red-500 text-sm italic">No hay cuentas de inscripción configuradas.</p>;
-                                                }
-
-                                                return validAccounts.map(account => {
-                                                    const isSelected = selectedPaymentAccount === account.id;
-
-                                                    // Determine visual style based on account details
-                                                    const name = account.bank_name || account.wallet_name || account.nombre || '';
-                                                    const lowerName = name.toLowerCase();
-                                                    const displayType = account.tipo === 'billetera' ? 'Billetera' : 'Banco';
-
-                                                    // Try to find configured logo
-                                                    let configuredLogo = null;
-                                                    if (treasuryData.config?.banks && account.tipo === 'banco') {
-                                                        const bank = treasuryData.config.banks.find(b => b.name === account.bank_name);
-                                                        if (bank?.logo) configuredLogo = bank.logo;
-                                                    } else if (treasuryData.config?.wallets && account.tipo === 'billetera') {
-                                                        const wallet = treasuryData.config.wallets.find(w => w.name === account.wallet_name);
-                                                        if (wallet?.logo) configuredLogo = wallet.logo;
+                                                    if (validAccounts.length === 0) {
+                                                        return <p className="text-red-500 text-sm italic">No hay cuentas de inscripción configuradas.</p>;
                                                     }
 
-                                                    let colorClass = 'bg-gray-50 border-gray-200';
-                                                    let iconClass = 'bg-gray-200 text-gray-600';
-                                                    let shortName = displayType;
+                                                    return validAccounts.map(account => {
+                                                        const isSelected = selectedPaymentAccount === account.id;
 
-                                                    if (lowerName.includes('yape')) {
-                                                        colorClass = 'bg-purple-50 border-purple-200';
-                                                        iconClass = 'bg-purple-600 text-white';
-                                                        shortName = 'Yape';
-                                                    }
-                                                    else if (lowerName.includes('plin')) {
-                                                        colorClass = 'bg-cyan-50 border-cyan-200';
-                                                        iconClass = 'bg-cyan-500 text-white';
-                                                        shortName = 'Plin';
-                                                    }
-                                                    else if (lowerName.includes('bcp') || lowerName.includes('crédito')) {
-                                                        colorClass = 'bg-orange-50 border-orange-200';
-                                                        iconClass = 'bg-orange-500 text-white';
-                                                        shortName = 'BCP';
-                                                    }
-                                                    else if (lowerName.includes('interbank')) {
-                                                        colorClass = 'bg-green-50 border-green-200';
-                                                        iconClass = 'bg-green-600 text-white';
-                                                        shortName = 'IB';
-                                                    }
-                                                    else if (lowerName.includes('bbva')) {
-                                                        colorClass = 'bg-blue-50 border-blue-200';
-                                                        iconClass = 'bg-blue-600 text-white';
-                                                        shortName = 'BBVA';
-                                                    }
+                                                        // Determine visual style based on account details
+                                                        const name = account.bank_name || account.wallet_name || account.nombre || '';
+                                                        const lowerName = name.toLowerCase();
+                                                        const displayType = account.tipo === 'billetera' ? 'Billetera' : 'Banco';
 
-                                                    if (isSelected) {
-                                                        colorClass = colorClass.replace('bg-', 'bg-opacity-50 ring-2 ring-blue-500 border-blue-500');
-                                                    }
+                                                        // Try to find configured logo
+                                                        let configuredLogo = null;
+                                                        if (treasuryData.config?.banks && account.tipo === 'banco') {
+                                                            const bank = treasuryData.config.banks.find(b => b.name === account.bank_name);
+                                                            if (bank?.logo) configuredLogo = bank.logo;
+                                                        } else if (treasuryData.config?.wallets && account.tipo === 'billetera') {
+                                                            const wallet = treasuryData.config.wallets.find(w => w.name === account.wallet_name);
+                                                            if (wallet?.logo) configuredLogo = wallet.logo;
+                                                        }
 
-                                                    return (
-                                                        <div
-                                                            key={account.id}
-                                                            onClick={() => {
-                                                                setSelectedPaymentAccount(account.id);
-                                                                setShowAccountError(false);
-                                                            }}
-                                                            className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'} ${showAccountError && !isSelected ? 'border-red-300 bg-red-50' : ''}`}
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${!configuredLogo ? iconClass : 'bg-white border border-gray-100'}`}>
-                                                                    {configuredLogo ? (
-                                                                        <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain p-1" />
-                                                                    ) : (
-                                                                        shortName.substring(0, 4)
-                                                                    )}
-                                                                </div>
-                                                                <div className="flex-1 min-w-0">
-                                                                    {displayType === 'Billetera' ? (
-                                                                        <>
-                                                                            <p className="font-bold text-gray-900 text-2xl leading-none tracking-tight mb-1">
-                                                                                {account.phone_number || account.account_number}
-                                                                            </p>
-                                                                            <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                                                                                {account.holder_name || 'Titular no registrado'}
-                                                                            </p>
-                                                                            <div className="mt-1 flex items-center gap-2">
-                                                                                <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">
-                                                                                    {name}
-                                                                                </span>
-                                                                            </div>
-                                                                        </>
-                                                                    ) : (
-                                                                        <>
-                                                                            <p className="font-bold text-gray-900 text-lg leading-tight mb-0.5">
-                                                                                {name || account.nombre}
-                                                                            </p>
-                                                                            <p className="text-xs text-gray-600 font-medium uppercase mb-2">
-                                                                                {account.holder_name || 'Titular no registrado'}
-                                                                            </p>
+                                                        let colorClass = 'bg-gray-50 border-gray-200';
+                                                        let iconClass = 'bg-gray-200 text-gray-600';
+                                                        let shortName = displayType;
 
-                                                                            <div className="space-y-1">
-                                                                                <p className="flex items-center gap-2">
-                                                                                    <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold tracking-wider min-w-[50px] text-center">Cuenta</span>
-                                                                                    <span className="font-mono text-gray-800 text-xs tracking-wide">{account.account_number || account.numero_cuenta}</span>
+                                                        if (lowerName.includes('yape')) {
+                                                            colorClass = 'bg-purple-50 border-purple-200';
+                                                            iconClass = 'bg-purple-600 text-white';
+                                                            shortName = 'Yape';
+                                                        }
+                                                        else if (lowerName.includes('plin')) {
+                                                            colorClass = 'bg-cyan-50 border-cyan-200';
+                                                            iconClass = 'bg-cyan-500 text-white';
+                                                            shortName = 'Plin';
+                                                        }
+                                                        else if (lowerName.includes('bcp') || lowerName.includes('crédito')) {
+                                                            colorClass = 'bg-orange-50 border-orange-200';
+                                                            iconClass = 'bg-orange-500 text-white';
+                                                            shortName = 'BCP';
+                                                        }
+                                                        else if (lowerName.includes('interbank')) {
+                                                            colorClass = 'bg-green-50 border-green-200';
+                                                            iconClass = 'bg-green-600 text-white';
+                                                            shortName = 'IB';
+                                                        }
+                                                        else if (lowerName.includes('bbva')) {
+                                                            colorClass = 'bg-blue-50 border-blue-200';
+                                                            iconClass = 'bg-blue-600 text-white';
+                                                            shortName = 'BBVA';
+                                                        }
+
+                                                        if (isSelected) {
+                                                            colorClass = colorClass.replace('bg-', 'bg-opacity-50 ring-2 ring-blue-500 border-blue-500');
+                                                        }
+
+                                                        return (
+                                                            <div
+                                                                key={account.id}
+                                                                onClick={() => {
+                                                                    setSelectedPaymentAccount(account.id);
+                                                                    setShowAccountError(false);
+                                                                }}
+                                                                className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'} ${showAccountError && !isSelected ? 'border-red-300 bg-red-50' : ''}`}
+                                                            >
+                                                                <div className="flex items-center gap-3">
+                                                                    <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${!configuredLogo ? iconClass : 'bg-white border border-gray-100'}`}>
+                                                                        {configuredLogo ? (
+                                                                            <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain p-1" />
+                                                                        ) : (
+                                                                            shortName.substring(0, 4)
+                                                                        )}
+                                                                    </div>
+                                                                    <div className="flex-1 min-w-0">
+                                                                        {displayType === 'Billetera' ? (
+                                                                            <>
+                                                                                <p className="font-bold text-gray-900 text-2xl leading-none tracking-tight mb-1">
+                                                                                    {account.phone_number || account.account_number}
                                                                                 </p>
-                                                                                {account.cci && (
+                                                                                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">
+                                                                                    {account.holder_name || 'Titular no registrado'}
+                                                                                </p>
+                                                                                <div className="mt-1 flex items-center gap-2">
+                                                                                    <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">
+                                                                                        {name}
+                                                                                    </span>
+                                                                                </div>
+                                                                            </>
+                                                                        ) : (
+                                                                            <>
+                                                                                <p className="font-bold text-gray-900 text-lg leading-tight mb-0.5">
+                                                                                    {name || account.nombre}
+                                                                                </p>
+                                                                                <p className="text-xs text-gray-600 font-medium uppercase mb-2">
+                                                                                    {account.holder_name || 'Titular no registrado'}
+                                                                                </p>
+
+                                                                                <div className="space-y-1">
                                                                                     <p className="flex items-center gap-2">
-                                                                                        <span className="text-[10px] uppercase bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-bold tracking-wider min-w-[50px] text-center">CCI</span>
-                                                                                        <span className="font-mono text-gray-600 text-xs tracking-wide">{account.cci}</span>
+                                                                                        <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold tracking-wider min-w-[50px] text-center">Cuenta</span>
+                                                                                        <span className="font-mono text-gray-800 text-xs tracking-wide">{account.account_number || account.numero_cuenta}</span>
                                                                                     </p>
-                                                                                )}
-                                                                            </div>
-                                                                        </>
-                                                                    )}
+                                                                                    {account.cci && (
+                                                                                        <p className="flex items-center gap-2">
+                                                                                            <span className="text-[10px] uppercase bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-bold tracking-wider min-w-[50px] text-center">CCI</span>
+                                                                                            <span className="font-mono text-gray-600 text-xs tracking-wide">{account.cci}</span>
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </>
+                                                                        )}
+                                                                    </div>
+                                                                    {isSelected && <CheckCircle className="text-blue-600" size={24} />}
                                                                 </div>
-                                                                {isSelected && <CheckCircle className="text-blue-600" size={24} />}
                                                             </div>
-                                                        </div>
-                                                    );
-                                                });
-                                            })()}
+                                                        );
+                                                    });
+                                                })()}
+                                            </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Right Col: Validation */}
                                     <div className="space-y-4">
@@ -1141,40 +1339,38 @@ const RegistrationView = () => {
                                     </div>
                                 </div>
 
-                                {requiresPayment && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100">
-                                        <div className="flex items-center gap-2">
-                                            <input
-                                                type="text"
-                                                placeholder="CÓDIGO DE CUPÓN"
-                                                value={couponCode}
-                                                onChange={(e) => {
-                                                    setCouponCode(e.target.value.toUpperCase());
-                                                    if (couponError) setCouponError(''); // Clear error on typing
-                                                }}
-                                                onKeyDown={(e) => {
-                                                    if (e.key === 'Enter') {
-                                                        e.preventDefault();
-                                                        handleValidateCoupon();
-                                                    }
-                                                }}
-                                                disabled={!!appliedCoupon}
-                                                className={`flex-1 px-4 py-3 border ${couponError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'} rounded-xl focus:ring-2 outline-none transition-all`}
-                                            />
-                                            {!appliedCoupon ? (
-                                                <button type="button" onClick={handleValidateCoupon} disabled={validatingCoupon || !couponCode} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-colors">{validatingCoupon ? <Loader className="animate-spin" size={20} /> : 'Aplicar'}</button>
-                                            ) : (
-                                                <button type="button" onClick={handleRemoveCoupon} className="bg-red-100 text-red-600 px-4 py-3 rounded-xl hover:bg-red-200"><X size={20} /></button>
-                                            )}
-                                        </div>
-                                        {couponError && (
-                                            <div className="flex items-center gap-2 mt-2 text-red-500 text-sm animate-fadeIn pl-1">
-                                                <AlertCircle size={16} />
-                                                <span className="font-medium">{couponError}</span>
-                                            </div>
+                                <div className="mt-4 pt-4 border-t border-gray-100">
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="text"
+                                            placeholder="CÓDIGO DE CUPÓN"
+                                            value={couponCode}
+                                            onChange={(e) => {
+                                                setCouponCode(e.target.value.toUpperCase());
+                                                if (couponError) setCouponError(''); // Clear error on typing
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    handleValidateCoupon();
+                                                }
+                                            }}
+                                            disabled={!!appliedCoupon}
+                                            className={`flex-1 px-4 py-3 border ${couponError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'} rounded-xl focus:ring-2 outline-none transition-all`}
+                                        />
+                                        {!appliedCoupon ? (
+                                            <button type="button" onClick={handleValidateCoupon} disabled={validatingCoupon || !couponCode} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-colors">{validatingCoupon ? <Loader className="animate-spin" size={20} /> : 'Aplicar'}</button>
+                                        ) : (
+                                            <button type="button" onClick={handleRemoveCoupon} className="bg-red-100 text-red-600 px-4 py-3 rounded-xl hover:bg-red-200"><X size={20} /></button>
                                         )}
                                     </div>
-                                )}
+                                    {couponError && (
+                                        <div className="flex items-center gap-2 mt-2 text-red-500 text-sm animate-fadeIn pl-1">
+                                            <AlertCircle size={16} />
+                                            <span className="font-medium">{couponError}</span>
+                                        </div>
+                                    )}
+                                </div>
 
                                 <div className="mt-auto pt-6 flex justify-center">
                                     <button

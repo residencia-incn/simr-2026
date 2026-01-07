@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Search, User, Mail, Shield, Calendar, MapPin, Clock } from 'lucide-react';
+import { Search, User, Mail, Shield, Calendar, MapPin, Clock, UserPlus } from 'lucide-react';
 import { api } from '../../services/api';
 import Card from '../ui/Card';
 import Badge from '../ui/Badge';
+import Button from '../ui/Button';
+import AddSpeakerModal from './AddSpeakerModal';
 
 const AcademicSpeakers = () => {
     const [speakers, setSpeakers] = useState([]);
@@ -11,6 +13,7 @@ const AcademicSpeakers = () => {
     const [selectedSpeakerId, setSelectedSpeakerId] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [loading, setLoading] = useState(true);
+    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
     // Load speakers and program data
     useEffect(() => {
@@ -37,6 +40,25 @@ const AcademicSpeakers = () => {
         };
         loadData();
     }, []);
+
+    const refetch = () => {
+        const loadData = async () => {
+            try {
+                const [allAttendees, progData, daysData] = await Promise.all([
+                    api.attendees.getAll(),
+                    api.program.getAll(),
+                    api.program.getDays()
+                ]);
+                const speakersList = allAttendees.filter(a => a.role === 'Ponente');
+                setSpeakers(speakersList);
+                setProgramData(progData || {});
+                setDays(daysData || []);
+            } catch (error) {
+                console.error("Error loading speakers data", error);
+            }
+        };
+        loadData();
+    };
 
     const selectedSpeaker = speakers.find(s => s.id === selectedSpeakerId);
 
@@ -86,7 +108,17 @@ const AcademicSpeakers = () => {
             <div className="w-1/3 flex flex-col gap-4 bg-white rounded-xl border border-gray-200 p-4">
                 <div className="flex justify-between items-center">
                     <h3 className="font-bold text-gray-800">Directorio de Ponentes</h3>
-                    <Badge className="bg-blue-100 text-blue-700">{speakers.length}</Badge>
+                    <div className="flex items-center gap-2">
+                        <Badge className="bg-purple-100 text-purple-700">{speakers.length}</Badge>
+                        <Button
+                            size="xs"
+                            onClick={() => setIsAddModalOpen(true)}
+                            className="bg-purple-600 hover:bg-purple-700 text-white flex items-center gap-1"
+                        >
+                            <UserPlus size={14} />
+                            Nuevo Ponente
+                        </Button>
+                    </div>
                 </div>
 
                 <div className="relative">
@@ -196,6 +228,13 @@ const AcademicSpeakers = () => {
                     </div>
                 )}
             </div>
+
+            {/* Add Speaker Modal */}
+            <AddSpeakerModal
+                isOpen={isAddModalOpen}
+                onClose={() => setIsAddModalOpen(false)}
+                onUpdate={refetch}
+            />
         </div>
     );
 };

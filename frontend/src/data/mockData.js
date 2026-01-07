@@ -154,12 +154,13 @@ export const ACADEMIC_CONFIG = {
     extensionDeadline: "2026-03-20T23:59",
     latePenalty: 2.0, // Points deduction
     sections: [
-        { id: 'introduction', label: 'Introducción', limit: 300, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
-        { id: 'objective', label: 'Objetivo', limit: 100, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
-        { id: 'methodology', label: 'Materiales y Métodos', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
-        { id: 'results', label: 'Resultados', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
-        { id: 'conclusions', label: 'Conclusiones', limit: 200, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
-        { id: 'case_description', label: 'Descripción del Caso', limit: 500, active: true, workTypes: ["Reporte de Caso"] }
+        { id: 'introduction', label: 'Introducción', limit: 300, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"], type: 'text' },
+        { id: 'objective', label: 'Objetivo', limit: 100, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"], type: 'text' },
+        { id: 'methodology', label: 'Metodología', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"], type: 'text' },
+        { id: 'results', label: 'Resultados', limit: 400, active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"], type: 'text' },
+        { id: 'conclusions', label: 'Conclusiones', limit: 200, active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"], type: 'text' },
+        { id: 'case_description', label: 'Descripción del Caso', limit: 500, active: true, workTypes: ["Reporte de Caso"], type: 'text' },
+        { id: 'consent_informed', label: 'Consentimiento Informado', limit: 5, active: true, workTypes: ["Reporte de Caso"], type: 'file', acceptedFileTypes: '.pdf,.jpg,.png' }
     ],
     workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"],
     declarations: [

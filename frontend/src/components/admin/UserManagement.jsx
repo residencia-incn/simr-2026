@@ -14,7 +14,8 @@ const UserManagement = () => {
     const [users, setUsers] = useState([]);
     const [loading, setLoading] = useState(true);
     const [selectedUser, setSelectedUser] = useState(null);
-    const [actionType, setActionType] = useState(null); // 'delete', 'reset', 'event_role', 'profiles'
+    const [actionType, setActionType] = useState(null);
+    const [ticketMap, setTicketMap] = useState({});
 
     // Modal for Details
     const {
@@ -27,9 +28,18 @@ const UserManagement = () => {
     const loadUsers = async () => {
         setLoading(true);
         try {
-            // ÚNICA FUENTE DE VERDAD: api.users.getAll()
-            // Ya filtra superadmin automáticamente
-            const usersData = await api.users.getAll();
+            // Cargar Usuarios y Configuración de Precios (para nombres de modalidades)
+            const [usersData, pricingData] = await Promise.all([
+                api.users.getAll(),
+                api.treasury.getPricing()
+            ]);
+
+            // Crear mapa de Code -> Title
+            const map = {};
+            if (pricingData?.ticketTypes) {
+                pricingData.ticketTypes.forEach(t => map[t.id] = t.title);
+            }
+            setTicketMap(map);
             setUsers(usersData);
         } catch (error) {
             console.error("Error loading users:", error);
@@ -226,23 +236,28 @@ const UserManagement = () => {
         },
         {
             header: 'Modalidad',
-            key: 'modality',
-            className: 'text-center w-16',
-            render: (item) => {
-                const mod = item.modality || 'Presencial';
-                let Icon = MapPin;
-                let color = 'text-green-600';
+            key: 'ticketType', // Changed key to reflect source of truth
+            className: 'text-left w-40',
+            render: (user) => {
+                const modName = ticketMap[user.ticketType] || user.modality || (user.ticketType ? 'Desconocido' : 'Presencial');
 
-                if (mod === 'Virtual') { Icon = Wifi; color = 'text-blue-500'; }
-                else if (mod === 'Híbrido') { Icon = Monitor; color = 'text-purple-600'; }
+                let Icon = MapPin;
+                let colorClass = 'text-green-700 bg-green-50 border-green-200';
+
+                // Estilos según tipo
+                const lower = modName.toLowerCase();
+                if (lower.includes('virtual')) {
+                    Icon = Wifi;
+                    colorClass = 'text-blue-700 bg-blue-50 border-blue-200';
+                } else if (lower.includes('certificado')) {
+                    colorClass = 'text-purple-700 bg-purple-50 border-purple-200';
+                }
 
                 return (
-                    <div className="flex justify-center group relative cursor-help">
-                        <Icon size={18} className={color} strokeWidth={2} />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
-                            {mod}
-                        </span>
-                    </div>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md border text-xs font-medium ${colorClass} w-full`}>
+                        <Icon size={12} className="shrink-0" />
+                        <span className="truncate" title={modName}>{modName}</span>
+                    </span>
                 );
             }
         },

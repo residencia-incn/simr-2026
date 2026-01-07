@@ -1,5 +1,6 @@
 import React from 'react';
 import { QrCode } from 'lucide-react';
+import CustomQRCode from '../ui/CustomQRCode';
 
 const Photocheck = ({ attendee, width = 9, height = 13 }) => {
     // Helper to parse dimension to number (handles "9cm" or 9)
@@ -141,10 +142,13 @@ const Photocheck = ({ attendee, width = 9, height = 13 }) => {
                         <p className="text-2xl text-gray-600 font-medium mb-1 line-clamp-1">{attendee?.specialty || 'Especialidad'}</p>
                         <p className="text-lg text-gray-400 mb-4 line-clamp-1">{attendee?.institution || 'Institución'}</p>
 
-                        {/* QR Code Placeholder */}
                         <div className="bg-white p-2 rounded-xl border-2 border-gray-100 shadow-sm mb-3 shrink-0">
                             {attendee?.id ? (
-                                <QrCode size={140} className="text-gray-800" />
+                                <CustomQRCode
+                                    value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: displayName })}
+                                    size={140}
+                                    level="H"
+                                />
                             ) : (
                                 <QrCode size={140} className="text-gray-300" />
                             )}

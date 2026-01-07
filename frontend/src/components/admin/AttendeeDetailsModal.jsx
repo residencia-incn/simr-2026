@@ -1,8 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check } from 'lucide-react';
+import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check, Cake, CreditCard } from 'lucide-react';
 import { Button, Card, Badge } from '../ui';
-import QRCode from 'react-qr-code';
+import CustomQRCode from '../ui/CustomQRCode';
 import { api } from '../../services/api';
 
 const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
@@ -56,6 +56,11 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
     const rawWorkshops = attendee.workshops || attendee.purchasedItems || [];
     const workshops = rawWorkshops.map(id => workshopNames[id] || id);
 
+    // Resolve Role Display (ignoring generic 'user' role)
+    const rawRole = attendee.eventRole || (attendee.eventRoles && attendee.eventRoles[0]) || 'Asistente';
+    // Capitalize
+    const displayRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1);
+
     // We will render mapped names later
     const attendancePercent = parseInt(attendee.attendancePercent || Math.floor(Math.random() * 40) + 60); // Mock
     const isApproved = attendancePercent >= 60;
@@ -69,7 +74,7 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                 {/* Screen Header */}
                 <div className="bg-white border-b border-gray-100 p-4 flex items-center justify-between z-10 flex-shrink-0">
                     <div>
-                        <h2 className="text-lg font-bold text-gray-900">Detalles del Asistente</h2>
+                        <h2 className="text-lg font-bold text-gray-900">Detalle del {displayRole}</h2>
                         <p className="text-sm text-gray-500">ID: {attendee.id || 'N/A'}</p>
                     </div>
                     <div className="flex gap-2">
@@ -100,7 +105,7 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                                 )}
                             </div>
                             <div className="bg-white p-3 rounded-xl border-2 border-dashed border-gray-200 shadow-sm">
-                                <QRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={120} level="M" />
+                                <CustomQRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={120} level="H" />
                             </div>
                             <span className="text-xs text-gray-400 font-mono tracking-wider">{attendee.dni || 'NO DNI'}</span>
                         </div>
@@ -109,16 +114,21 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                             <div>
                                 <h1 className="text-3xl font-bold text-gray-900 mb-2">{fullName}</h1>
                                 <div className="flex flex-wrap gap-2 mb-4">
-                                    <Badge variant="blue" className="text-sm py-1 px-3">{attendee.role || 'Participante'}</Badge>
-                                    <Badge variant={attendee.modality === 'Virtual' ? 'purple' : 'green'} className="text-sm py-1 px-3">{attendee.modality || 'Presencial'}</Badge>
-                                    <Badge variant={isApproved ? 'green' : 'gray'} className="text-sm py-1 px-3">{isApproved ? 'Aprobado' : 'En Curso'}</Badge>
+                                    <Badge variant={attendee.modality === 'Virtual' ? 'purple' : 'green'} className="text-sm py-1 px-3">
+                                        {workshopNames[attendee.ticketType] || attendee.modality || 'Presencial'}
+                                    </Badge>
+                                    <Badge variant="blue" className="text-sm py-1 px-3">
+                                        {displayRole}
+                                    </Badge>
                                 </div>
                             </div>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                                <InfoItem icon={CreditCard} label="DNI" value={attendee.dni || '-'} />
+                                <InfoItem icon={Cake} label="Fecha Nacimiento" value={attendee.birthDate ? attendee.birthDate.split('-').reverse().join('/') : '-'} />
                                 <InfoItem icon={Mail} label="Email" value={attendee.email || '-'} copyable />
                                 <InfoItem icon={Phone} label="Teléfono" value={attendee.phone || '-'} />
                                 <InfoItem icon={Building} label="Institución" value={attendee.institution || '-'} />
-                                <InfoItem icon={Calendar} label="Fecha Registro" value={attendee.date || '-'} />
+                                <InfoItem icon={Calendar} label="Fecha Registro" value={attendee.registrationDate || attendee.date || '-'} />
                             </div>
                         </div>
                     </div>
@@ -162,12 +172,46 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                             {workshops.length === 0 && <p className="text-gray-500 text-sm italic col-span-2">No registrado en talleres adicionales.</p>}
                         </div>
                     </div>
+
+                    {/* Modality History Section */}
+                    {attendee.modalityHistory && attendee.modalityHistory.length > 0 && (
+                        <div>
+                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Clock size={20} className="text-orange-500" /> Historial de Modalidades</h3>
+                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                <table className="w-full text-sm text-left">
+                                    <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
+                                        <tr>
+                                            <th className="p-3">Fecha</th>
+                                            <th className="p-3">Acción</th>
+                                            <th className="p-3">Cambio</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-gray-100">
+                                        {attendee.modalityHistory.map((entry, idx) => (
+                                            <tr key={idx}>
+                                                <td className="p-3 text-gray-600">{new Date(entry.timestamp).toLocaleDateString()} {new Date(entry.timestamp).toLocaleTimeString()}</td>
+                                                <td className="p-3">
+                                                    <Badge variant="blue" className="text-xs">{entry.action === 'swap_free' ? 'Cambio' : 'Upgrade'}</Badge>
+                                                </td>
+                                                <td className="p-3">
+                                                    <div className="flex flex-col">
+                                                        <span className="text-gray-900 font-medium">{workshopNames[entry.to] || entry.to}</span>
+                                                        <span className="text-xs text-gray-400">Desde: {workshopNames[entry.from] || entry.from || 'Inicio'}</span>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
 
 
-            // ... (component code) ...
+
 
             {/* PRINT PORTAL - Moved out of #root to ensure exclusive print layout */}
             {createPortal(
@@ -199,16 +243,15 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                             <div className="flex-grow pt-1">
                                 <h2 className="text-3xl font-bold text-black leading-tight mb-2">{fullName}</h2>
                                 <div className="flex gap-2 mb-3">
-                                    <span className="px-2 py-1 bg-gray-100 border border-gray-300 text-xs font-bold text-black rounded uppercase">{attendee.role || 'Participante'}</span>
-                                    <span className="px-2 py-1 bg-gray-100 border border-gray-300 text-xs font-bold text-black rounded uppercase">{attendee.modality || 'Presencial'}</span>
-                                    <span className="px-2 py-1 bg-gray-100 border border-gray-300 text-xs font-bold text-black rounded uppercase">{isApproved ? 'Aprobado' : 'En Curso'}</span>
+                                    <span className="px-2 py-1 bg-blue-100 border border-blue-300 text-xs font-bold text-blue-800 rounded uppercase">{displayRole}</span>
+                                    <span className="px-2 py-1 bg-green-100 border border-green-300 text-xs font-bold text-green-800 rounded uppercase">{workshopNames[attendee.ticketType] || attendee.modality || 'Presencial'}</span>
                                 </div>
                                 <p className="text-xs text-gray-500 font-mono">ID: {attendee.id || 'N/A'} | DNI: {attendee.dni || 'NO DNI'}</p>
                             </div>
 
                             {/* QR Code */}
                             <div className="bg-white p-2 border border-gray-200">
-                                <QRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={80} />
+                                <CustomQRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={80} level="H" />
                             </div>
                         </div>
 
@@ -219,6 +262,7 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                                 <h3 className="text-sm font-bold text-black uppercase border-b border-gray-300 pb-1 mb-3">Información Personal</h3>
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between"><span className="text-gray-600">DNI:</span> <span className="font-semibold text-black">{attendee.dni || '-'}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">Fecha Nac.:</span> <span className="font-semibold text-black">{attendee.birthDate ? attendee.birthDate.split('-').reverse().join('/') : '-'}</span></div>
                                     <div className="flex justify-between"><span className="text-gray-600">Email:</span> <span className="font-semibold text-black truncate max-w-[150px]">{attendee.email || '-'}</span></div>
                                     <div className="flex justify-between"><span className="text-gray-600">Teléfono:</span> <span className="font-semibold text-black">{attendee.phone || '-'}</span></div>
                                     <div className="flex justify-between"><span className="text-gray-600">Institución:</span> <span className="font-semibold text-black text-right">{attendee.institution || '-'}</span></div>

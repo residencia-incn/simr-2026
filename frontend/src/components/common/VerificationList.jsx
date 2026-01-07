@@ -258,11 +258,23 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                                     )}
                                                 </div>
                                             ) : (
-                                                /* Only show Ticket line if it has cost or if it's the ONLY thing being bought */
+                                                /* Show Ticket line. If Amount is 0 (Coupon), we still want to show the original value */
                                                 (getTicketInfo(selectedRegistration.ticketType).price > 0 || (!selectedRegistration.items || selectedRegistration.items.length === 0)) && (
-                                                    <div className="flex justify-between items-center text-sm">
-                                                        <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
-                                                        <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
+                                                    <div className="flex flex-col gap-2 w-full">
+                                                        <div className="flex justify-between items-center text-sm">
+                                                            <span className="text-gray-700 font-medium text-base">Ticket: {getTicketInfo(selectedRegistration.ticketType).title}</span>
+                                                            <span className="font-bold text-gray-900 text-base">S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
+                                                        </div>
+
+                                                        {/* Coupon Discount Row */}
+                                                        {selectedRegistration.amount === 0 && selectedRegistration.coupon && (
+                                                            <div className="flex justify-between items-center text-sm bg-green-50 p-2 rounded border border-green-100">
+                                                                <span className="text-green-700 font-medium flex items-center gap-2">
+                                                                    <Award size={14} /> Cupón: {selectedRegistration.coupon}
+                                                                </span>
+                                                                <span className="font-bold text-green-700">- S/ {getTicketInfo(selectedRegistration.ticketType).price.toFixed(2)}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 )
                                             )}
@@ -286,9 +298,17 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                                         {selectedRegistration.workshops.map(wsId => {
                                                             const ws = pricingConfig?.workshops?.find(w => w.id === wsId || w.key === wsId);
                                                             return (
-                                                                <div key={wsId} className="flex justify-between items-center text-sm pl-2">
-                                                                    <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
-                                                                    <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
+                                                                <div key={wsId}>
+                                                                    <div className="flex justify-between items-center text-sm pl-2">
+                                                                        <span className="text-gray-700">• {ws ? ws.name : wsId}</span>
+                                                                        <span className="font-semibold text-gray-900">{ws ? `+ S/ ${ws.price.toFixed(2)}` : '-'}</span>
+                                                                    </div>
+                                                                    {selectedRegistration.amount === 0 && selectedRegistration.coupon && ws && (
+                                                                        <div className="flex justify-between items-center text-xs pl-4 pr-1 mt-1 text-green-600">
+                                                                            <span>↳ Incluido en Cupón</span>
+                                                                            <span>- S/ {ws.price.toFixed(2)}</span>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                             );
                                                         })}
@@ -310,7 +330,16 @@ const VerificationList = ({ pendingRegistrations, onApprove, onReject, pricingCo
                                         <FileText size={20} className="text-gray-500" /> Voucher
                                     </h4>
                                     <div className="flex-1 bg-gray-100 rounded-xl border-2 border-dashed border-gray-300 flex items-center justify-center p-4 relative overflow-hidden group min-h-[400px]">
-                                        {selectedRegistration.voucherData ? (
+                                        {selectedRegistration.amount === 0 && selectedRegistration.coupon ? (
+                                            <div className="text-center p-8 bg-green-50 rounded-xl border border-green-200 w-full h-full flex flex-col items-center justify-center">
+                                                <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-green-600 mb-4">
+                                                    <Award size={40} />
+                                                </div>
+                                                <h3 className="text-xl font-bold text-green-800 mb-2">¡Beca / Cupón Aplicado!</h3>
+                                                <p className="text-green-700 font-medium mb-1">Código: <span className="font-bold">{selectedRegistration.coupon}</span></p>
+                                                <p className="text-sm text-green-600">Este registro tiene un descuento del 100%.</p>
+                                            </div>
+                                        ) : selectedRegistration.voucherData ? (
                                             <a
                                                 href="#"
                                                 onClick={handleViewVoucher}

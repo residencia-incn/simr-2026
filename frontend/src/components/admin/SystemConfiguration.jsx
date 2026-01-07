@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket, ArrowUp, ArrowDown } from 'lucide-react';
+import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket, ArrowUp, ArrowDown, UserCog, Shield, Briefcase } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import CarouselManager from './CarouselManager';
 import PrintSettingsManager from './PrintSettingsManager';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import RoleAccessConfiguration from './RoleAccessConfiguration';
 import { api } from '../../services/api';
 import { showSuccess } from '../../utils/alerts';
 
@@ -19,7 +20,8 @@ const SystemConfiguration = () => {
     const TABS = [
         { id: 'general', label: 'General', icon: Settings },
         { id: 'content', label: 'Contenido', icon: Layout },
-        { id: 'lists', label: 'Listas', icon: List },
+        { id: 'roles_modules', label: 'Roles y Módulos', icon: Shield },
+        { id: 'lists', label: 'Parámetros', icon: List },
         { id: 'pricing', label: 'Inscripciones', icon: Ticket }, // Renamed from Tarifas
         { id: 'print', label: 'Impresión', icon: Printer },
         { id: 'system', label: 'Sistema', icon: HardDrive }
@@ -130,12 +132,7 @@ const SystemConfiguration = () => {
 
     if (loading || !config) return <div>Cargando configuración...</div>;
 
-    const themes = [
-        { id: 'blue', name: 'Azul Institucional (Default)', color: 'bg-blue-600' },
-        { id: 'red', name: 'Rojo Pasión', color: 'bg-red-600' },
-        { id: 'emerald', name: 'Esmeralda', color: 'bg-emerald-600' },
-        { id: 'purple', name: 'Violeta', color: 'bg-purple-600' },
-    ];
+
 
 
 
@@ -456,26 +453,7 @@ const SystemConfiguration = () => {
                             </div>
                         </Card>
 
-                        {/* Appearance settings */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Palette size={20} className="text-gray-500" />
-                                Apariencia y Tema
-                            </h4>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 flex-1 overflow-y-auto pr-1 content-start">
-                                {themes.map(theme => (
-                                    <div
-                                        key={theme.id}
-                                        onClick={() => setConfig({ ...config, theme: theme.id })}
-                                        className={`cursor-pointer border-2 rounded-xl p-3 flex items-center gap-3 transition-all h-20 ${config.theme === theme.id ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'}`}
-                                    >
-                                        <div className={`w-10 h-10 rounded-full ${theme.color} shadow-sm shrink-0`}></div>
-                                        <span className={`font-medium ${config.theme === theme.id ? 'text-blue-900' : 'text-gray-600'}`}>{theme.name}</span>
-                                        {config.theme === theme.id && <div className="ml-auto text-blue-600"><Save size={16} /></div>}
-                                    </div>
-                                ))}
-                            </div>
-                        </Card>
+
 
                         {/* Public Sections Management */}
                         <Card className="p-6 md:col-span-2">
@@ -544,36 +522,50 @@ const SystemConfiguration = () => {
                     </div>
                 )}
 
+                {activeTab === 'roles_modules' && (
+                    <div className="animate-fadeIn">
+                        <Card className="p-0 overflow-hidden">
+                            <RoleAccessConfiguration />
+                        </Card>
+                    </div>
+                )}
+
                 {activeTab === 'lists' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
                         {/* Roles Management (New) */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Settings size={20} className="text-gray-500" />
+                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-purple-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
+                                    <Shield size={20} />
+                                </div>
                                 Gestión de Roles
                             </h4>
-                            <p className="text-sm text-gray-500 mb-4 shrink-0">Define los roles disponibles para asignar a los usuarios (Ej. Ponente, Jurado).</p>
+                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define los roles disponibles para asignar a los usuarios (Ej. Ponente, Jurado).</p>
 
-                            <div className="flex gap-2 mb-4 shrink-0">
+                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent transition-all">
                                 <input
                                     type="text"
                                     value={newRole}
                                     onChange={(e) => setNewRole(e.target.value)}
                                     placeholder="Nuevo rol..."
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="flex-1 p-3 text-sm outline-none border-none"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
                                 />
-                                <Button onClick={handleAddRole} disabled={!newRole.trim()} size="sm">
-                                    <Plus size={16} /> Agregar
-                                </Button>
+                                <button
+                                    onClick={handleAddRole}
+                                    disabled={!newRole.trim()}
+                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
                                 {config.roles?.map((role, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-50 text-purple-700 text-xs font-medium border border-purple-100 h-8">
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-purple-200 hover:shadow-md transition-all">
                                         {role}
-                                        <button onClick={() => handleRemoveRole(role)} className="hover:text-red-500 transition-colors">
-                                            <X size={12} />
+                                        <button onClick={() => handleRemoveRole(role)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
                                         </button>
                                     </span>
                                 ))}
@@ -581,70 +573,84 @@ const SystemConfiguration = () => {
                         </Card>
 
                         {/* Subspecialties */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Settings size={20} className="text-gray-500" />
+                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-blue-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
+                                    <List size={20} />
+                                </div>
                                 Gestión de Subespecialidades
                             </h4>
-                            <p className="text-sm text-gray-500 mb-4 shrink-0">Define las subespecialidades disponibles para la clasificación de trabajos de investigación.</p>
+                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define las subespecialidades disponibles para la clasificación de trabajos de investigación.</p>
 
-                            <div className="flex gap-2 mb-4 shrink-0">
+                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
                                 <input
                                     type="text"
                                     value={newSpecialty}
                                     onChange={(e) => setNewSpecialty(e.target.value)}
                                     placeholder="Nueva subespecialidad..."
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="flex-1 p-3 text-sm outline-none border-none"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddSpecialty()}
                                 />
-                                <Button onClick={handleAddSpecialty} disabled={!newSpecialty.trim()} size="sm">
-                                    <Plus size={16} /> Agregar
-                                </Button>
+                                <button
+                                    onClick={handleAddSpecialty}
+                                    disabled={!newSpecialty.trim()}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
                                 {config.specialties?.map((spec, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100 h-8">
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-blue-200 hover:shadow-md transition-all">
                                         {spec}
-                                        <button onClick={() => handleRemoveSpecialty(spec)} className="hover:text-red-500 transition-colors">
-                                            <X size={12} />
+                                        <button onClick={() => handleRemoveSpecialty(spec)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
                                         </button>
                                     </span>
                                 ))}
                                 {(!config.specialties || config.specialties.length === 0) && (
-                                    <span className="text-gray-400 text-xs italic">No hay subespecialidades definidas.</span>
+                                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm italic border-2 border-dashed border-gray-100 rounded-lg">
+                                        No hay subespecialidades definidas
+                                    </div>
                                 )}
                             </div>
                         </Card>
 
                         {/* Occupations */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Settings size={20} className="text-gray-500" />
+                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-green-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-green-100 rounded-lg text-green-600">
+                                    <Briefcase size={20} />
+                                </div>
                                 Gestión de Ocupaciones
                             </h4>
-                            <p className="text-sm text-gray-500 mb-4 shrink-0">Define las opciones para el campo Ocupación en la inscripción.</p>
+                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define las opciones para el campo Ocupación en la inscripción.</p>
 
-                            <div className="flex gap-2 mb-4 shrink-0">
+                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent transition-all">
                                 <input
                                     type="text"
                                     value={newOccupation}
                                     onChange={(e) => setNewOccupation(e.target.value)}
                                     placeholder="Nueva ocupación..."
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="flex-1 p-3 text-sm outline-none border-none"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddOccupation()}
                                 />
-                                <Button onClick={handleAddOccupation} disabled={!newOccupation.trim()} size="sm">
-                                    <Plus size={16} /> Agregar
-                                </Button>
+                                <button
+                                    onClick={handleAddOccupation}
+                                    disabled={!newOccupation.trim()}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
                                 {config.occupations?.map((occ, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100 h-8">
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-green-200 hover:shadow-md transition-all">
                                         {occ}
-                                        <button onClick={() => handleRemoveOccupation(occ)} className="hover:text-red-500 transition-colors">
-                                            <X size={12} />
+                                        <button onClick={() => handleRemoveOccupation(occ)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
                                         </button>
                                     </span>
                                 ))}
@@ -652,33 +658,39 @@ const SystemConfiguration = () => {
                         </Card>
 
                         {/* Residency Years */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Settings size={20} className="text-gray-500" />
+                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-orange-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
+                                    <Clock size={20} />
+                                </div>
                                 Años de Residencia
                             </h4>
-                            <p className="text-sm text-gray-500 mb-4 shrink-0">Opciones desplegables para el año de residencia.</p>
+                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Opciones desplegables para el año de residencia.</p>
 
-                            <div className="flex gap-2 mb-4 shrink-0">
+                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
                                 <input
                                     type="text"
                                     value={newResidencyYear}
                                     onChange={(e) => setNewResidencyYear(e.target.value)}
                                     placeholder="Nuevo año (ej. R5)..."
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="flex-1 p-3 text-sm outline-none border-none"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddResidencyYear()}
                                 />
-                                <Button onClick={handleAddResidencyYear} disabled={!newResidencyYear.trim()} size="sm">
-                                    <Plus size={16} /> Agregar
-                                </Button>
+                                <button
+                                    onClick={handleAddResidencyYear}
+                                    disabled={!newResidencyYear.trim()}
+                                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
                                 {config.residencyYears?.map((year, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100 h-8">
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-orange-200 hover:shadow-md transition-all">
                                         {year}
-                                        <button onClick={() => handleRemoveResidencyYear(year)} className="hover:text-red-500 transition-colors">
-                                            <X size={12} />
+                                        <button onClick={() => handleRemoveResidencyYear(year)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
                                         </button>
                                     </span>
                                 ))}
@@ -686,33 +698,39 @@ const SystemConfiguration = () => {
                         </Card>
 
                         {/* Participant Specialties */}
-                        <Card className="p-6 h-[500px] flex flex-col">
-                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-6 border-b pb-2 shrink-0">
-                                <Settings size={20} className="text-gray-500" />
+                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-cyan-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-cyan-100 rounded-lg text-cyan-600">
+                                    <UserCog size={20} />
+                                </div>
                                 Gestión de Especialidades (Participantes)
                             </h4>
-                            <p className="text-sm text-gray-500 mb-4 shrink-0">Opciones de especialidad para Médicos Especialistas.</p>
+                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Opciones de especialidad para Médicos Especialistas.</p>
 
-                            <div className="flex gap-2 mb-4 shrink-0">
+                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-cyan-500 focus-within:border-transparent transition-all">
                                 <input
                                     type="text"
                                     value={newParticipantSpecialty}
                                     onChange={(e) => setNewParticipantSpecialty(e.target.value)}
                                     placeholder="Nueva especialidad..."
-                                    className="flex-1 p-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                    className="flex-1 p-3 text-sm outline-none border-none"
                                     onKeyDown={(e) => e.key === 'Enter' && handleAddParticipantSpecialty()}
                                 />
-                                <Button onClick={handleAddParticipantSpecialty} disabled={!newParticipantSpecialty.trim()} size="sm">
-                                    <Plus size={16} /> Agregar
-                                </Button>
+                                <button
+                                    onClick={handleAddParticipantSpecialty}
+                                    disabled={!newParticipantSpecialty.trim()}
+                                    className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                                >
+                                    <Plus size={18} />
+                                </button>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1">
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
                                 {config.participantSpecialties?.map((spec, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-medium border border-blue-100 h-8">
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-cyan-200 hover:shadow-md transition-all">
                                         {spec}
-                                        <button onClick={() => handleRemoveParticipantSpecialty(spec)} className="hover:text-red-500 transition-colors">
-                                            <X size={12} />
+                                        <button onClick={() => handleRemoveParticipantSpecialty(spec)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
                                         </button>
                                     </span>
                                 ))}

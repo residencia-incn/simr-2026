@@ -3,7 +3,7 @@ import { X, User, Mail, Shield, Building, Search, UserPlus, CheckCircle, AlertCi
 import Button from '../ui/Button';
 import { api } from '../../services/api';
 
-const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
+const AddSpeakerModal = ({ isOpen, onClose, onUpdate }) => {
     const [activeTab, setActiveTab] = useState('register'); // 'register' or 'search'
 
     // Form State
@@ -32,18 +32,6 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
     const [successMessage, setSuccessMessage] = useState(null);
 
     useEffect(() => {
-        const loadConfig = async () => {
-            // Mock loading config from API if needed, or if mockData is enough we could import it directly but better to use api principle
-            // Assuming api.config.getPublic exists or we can get it from somewhere. 
-            // Since api.config might not be exposed, and we updated mockData, let's use a simulated fetch or try to find where it is exposed.
-            // Actually, usually it's in api.js. I'll check api.js for config.
-            // If not, I'll just import it? No, imports from ../data forbidden usually if via api.
-            // Let's check api.js again. Ah, I see api.js uses MOCK_DATA.
-            // I'll assume for now I can get it via a new/existing endpoint or just use hardcoded fallbacks if I can't find it.
-            // Wait, I see "EVENT_CONFIG" in api.js imports. 
-            // Let's add a helper to fetch it if it doesn't exist.
-        };
-
         if (isOpen) {
             // Reset state when opening
             setFormData({ name: '', lastName: '', email: '', occupation: '', cmp: '', rne: '', residencyYear: '', specialty: '', institution: '' });
@@ -52,12 +40,6 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
             setError(null);
             setSuccessMessage(null);
             setActiveTab('register');
-
-            // Allow fetch
-            // For now, let's direct fetch or use a known shared config if possible.
-            // Since I edited mockData.js, I need to make sure I can access it.
-            // I'll try to add a temporary fetcher here or use `api` if I can find the endpoint.
-            // I'll add `api.config` to api.js if missing in next step. For now I'll write the logic assuming it exists or I'll add it.
         }
     }, [isOpen]);
 
@@ -65,8 +47,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
     useEffect(() => {
         const fetchConfig = async () => {
             try {
-                // Use a safe fallback or valid API
-                const data = await api.system.getConfig(); // I'll add this to api.js
+                const data = await api.system.getConfig();
                 setConfig(data);
             } catch (e) {
                 console.error("Config load error", e);
@@ -112,21 +93,21 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
 
         try {
             const fullName = `${formData.name} ${formData.lastName}`.trim();
-            await api.jurors.create({
+            await api.speakers.create({
                 ...formData,
                 name: fullName,
                 firstName: formData.name,
                 lastName: formData.lastName
             });
 
-            setSuccessMessage("Jurado registrado correctamente");
+            setSuccessMessage("Ponente registrado correctamente");
             setTimeout(() => {
                 onUpdate();
                 onClose();
             }, 1000);
         } catch (err) {
-            console.error("Error adding juror:", err);
-            setError(err.message || "Error al agregar jurado");
+            console.error("Error adding speaker:", err);
+            setError(err.message || "Error al agregar ponente");
         } finally {
             setLoading(false);
         }
@@ -136,21 +117,21 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
         setLoading(true);
         setError(null);
         try {
-            // Check if already a juror just in case logic missed it
+            // Check if already a speaker
             const roles = user.eventRoles || [];
-            if (roles.includes('jurado')) {
-                setError("Este usuario ya es jurado.");
+            if (roles.includes('ponente')) {
+                setError("Este usuario ya es ponente.");
                 setLoading(false);
                 return;
             }
 
-            await api.jurors.create({
+            await api.speakers.create({
                 email: user.email,
-                specialty: user.specialty, // Keep existing or update? create handles this
+                specialty: user.specialty,
                 institution: user.institution
             });
 
-            setSuccessMessage(`Rol de jurado asignado a ${user.name}`);
+            setSuccessMessage(`Rol de ponente asignado a ${user.name}`);
             setTimeout(() => {
                 onUpdate();
                 onClose();
@@ -162,22 +143,22 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
         }
     };
 
-    // Helper to check if user is already a juror
-    const isJuror = (user) => {
+    // Helper to check if user is already a speaker
+    const isSpeaker = (user) => {
         const roles = user.eventRoles || [];
-        return roles.some(r => r.toLowerCase() === 'jurado');
+        return roles.some(r => r.toLowerCase() === 'ponente');
     };
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 animate-fadeIn">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden flex flex-col max-h-[90vh]">
                 {/* Header */}
-                <div className="bg-blue-600 px-6 py-4 flex justify-between items-center shrink-0">
+                <div className="bg-purple-600 px-6 py-4 flex justify-between items-center shrink-0">
                     <h3 className="text-white font-bold text-lg flex items-center gap-2">
                         <UserPlus size={20} />
-                        Gestión de Jurados
+                        Gestión de Ponentes
                     </h3>
-                    <button onClick={onClose} className="text-blue-100 hover:text-white transition-colors">
+                    <button onClick={onClose} className="text-purple-100 hover:text-white transition-colors">
                         <X size={20} />
                     </button>
                 </div>
@@ -185,13 +166,13 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200 shrink-0">
                     <button
-                        className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'register' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'register' ? 'border-purple-600 text-purple-600 bg-purple-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         onClick={() => setActiveTab('register')}
                     >
                         Registrar Nuevo
                     </button>
                     <button
-                        className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'search' ? 'border-blue-600 text-blue-600 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+                        className={`flex-1 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === 'search' ? 'border-purple-600 text-purple-600 bg-purple-50' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
                         onClick={() => setActiveTab('search')}
                     >
                         Buscar Existente
@@ -219,7 +200,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
 
                             {activeTab === 'register' && (
                                 <form onSubmit={handleRegisterSubmit} className="space-y-4 animate-fadeIn">
-                                    <div className="bg-blue-50 p-3 rounded-lg text-xs text-blue-800 border border-blue-100 mb-4">
+                                    <div className="bg-purple-50 p-3 rounded-lg text-xs text-purple-800 border border-purple-100 mb-4">
                                         <p>Se creará una cuenta de usuario nueva para esta persona.</p>
                                         <p className="mt-1 font-medium">Contraseña por defecto: 123456</p>
                                     </div>
@@ -230,7 +211,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                             <input
                                                 required
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                                                 value={formData.name}
                                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                                                 placeholder="Ej. Juan"
@@ -241,7 +222,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                             <input
                                                 required
                                                 type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                                                 value={formData.lastName}
                                                 onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                                                 placeholder="Ej. Perez"
@@ -256,7 +237,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                             <input
                                                 required
                                                 type="email"
-                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                                                 value={formData.email}
                                                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                                 placeholder="correo@ejemplo.com"
@@ -270,7 +251,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                             <Shield className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                             <select
                                                 required
-                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none appearance-none bg-white"
                                                 value={formData.occupation}
                                                 onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
                                             >
@@ -292,7 +273,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                     <input
                                                         type="number"
                                                         required
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                                                         value={formData.cmp}
                                                         onChange={(e) => setFormData({ ...formData, cmp: e.target.value })}
                                                         placeholder="12345"
@@ -306,7 +287,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                         <input
                                                             type="number"
                                                             required
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none"
                                                             value={formData.rne}
                                                             onChange={(e) => setFormData({ ...formData, rne: e.target.value })}
                                                             placeholder="54321"
@@ -320,7 +301,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">Año de Residencia *</label>
                                                         <select
                                                             required
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none appearance-none bg-white"
                                                             value={formData.residencyYear}
                                                             onChange={(e) => setFormData({ ...formData, residencyYear: e.target.value })}
                                                         >
@@ -341,7 +322,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Especialidad *</label>
                                                     <select
                                                         required
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none appearance-none bg-white"
                                                         value={formData.specialty}
                                                         onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
                                                     >
@@ -364,7 +345,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                             <Building className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
                                             <select
                                                 required
-                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none appearance-none bg-white"
+                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none appearance-none bg-white"
                                                 value={formData.institution}
                                                 onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
                                             >
@@ -380,8 +361,8 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                         <Button type="button" variant="outline" onClick={onClose}>
                                             Cancelar
                                         </Button>
-                                        <Button type="submit" disabled={loading}>
-                                            {loading ? 'Guardando...' : 'Crear Cuenta Jurado'}
+                                        <Button type="submit" disabled={loading} className="bg-purple-600 hover:bg-purple-700">
+                                            {loading ? 'Guardando...' : 'Crear Cuenta Ponente'}
                                         </Button>
                                     </div>
                                 </form>
@@ -394,7 +375,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                         <input
                                             type="text"
                                             placeholder="Buscar usuario por nombre o correo..."
-                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 shadow-sm"
+                                            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 shadow-sm"
                                             value={searchQuery}
                                             onChange={(e) => setSearchQuery(e.target.value)}
                                             autoFocus
@@ -415,7 +396,7 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                         ) : (
                                             <div className="divide-y divide-gray-200">
                                                 {searchResults.map(user => {
-                                                    const alreadyJuror = isJuror(user);
+                                                    const alreadySpeaker = isSpeaker(user);
                                                     return (
                                                         <div key={user.id} className="p-3 bg-white flex justify-between items-center hover:bg-gray-50 transition-colors">
                                                             <div className="flex items-center gap-3">
@@ -428,15 +409,16 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                                 </div>
                                                             </div>
 
-                                                            {alreadyJuror ? (
+                                                            {alreadySpeaker ? (
                                                                 <span className="text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100 flex items-center gap-1">
-                                                                    <CheckCircle size={10} /> Ya es jurado
+                                                                    <CheckCircle size={10} /> Ya es ponente
                                                                 </span>
                                                             ) : (
                                                                 <Button
                                                                     size="xs"
                                                                     onClick={() => handleAddExisting(user)}
                                                                     disabled={loading}
+                                                                    className="bg-purple-600 hover:bg-purple-700"
                                                                 >
                                                                     Asignar Rol
                                                                 </Button>
@@ -463,4 +445,4 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
     );
 };
 
-export default AddJurorModal;
+export default AddSpeakerModal;

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Monitor, DollarSign, GraduationCap, UserCheck, ClipboardCheck, Calendar, Settings, FileText, Users, Scale, BookOpen, UserCog, QrCode, Check, Sliders } from 'lucide-react';
 import { MODULE_PERMISSIONS } from '../../context/AuthContext';
+import { api } from '../../services/api';
 
 /**
  * Modal mejorado para gestionar módulos y permisos de acceso
@@ -11,15 +12,48 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
     const [advancedMode, setAdvancedMode] = useState(false);
     const [customPermissions, setCustomPermissions] = useState([]);
     const [expandedModule, setExpandedModule] = useState(null);
+    const [lockedModules, setLockedModules] = useState(new Set(['mi_perfil']));
 
     useEffect(() => {
-        if (user?.modules) {
-            setSelectedModules(user.modules);
-        } else if (user?.profiles) {
-            // Legacy support
-            setSelectedModules(user.profiles);
-        } else {
-            setSelectedModules(['mi_perfil']);
+        const loadDefaults = async () => {
+            try {
+                const defaults = await api.system.getRoleDefaults();
+                const userRoles = user?.eventRoles || (user?.eventRole ? [user.eventRole] : []);
+
+                const newLockedModules = new Set(['mi_perfil']);
+
+                userRoles.forEach(role => {
+                    const roleConfig = defaults[role]?.modules || {};
+                    Object.entries(roleConfig).forEach(([moduleId, config]) => {
+                        if (config.locked) {
+                            newLockedModules.add(moduleId);
+                        }
+                    });
+                });
+
+                setLockedModules(newLockedModules);
+
+                // Initialize selected modules
+                let initialModules = [];
+                if (user?.modules) {
+                    initialModules = [...user.modules];
+                } else if (user?.profiles) {
+                    initialModules = [...user.profiles];
+                } else {
+                    initialModules = ['mi_perfil'];
+                }
+
+                // Ensure locked modules are selected
+                const mergedModules = new Set([...initialModules, ...newLockedModules]);
+                setSelectedModules(Array.from(mergedModules));
+
+            } catch (error) {
+                console.error("Error loading role defaults:", error);
+            }
+        };
+
+        if (isOpen && user) {
+            loadDefaults();
         }
 
         // Initialize custom permissions
@@ -42,8 +76,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
     if (!isOpen) return null;
 
     const handleToggleModule = (moduleId) => {
-        // Mi perfil siempre debe estar seleccionado
-        if (moduleId === 'mi_perfil') return;
+        // Módulos bloqueados no se pueden alternar
+        if (lockedModules.has(moduleId)) return;
 
         setSelectedModules(prev => {
             const exists = prev.includes(moduleId);
@@ -64,9 +98,8 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
             });
         } else {
             // Modo normal: calcular permisos desde módulos
-            const finalModules = selectedModules.includes('mi_perfil')
-                ? selectedModules
-                : ['mi_perfil', ...selectedModules];
+            // Asegurar que los bloqueados estén incluidos
+            const finalModules = Array.from(new Set([...selectedModules, ...lockedModules]));
 
             // Calcular permisos basados en módulos seleccionados
             const permissions = new Set();
@@ -101,7 +134,6 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
             icon: UserCheck,
             description: 'Acceso básico al sistema. Incluido por defecto para todos los usuarios.',
             color: 'text-gray-600 bg-gray-50',
-            locked: true,
             category: 'basic'
         },
         {
@@ -233,7 +265,7 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                     {moduleOptions.filter(m => m.category === 'basic').map((option) => {
                                         const Icon = option.icon;
                                         const isSelected = selectedModules.includes(option.id);
-                                        const isLocked = option.locked;
+                                        const isLocked = lockedModules.has(option.id);
 
                                         return (
                                             <button
@@ -242,11 +274,12 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                 disabled={isLocked}
                                                 className={`
                                             text-left p-4 rounded-lg border-2 transition-all
-                                            ${isSelected
-                                                        ? 'border-blue-500 bg-blue-50'
-                                                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                            ${isLocked
+                                                        ? 'border-gray-200 bg-gray-100 opacity-75 cursor-not-allowed'
+                                                        : isSelected
+                                                            ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                                                     }
-                                            ${isLocked ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'}
                                         `}
                                             >
                                                 <div className="flex items-start gap-3">
@@ -283,16 +316,20 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                     {moduleOptions.filter(m => m.category === 'academic').map((option) => {
                                         const Icon = option.icon;
                                         const isSelected = selectedModules.includes(option.id);
+                                        const isLocked = lockedModules.has(option.id);
 
                                         return (
                                             <button
                                                 key={option.id}
-                                                onClick={() => handleToggleModule(option.id)}
+                                                onClick={() => !isLocked && handleToggleModule(option.id)}
+                                                disabled={isLocked}
                                                 className={`
-                                            text-left p-4 rounded-lg border-2 transition-all cursor-pointer
-                                            ${isSelected
-                                                        ? 'border-blue-500 bg-blue-50'
-                                                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                            text-left p-4 rounded-lg border-2 transition-all
+                                            ${isLocked
+                                                        ? 'border-gray-200 bg-gray-100 opacity-75 cursor-not-allowed'
+                                                        : isSelected
+                                                            ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                                                     }
                                         `}
                                             >
@@ -303,7 +340,12 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
                                                             <h3 className="font-semibold text-gray-900 text-sm">{option.label}</h3>
-                                                            {isSelected && (
+                                                            {isLocked && (
+                                                                <span className="px-2 py-0.5 bg-gray-300 text-gray-700 text-xs rounded-full">
+                                                                    Por defecto
+                                                                </span>
+                                                            )}
+                                                            {isSelected && !isLocked && (
                                                                 <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
                                                                     ✓
                                                                 </span>
@@ -325,16 +367,20 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                     {moduleOptions.filter(m => m.category === 'admin').map((option) => {
                                         const Icon = option.icon;
                                         const isSelected = selectedModules.includes(option.id);
+                                        const isLocked = lockedModules.has(option.id);
 
                                         return (
                                             <button
                                                 key={option.id}
-                                                onClick={() => handleToggleModule(option.id)}
+                                                onClick={() => !isLocked && handleToggleModule(option.id)}
+                                                disabled={isLocked}
                                                 className={`
-                                            text-left p-4 rounded-lg border-2 transition-all cursor-pointer
-                                            ${isSelected
-                                                        ? 'border-blue-500 bg-blue-50'
-                                                        : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                                            text-left p-4 rounded-lg border-2 transition-all
+                                            ${isLocked
+                                                        ? 'border-gray-200 bg-gray-100 opacity-75 cursor-not-allowed'
+                                                        : isSelected
+                                                            ? 'border-blue-500 bg-blue-50 cursor-pointer'
+                                                            : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50 cursor-pointer'
                                                     }
                                         `}
                                             >
@@ -345,7 +391,12 @@ const PermissionsModal = ({ isOpen, onClose, user, onSave }) => {
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
                                                             <h3 className="font-semibold text-gray-900 text-sm">{option.label}</h3>
-                                                            {isSelected && (
+                                                            {isLocked && (
+                                                                <span className="px-2 py-0.5 bg-gray-300 text-gray-700 text-xs rounded-full">
+                                                                    Por defecto
+                                                                </span>
+                                                            )}
+                                                            {isSelected && !isLocked && (
                                                                 <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full">
                                                                     ✓
                                                                 </span>

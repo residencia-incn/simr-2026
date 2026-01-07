@@ -82,7 +82,7 @@ export const ROLE_MODULE_MAPPING: Record<string, any> = {
         }
     },
     'jurado': {
-        base: ['mi_perfil', 'jurado', 'aula_virtual']
+        base: ['mi_perfil', 'jurado']
     },
     'ponente': {
         base: ['mi_perfil', 'aula_virtual']
@@ -102,8 +102,7 @@ export const LEGACY_ROLE_PERMISSIONS: Record<string, string[]> = {
     'resident': ['papers:read', 'papers:submit'],
     'jurado': ['jury:read', 'jury:evaluate', 'papers:read'],
     'secretaria': ['secretary:read', 'planning:read', 'planning:write'],
-    'aula_virtual': ['classroom:read'],
-    'participant': ['classroom:read']
+    'aula_virtual': ['classroom:read', 'virtual_access']
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -153,6 +152,12 @@ const deriveModulesAndPermissions = (userData: User): { modules: string[], permi
 
     if (userData.roles && Array.isArray(userData.roles)) {
         userData.roles.forEach(role => {
+            // Add role as module (e.g. 'jurado', 'ponente'), but skip 'participant' 
+            // to avoid ghost menu items if they only have the role legacy but not the module
+            if (role !== 'participant') {
+                modules.add(role);
+            }
+
             const perms = LEGACY_ROLE_PERMISSIONS[role] || [];
             perms.forEach(p => permissions.add(p));
         });
@@ -165,7 +170,10 @@ const deriveModulesAndPermissions = (userData: User): { modules: string[], permi
         if (userData.role === 'admin') {
             modules.add('organizacion');
         } else {
-            modules.add(userData.role);
+            // Skip 'participant' to avoid it appearing as a module (ghost menu)
+            if (userData.role !== 'participant') {
+                modules.add(userData.role);
+            }
         }
 
         const perms = LEGACY_ROLE_PERMISSIONS[userData.role] || [];

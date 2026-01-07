@@ -22,7 +22,12 @@ import {
 } from '../data/mockData';
 import { MOCK_ATTENDEES } from '../data/mockAttendees';
 import { MOCK_USERS } from '../data/mockUsers';
-import { storage, STORAGE_KEYS } from './storage';
+import { storage, STORAGE_KEYS as ORIG_KEYS } from './storage';
+
+const STORAGE_KEYS = {
+    ...ORIG_KEYS,
+    ROLE_DEFAULTS: 'simr_role_defaults'
+};
 
 // Helper for simulating async operations
 const delay = (ms = 300) => new Promise(resolve => setTimeout(resolve, ms));
@@ -50,6 +55,87 @@ const assignProfilesByRegistrationType = (registrationType) => {
 
         default:
             return baseProfiles;
+    }
+};
+
+/**
+ * Get modules (profiles) and modality assigned to a specific event role from system configuration
+ * @param {string} roleName - Event role name (e.g., 'jurado', 'ponente', 'asistente')
+ * @returns {Promise<{modules: string[], modality: string}>} Object with modules array and modality string
+ */
+const getRoleModules = async (roleName) => {
+    try {
+        const roleDefaults = storage.get(STORAGE_KEYS.ROLE_DEFAULTS, {});
+        const normalizedRole = roleName.toLowerCase();
+
+        // Resolve dynamic ticket IDs from Pricing Config
+        let presencialCertId = 't_1767220000004'; // Default fallback
+        let presencialBasicId = 't_1767220000003'; // Default fallback
+
+        try {
+            const pricing = await api.treasury.getPricing();
+            if (pricing && pricing.ticketTypes) {
+                const certTicket = pricing.ticketTypes.find(t => t.title.includes('Presencial') && t.title.includes('Certificado'));
+                const basicTicket = pricing.ticketTypes.find(t => t.title.includes('Presencial') && !t.title.includes('Certificado')); // Presencial (Sin Certificado)
+
+                if (certTicket) presencialCertId = certTicket.id;
+                if (basicTicket) presencialBasicId = basicTicket.id;
+            }
+        } catch (e) {
+            console.warn('Error resolving pricing IDs, using defaults', e);
+        }
+
+        // Get modules and modality for this role from configuration
+        if (roleDefaults[normalizedRole]) {
+            const config = roleDefaults[normalizedRole];
+            // If config has a specific modality stored (e.g. from a selector), use it.
+            // If it stored 'presencial_certificado' string (legacy), map it to ID.
+            let modality = config.modality || presencialCertId;
+
+            if (modality === 'presencial_certificado' || modality === 'presencial_cert') modality = presencialCertId;
+            if (modality === 'presencial') modality = presencialBasicId;
+
+            // Check if modality is still a legacy string (not starting with t_) and force update if so
+            if (modality && typeof modality === 'string' && !modality.startsWith('t_')) {
+                modality = presencialCertId;
+            }
+
+            return {
+                modules: Array.isArray(config.modules) ? config.modules : ['perfil_basico', 'aula_virtual'],
+                modality: modality
+            };
+        }
+
+        // Fallback to default modules and modality based on role
+        const defaultConfig = {
+            'jurado': {
+                modules: ['perfil_basico', 'aula_virtual', 'jurado', 'academico'], // Restored aula_virtual as requested
+                modality: presencialCertId
+            },
+            'ponente': {
+                modules: ['perfil_basico', 'aula_virtual', 'ponente', 'academico'], // Added academico
+                modality: presencialCertId
+            },
+            'asistente': {
+                modules: ['perfil_basico', 'aula_virtual'],
+                modality: presencialBasicId
+            },
+            'organizador': {
+                modules: ['perfil_basico', 'aula_virtual', 'organizacion', 'secretaria', 'contabilidad', 'investigacion', 'jurado', 'academico'],
+                modality: presencialCertId
+            }
+        };
+
+        return defaultConfig[normalizedRole] || {
+            modules: ['perfil_basico'],
+            modality: presencialBasicId
+        };
+    } catch (error) {
+        console.error('Error getting role modules:', error);
+        return {
+            modules: ['perfil_basico'],
+            modality: 't_1767220000003' // Safe fallback
+        };
     }
 };
 
@@ -336,6 +422,15 @@ export const api = {
                 occupations: EVENT_CONFIG.occupations,
                 institutions: EVENT_CONFIG.institutions
             };
+        },
+        getRoleDefaults: async () => {
+            await delay(100);
+            return storage.get(STORAGE_KEYS.ROLE_DEFAULTS, {});
+        },
+        saveRoleDefaults: async (defaults) => {
+            await delay(100);
+            storage.set(STORAGE_KEYS.ROLE_DEFAULTS, defaults);
+            return defaults;
         }
     },
 
@@ -455,6 +550,8 @@ export const api = {
                 modality: reg.modalidad || reg.ticketType || 'presencial',
                 amount: reg.amount,
                 institution: reg.institution,
+                birthDate: reg.birthDate || existingUser?.birthDate, // Sync birth date from registration
+                phone: reg.phone || existingUser?.phone, // Sync phone from registration
                 registrationDate: reg.timestamp || reg.registrationDate || new Date().toISOString(),
                 status: 'Confirmado',
                 role: shouldHaveVirtualAccess ? 'participant' : 'user',
@@ -463,6 +560,7 @@ export const api = {
                 modules: existingUser ? [...new Set([...(existingUser.modules || []), ...assignedModules])] : assignedModules,
                 password: existingUser ? existingUser.password : '123456',
                 voucherData: reg.voucherData,
+                coupon_code: reg.coupon || reg.couponCode || reg.coupon_code, // Persist coupon code
                 image: reg.img, // Ensure image is preserved if present
                 ticketType: reg.ticketType,
                 workshops: reg.workshops,
@@ -519,29 +617,31 @@ export const api = {
                 }
             }
 
-            // Register each item as a separate income transaction
-            for (const item of itemsToRegister) {
-                const amount = parseFloat(item.price || item.amount || 0);
-                if (amount <= 0) continue; // Skip free items
+            // Register income transaction ONLY if total amount > 0 (no full coupon discount)
+            const totalAmount = parseFloat(reg.amount || 0);
 
-                const isWorkshop = item.type === 'workshop' || (item.id && item.id.startsWith('w_'));
-                const category = isWorkshop ? 'Talleres' : 'Inscripciones';
-                const description = isWorkshop
-                    ? `Taller: ${reg.name} - ${item.name || item.title || 'Taller'}`
-                    : `Inscripción: ${reg.name} - ${item.title || item.name || 'Acceso'}`;
+            if (totalAmount > 0) {
+                // Create a single transaction for the total amount
+                const hasWorkshops = reg.workshops && reg.workshops.length > 0;
+                const category = hasWorkshops ? 'Talleres' : 'Inscripciones';
+                const description = hasWorkshops
+                    ? `Inscripción + Talleres: ${reg.name}`
+                    : `Inscripción: ${reg.name} - ${reg.ticketType || reg.modalidad || 'Acceso'}`;
 
                 try {
-                    // Use addIncome helper which handles account resolution automatically
                     await api.treasury.addIncome(
-                        amount,
+                        totalAmount,
                         description,
                         category,
                         reg.voucherData,
-                        reg.paymentAccountId // Pass the selected account ID
+                        reg.paymentAccountId
                     );
                 } catch (err) {
-                    console.error("Error registering income for item:", item, err);
+                    console.error("Error registering income:", err);
                 }
+            } else if (reg.coupon || reg.couponCode || reg.coupon_code) {
+                // Log that this was a free registration via coupon (no income transaction needed)
+                console.log(`Registration approved with 100% coupon discount: ${reg.name} - Coupon: ${reg.coupon || reg.couponCode || reg.coupon_code}`);
             }
 
             // 4. Update Registration Status in Persistent Storage
@@ -868,14 +968,22 @@ export const api = {
                 const newRoles = [...new Set([...currentRoles, 'jurado'])];
                 if (newRoles.length !== currentRoles.length) {
                     updates.eventRoles = newRoles;
+                    updates.eventRole = 'jurado'; // Legacy compatibility
                 }
 
-                // Add required profiles if missing
-                const requiredProfiles = ['perfil_basico', 'aula_virtual', 'jurado'];
-                const newProfiles = [...new Set([...currentProfiles, ...requiredProfiles])];
+                // Add required profiles from role configuration
+                const roleConfig = await getRoleModules('jurado');
+                const newProfiles = [...new Set([...currentProfiles, ...roleConfig.modules])];
 
                 if (newProfiles.length !== currentProfiles.length) {
                     updates.profiles = newProfiles;
+                    updates.modules = newProfiles; // Legacy compatibility
+                }
+
+                // Update modality/ticketType if missing or different
+                if (!existingUser.ticketType || existingUser.ticketType === 'presencial') {
+                    updates.ticketType = roleConfig.modality;
+                    updates.modality = roleConfig.modality;
                 }
 
                 // FORCE PASSWORD RESET to '123456'
@@ -895,15 +1003,20 @@ export const api = {
                 }
                 return existingUser; // No changes needed
             } else {
-                // Create new user with 'jurado' role and specific profiles
+                // Create new user with 'jurado' role and configured profiles
+                const roleConfig = await getRoleModules('jurado');
                 return await api.users.add({
                     ...jurorData,
                     password: '123456', // Default as requested
                     eventRoles: ['jurado'],
-                    profiles: ['perfil_basico', 'aula_virtual', 'jurado'], // Specific access rules
-                    roles: ['participant', 'jurado'], // Default system role + jurado
-                    role: 'participant',
-                    status: 'Confirmado'
+                    eventRole: 'jurado', // Legacy compatibility
+                    profiles: roleConfig.modules, // Use configured modules
+                    modules: roleConfig.modules, // Legacy compatibility
+                    roles: ['jurado'], // Only jurado default
+                    role: 'jurado',
+                    status: 'Confirmado',
+                    ticketType: roleConfig.modality, // Primary modality field
+                    modality: roleConfig.modality // Secondary modality field
                 });
             }
         },
@@ -915,6 +1028,110 @@ export const api = {
             const user = allUsers.find(u => u.id === id);
             if (user) {
                 const newRoles = (user.eventRoles || []).filter(r => r.toLowerCase() !== 'jurado');
+                await api.users.update({
+                    ...user,
+                    eventRoles: newRoles
+                });
+            }
+            return true;
+        }
+    },
+
+    // --- 8.5. Speakers Management ---
+    speakers: {
+        getAll: async () => {
+            await delay();
+            const users = await api.users.getAll();
+            // Filter users who have the 'ponente' role
+            return users.filter(u => {
+                const roles = u.eventRoles || [];
+                return roles.some(r => r.toLowerCase() === 'ponente') ||
+                    (u.roles && u.roles.includes('ponente')) ||
+                    u.role === 'ponente';
+            }).map(u => ({
+                ...u,
+                active: u.status === 'Confirmado' || u.status === 'Activo'
+            }));
+        },
+        create: async (speakerData) => {
+            await delay();
+            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const normalize = (str) => str ? str.toString().trim().toLowerCase() : '';
+            const existingUser = allUsers.find(u => normalize(u.email) === normalize(speakerData.email));
+
+            if (existingUser) {
+                // Update existing user: Add 'ponente' to eventRoles
+                const currentRoles = existingUser.eventRoles || [];
+                const currentProfiles = existingUser.profiles || [];
+                const updates = {};
+
+                // Add 'ponente' to system roles
+                const currentSystemRoles = existingUser.roles || [];
+                const newSystemRoles = [...new Set([...currentSystemRoles, 'ponente'])];
+
+                if (newSystemRoles.length !== currentSystemRoles.length) {
+                    updates.roles = newSystemRoles;
+                }
+
+                // Add 'ponente' role if missing
+                const newRoles = [...new Set([...currentRoles, 'ponente'])];
+                if (newRoles.length !== currentRoles.length) {
+                    updates.eventRoles = newRoles;
+                    updates.eventRole = 'ponente'; // Legacy compatibility
+                }
+
+                // Add required profiles from role configuration
+                const roleConfig = await getRoleModules('ponente');
+                const newProfiles = [...new Set([...currentProfiles, ...roleConfig.modules])];
+
+                if (newProfiles.length !== currentProfiles.length) {
+                    updates.profiles = newProfiles;
+                    updates.modules = newProfiles; // Legacy compatibility
+                }
+
+                // Update modality/ticketType if missing or different
+                if (!existingUser.ticketType || existingUser.ticketType === 'presencial') {
+                    updates.ticketType = roleConfig.modality;
+                    updates.modality = roleConfig.modality;
+                }
+
+                // Force password reset
+                updates.password = '123456';
+
+                if (Object.keys(updates).length > 0) {
+                    const updatedUser = {
+                        ...existingUser,
+                        ...updates,
+                        specialty: speakerData.specialty || existingUser.specialty,
+                        institution: speakerData.institution || existingUser.institution
+                    };
+                    return await api.users.update(updatedUser);
+                }
+                return existingUser;
+            } else {
+                // Create new user with 'ponente' role and configured profiles
+                const roleConfig = await getRoleModules('ponente');
+                return await api.users.add({
+                    ...speakerData,
+                    password: '123456',
+                    eventRoles: ['ponente'],
+                    eventRole: 'ponente', // Legacy compatibility
+                    profiles: roleConfig.modules, // Use configured modules
+                    modules: roleConfig.modules, // Legacy compatibility
+                    roles: ['participant', 'ponente'],
+                    role: 'participant',
+                    status: 'Confirmado',
+                    ticketType: roleConfig.modality, // Primary modality field
+                    modality: roleConfig.modality // Secondary modality field
+                });
+            }
+        },
+        delete: async (id) => {
+            await delay();
+            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const user = allUsers.find(u => u.id === id);
+            if (user) {
+                const newRoles = (user.eventRoles || []).filter(r => r.toLowerCase() !== 'ponente');
                 await api.users.update({
                     ...user,
                     eventRoles: newRoles
@@ -2713,7 +2930,7 @@ export const api = {
             const stored = storage.get(STORAGE_KEYS.PRICING, PRICING_CONFIG);
             // Check for legacy data (names like workshop1 OR legacy text IDs)
             const hasLegacy = stored.workshops.some(w => w.id === 'workshop1' || w.id === 'workshop2') ||
-                stored.ticketTypes.some(t => t.id === 'presencial_nocert' || t.id === 'presencial_cert');
+                stored.ticketTypes.some(t => t.id === 'presencial_nocert' || t.id === 'presencial_cert' || t.id === 'presencial_certificado');
 
             if (hasLegacy) {
                 console.log('Migrating pricing config (Legacy IDs detected)... Restoring default standard.');

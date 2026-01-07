@@ -385,29 +385,52 @@ const SubmitWorkForm = ({ navigate }) => {
 
                 <form onSubmit={handleSubmit(onSubmit)} className={`space-y-6 ${!getDeadlineStatus().allowed ? 'opacity-50 pointer-events-none' : ''}`}>
                     {/* Authorship Section */}
-                    <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                        <label className="block text-sm font-bold text-gray-700 mb-3">Autoría del Trabajo</label>
-                        <div className="flex gap-4 mb-4">
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="authorMode"
-                                    checked={authorMode === 'single'}
-                                    onChange={() => setAuthorMode('single')}
-                                    className="text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-gray-700">Solo Autor (Yo)</span>
-                            </label>
-                            <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                    type="radio"
-                                    name="authorMode"
-                                    checked={authorMode === 'multiple'}
-                                    onChange={() => setAuthorMode('multiple')}
-                                    className="text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm font-medium text-gray-700">Varios Autores</span>
-                            </label>
+                    <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
+                        <label className="block text-sm font-bold text-gray-700 mb-4">Autoría del Trabajo</label>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                            <div
+                                onClick={() => setAuthorMode('single')}
+                                className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${authorMode === 'single'
+                                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                        : 'border-gray-200 hover:border-blue-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                            >
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 ${authorMode === 'single' ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                    <User size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-base">Solo Autor (Yo)</p>
+                                    <p className="text-xs opacity-70">Soy el único autor del trabajo</p>
+                                </div>
+                                {authorMode === 'single' && (
+                                    <div className="ml-auto w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                                        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div
+                                onClick={() => setAuthorMode('multiple')}
+                                className={`cursor-pointer p-4 rounded-xl border-2 transition-all flex items-center gap-4 ${authorMode === 'multiple'
+                                        ? 'border-blue-600 bg-blue-50 text-blue-700'
+                                        : 'border-gray-200 hover:border-blue-200 text-gray-600 hover:bg-gray-50'
+                                    }`}
+                            >
+                                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-xl shrink-0 ${authorMode === 'multiple' ? 'bg-blue-200 text-blue-700' : 'bg-gray-100 text-gray-500'
+                                    }`}>
+                                    <Users size={24} />
+                                </div>
+                                <div>
+                                    <p className="font-bold text-base">Varios Autores</p>
+                                    <p className="text-xs opacity-70">Hay co-autores involucrados</p>
+                                </div>
+                                {authorMode === 'multiple' && (
+                                    <div className="ml-auto w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center shrink-0">
+                                        <div className="w-2.5 h-2.5 bg-white rounded-full" />
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {authorMode === 'multiple' && (

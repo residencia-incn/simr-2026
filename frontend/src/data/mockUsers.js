@@ -16,6 +16,7 @@
  * - role, roles: Legacy (mantener por compatibilidad)
  * - isSuperAdmin: Flag para filtrar de listas (solo para superadmin)
  * - specialty, occupation, institution: Datos profesionales
+ * - birthDate, gender: Datos personales
  * - modality: Presencial, Virtual, Híbrido
  * - registrationType: presencial, presencial_certificado, virtual
  * - registrationDate, status, amount: Datos de inscripción
@@ -36,6 +37,7 @@ export const MOCK_USERS = [
 
         // Nuevos campos RBAC
         eventRole: 'organizador',
+        birthDate: '1980-01-01',
         organizerFunction: 'admin',
         hasPaid: true,
         modality: 'virtual',

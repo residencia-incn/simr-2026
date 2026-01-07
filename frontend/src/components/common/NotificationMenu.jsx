@@ -104,7 +104,17 @@ const NotificationMenu = () => {
                                                     // Redirection logic
                                                     if (notif.link.includes('?')) {
                                                         const [path, query] = notif.link.split('?');
-                                                        window.location.href = notif.link; // Simple redirect for now as we don't have global router control easily
+                                                        let newLink = notif.link;
+
+                                                        // Smart Redirection for Treasurers
+                                                        // If link goes to admission-dashboard verification, but user is treasurer, redirect to treasurer-dashboard
+                                                        if (user.eventRole === 'contabilidad' || (user.eventRoles && user.eventRoles.includes('contabilidad'))) {
+                                                            if (notif.link.includes('view=admission-dashboard') && (notif.link.includes('tab=verification') || notif.link.includes('tab=validation'))) {
+                                                                newLink = notif.link.replace('view=admission-dashboard', 'view=treasurer-dashboard');
+                                                            }
+                                                        }
+
+                                                        window.location.href = newLink;
                                                     } else {
                                                         window.location.href = notif.link;
                                                     }
