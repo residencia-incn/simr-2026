@@ -25,6 +25,17 @@ const AddSpeakerModal = ({ isOpen, onClose, onUpdate }) => {
     const [searchResults, setSearchResults] = useState([]);
     const [isSearching, setIsSearching] = useState(false);
 
+    // Config State
+    const [config, setConfig] = useState({
+        occupations: ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
+        institutions: ["INCN", "Hospital Almenara", "Hospital Rebagliati", "Otro"],
+        specialties: []
+    });
+
+    // UI State
+    const [error, setError] = useState(null);
+    const [successMessage, setSuccessMessage] = useState(null);
+
     const countries = [
         "Perú", "Argentina", "Bolivia", "Brasil", "Chile", "Colombia", "Ecuador", "México", "Paraguay", "Uruguay", "Venezuela", "Estados Unidos", "España", "Otro"
     ];

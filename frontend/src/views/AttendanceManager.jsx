@@ -4,7 +4,7 @@ import { QrCode, Scan, Users, Calendar, Clock, RotateCcw, Download, Search, Refr
 import { useApi } from '../hooks';
 import { api } from '../services/api';
 import { showConfirm } from '../utils/alerts';
-import QRCode from 'react-qr-code';
+import CustomQRCode from '../components/ui/CustomQRCode';
 import AttendanceScanner from '../components/common/AttendanceScanner';
 
 const AttendanceManager = () => {
@@ -168,7 +168,7 @@ const AttendanceManager = () => {
 
                     <div className="bg-white p-4 rounded-xl shadow-lg border-4 border-gray-900 mb-6">
                         {dayToken ? (
-                            <QRCode value={dayToken} size={220} level="H" />
+                            <CustomQRCode value={dayToken} size={220} />
                         ) : (
                             <div className="w-[220px] h-[220px] bg-gray-100 flex items-center justify-center rounded text-gray-400">
                                 <LoadingSpinner />
