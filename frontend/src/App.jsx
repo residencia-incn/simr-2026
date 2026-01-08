@@ -355,7 +355,7 @@ function SIMRAppContent() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+    <div className="min-h-screen print:min-h-0 bg-gray-50 print:bg-white font-sans text-gray-800">
 
       {/* Navbar */}
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm print:hidden">
@@ -616,7 +616,7 @@ function SIMRAppContent() {
 
       {/* Footer */}
       {['home', 'bases', 'roadmap', 'program', 'committee', 'gallery', 'posters', 'registration', 'login'].includes(currentView) && (
-        <footer className="bg-white border-t border-gray-200 mt-12 py-12">
+        <footer className="bg-white border-t border-gray-200 mt-12 py-12 print:hidden">
           <div className="max-w-7xl mx-auto px-4 md:px-8 text-center md:text-left grid md:grid-cols-4 gap-8">
             <div className="col-span-1 md:col-span-2">
               <h3 className="font-bold text-gray-900 mb-4">{eventName}</h3>

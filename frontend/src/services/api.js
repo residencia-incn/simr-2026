@@ -4,6 +4,7 @@ import {
     INITIAL_GALLERY,
     MOCK_NEWS,
     EVENT_CONFIG,
+    PROGRAM_CONFIG,
     SPONSORS,
     INITIAL_WORKS,
     INITIAL_JURORS,
@@ -26,7 +27,8 @@ import { storage, STORAGE_KEYS as ORIG_KEYS } from './storage';
 
 const STORAGE_KEYS = {
     ...ORIG_KEYS,
-    ROLE_DEFAULTS: 'simr_role_defaults'
+    ROLE_DEFAULTS: 'simr_role_defaults',
+    PROGRAM_CONFIG: 'simr_program_config_v2' // Distinct key for program configuration
 };
 
 // Helper for simulating async operations
@@ -826,24 +828,86 @@ export const api = {
     // --- 4. Program ---
     program: {
         getAll: async () => {
-            await delay();
-            return storage.get(STORAGE_KEYS.PROGRAM, PROGRAM_DATA);
+            // Simulate API delay
+            await new Promise(resolve => setTimeout(resolve, 300));
+
+            // Check if we have data in localStorage
+            const stored = localStorage.getItem('simr_program_schedule');
+            if (stored) {
+                return JSON.parse(stored);
+            }
+
+            // Initialize from mock data if empty
+            const initialData = {};
+            // Just return empty object, mapping logic handles the rest or uses INITIAL_SCHEDULE if this is empty? 
+            // Actually hooks use INITIAL_SCHEDULE as initial state, but then loadData overrides it.
+            // Let's return null to signify "no saved data, use defaults from code"
+            return null;
         },
         save: async (programData) => {
-            await delay();
-            storage.set(STORAGE_KEYS.PROGRAM, programData);
+            await new Promise(resolve => setTimeout(resolve, 500));
+            localStorage.setItem('simr_program_schedule', JSON.stringify(programData));
             window.dispatchEvent(new Event('program-updated'));
-            return true;
+            return { success: true };
         },
         getDays: async () => {
-            await delay();
-            return storage.get(STORAGE_KEYS.PROGRAM_DAYS, DEFAULT_DAYS);
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const storedDays = localStorage.getItem('simr_program_days');
+            const storedConfig = localStorage.getItem('simr_program_config');
+
+            if (storedConfig) {
+                const config = JSON.parse(storedConfig);
+                if (config.days) return config.days;
+            }
+
+            if (storedDays) return JSON.parse(storedDays);
+
+            // Default from PROGRAM_CONFIG if available, otherwise hardcoded
+            // We need to import PROGRAM_CONFIG here or just redefine defaults
+            return [
+                { id: 1, label: 'Día 1 (Lunes 22)', date: '2026-10-22', active: true },
+                { id: 2, label: 'Día 2 (Martes 23)', date: '2026-10-23', active: true },
+                { id: 3, label: 'Día 3 (Miércoles 24)', date: '2026-10-24', active: true },
+                { id: 4, label: 'Día 4 (Jueves 25)', date: '2026-10-25', active: true },
+                { id: 5, label: 'Día 5 (Viernes 26)', date: '2026-10-26', active: true }
+            ];
         },
-        saveDays: async (days) => {
-            await delay();
-            storage.set(STORAGE_KEYS.PROGRAM_DAYS, days);
+        getConfig: async () => {
+            await new Promise(resolve => setTimeout(resolve, 200));
+            const stored = localStorage.getItem('simr_program_config');
+            if (stored) return JSON.parse(stored);
+
+            // Return default mock config
+            // Note: In a real app we would import PROGRAM_CONFIG, but here we'll replicate or minimal default
+            return {
+                days: [
+                    { id: 1, label: 'Día 1 (Lunes 22)', date: '2026-10-22', active: true },
+                    { id: 2, label: 'Día 2 (Martes 23)', date: '2026-10-23', active: true },
+                    { id: 3, label: 'Día 3 (Miércoles 24)', date: '2026-10-24', active: true },
+                    { id: 4, label: 'Día 4 (Jueves 25)', date: '2026-10-25', active: true },
+                    { id: 5, label: 'Día 5 (Viernes 26)', date: '2026-10-26', active: true }
+                ],
+                timeSlots: [
+                    { id: 'ts1', start: '08:00', end: '09:00', label: '08:00 - 09:00' },
+                    { id: 'ts2', start: '09:00', end: '10:00', label: '09:00 - 10:00' }
+                ]
+            };
+        },
+        updateConfig: async (config) => {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            localStorage.setItem('simr_program_config', JSON.stringify(config));
+            // Also update separate days storage for compatibility
+            if (config.days) {
+                localStorage.setItem('simr_program_days', JSON.stringify(config.days));
+                window.dispatchEvent(new Event('program-days-updated'));
+            }
+            return { success: true };
+        },
+        updateDays: async (days) => {
+            await new Promise(resolve => setTimeout(resolve, 300));
+            localStorage.setItem('simr_program_days', JSON.stringify(days));
             window.dispatchEvent(new Event('program-days-updated'));
-            return true;
+            return { success: true };
         },
         getHalls: async () => {
             await delay();
@@ -978,6 +1042,50 @@ export const api = {
     },
 
     // --- 7. Works (Academic) ---
+    program: {
+        getAll: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PROGRAM_SCHEDULE, {});
+        },
+        save: async (programData) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PROGRAM_SCHEDULE, programData);
+            window.dispatchEvent(new Event('program-updated'));
+            return true;
+        },
+        getDays: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PROGRAM_DAYS, DEFAULT_DAYS);
+        },
+        saveDays: async (days) => {
+            await delay();
+            storage.set(STORAGE_KEYS.PROGRAM_DAYS, days);
+
+            // Sync with PROGRAM_CONFIG to prevent data loss
+            const currentConfig = storage.get(STORAGE_KEYS.PROGRAM_CONFIG, PROGRAM_CONFIG);
+            storage.set(STORAGE_KEYS.PROGRAM_CONFIG, { ...currentConfig, days });
+
+            window.dispatchEvent(new Event('program-days-updated'));
+            return true;
+        },
+        getConfig: async () => {
+            await delay();
+            return storage.get(STORAGE_KEYS.PROGRAM_CONFIG, PROGRAM_CONFIG);
+        },
+        updateConfig: async (config) => {
+            await delay();
+            const current = storage.get(STORAGE_KEYS.PROGRAM_CONFIG, PROGRAM_CONFIG);
+            const updated = { ...current, ...config };
+            storage.set(STORAGE_KEYS.PROGRAM_CONFIG, updated);
+            // Also sync days if provided
+            if (config.days) {
+                storage.set(STORAGE_KEYS.PROGRAM_DAYS, config.days);
+                window.dispatchEvent(new Event('program-days-updated'));
+            }
+            return updated;
+        }
+    },
+
     works: {
         getAll: async () => {
             await delay();

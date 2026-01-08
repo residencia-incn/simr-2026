@@ -127,7 +127,7 @@ const AcademicSpeakers = () => {
         }
     };
 
-    const getTalkSchedule = (talkId) => {
+    const getTalkSchedule = (talkId, talkTitle = null) => {
         if (!programData || !days) return null;
 
         // Search in all days
@@ -137,21 +137,63 @@ const AcademicSpeakers = () => {
 
             for (const block of dayBlocks) {
                 // Check if block links directly to this talk
-                if (block.linkedWorkId === talkId) {
+                if (block.linkedWorkId === talkId || block.linkedTalkId === talkId || (talkTitle && block.title === talkTitle)) {
                     return { day: dayLabel, time: block.time, room: block.room };
                 }
 
                 // Check if any concurrent session links to this talk
                 if (block.sessions) {
                     for (const session of Object.values(block.sessions)) {
-                        if (session.linkedWorkId === talkId) {
-                            return { day: dayLabel, time: block.time, room: block.room }; // Using block time for simplicity
+                        if (session.linkedWorkId === talkId || session.linkedTalkId === talkId || (talkTitle && session.title === talkTitle)) {
+                            return { day: dayLabel, time: block.time, room: block.room };
                         }
                     }
                 }
             }
         }
         return null;
+    };
+
+    const handleDeleteTalk = async (talkIndex) => {
+        if (!selectedSpeaker) return;
+
+        const result = await Swal.fire({
+            title: '¿Eliminar ponencia?',
+            text: "Esta acción no se puede deshacer.",
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonColor: '#d33',
+            cancelButtonColor: '#3085d6',
+            confirmButtonText: 'Sí, eliminar',
+            cancelButtonText: 'Cancelar'
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const updatedTalks = [...(selectedSpeaker.talks || [])];
+            updatedTalks.splice(talkIndex, 1);
+
+            const updatedSpeaker = {
+                ...selectedSpeaker,
+                talks: updatedTalks
+            };
+
+            // Optimistic update
+            setSpeakers(prev => prev.map(s => s.id === selectedSpeaker.id ? updatedSpeaker : s));
+
+            await api.speakers.update(updatedSpeaker);
+
+            await Swal.fire(
+                '¡Eliminado!',
+                'La ponencia ha sido eliminada.',
+                'success'
+            );
+        } catch (error) {
+            console.error("Error deleting talk:", error);
+            Swal.fire('Error', 'Hubo un problema al eliminar la ponencia.', 'error');
+            refetch(); // Revert on error
+        }
     };
 
     return (
@@ -244,7 +286,7 @@ const AcademicSpeakers = () => {
                                 className="!bg-white !text-red-600 !border-red-200 hover:!bg-red-50 shadow-sm flex items-center gap-2"
                                 onClick={async () => {
                                     // 1. Check for scheduled talks
-                                    const scheduledTalks = (selectedSpeaker.talks || []).filter(talk => getTalkSchedule(talk.id));
+                                    const scheduledTalks = (selectedSpeaker.talks || []).filter(talk => getTalkSchedule(talk.id, talk.title));
 
                                     if (scheduledTalks.length > 0) {
                                         await Swal.fire({
@@ -338,7 +380,7 @@ const AcademicSpeakers = () => {
                             {selectedSpeaker.talks && selectedSpeaker.talks.length > 0 ? (
                                 <div className="space-y-2">
                                     {selectedSpeaker.talks.map((talk, idx) => {
-                                        const schedule = getTalkSchedule(talk.id);
+                                        const schedule = getTalkSchedule(talk.id, talk.title);
                                         return (
                                             <div key={idx} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex justify-between items-center group hover:border-purple-200 transition-all">
                                                 <div className="flex-1">

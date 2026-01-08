@@ -148,6 +148,29 @@ export const MOCK_INCN_RESIDENTS = [
 ];
 
 
+// ============================================
+// CONFIGURACIÓN GENERAL DEL PROGRAMA
+// ============================================
+export const PROGRAM_CONFIG = {
+    days: [
+        { id: 1, label: 'Día 1', date: '2026-06-22', active: true },
+        { id: 2, label: 'Día 2', date: '2026-06-23', active: true },
+        { id: 3, label: 'Día 3', date: '2026-06-24', active: true },
+        { id: 4, label: 'Día 4', date: '2026-06-25', active: true },
+        { id: 5, label: 'Día 5', date: '2026-06-26', active: true }
+    ],
+    timeSlots: [
+        { id: 'ts1', start: '08:00', end: '09:00', label: '08:00 - 09:00' },
+        { id: 'ts2', start: '09:00', end: '10:00', label: '09:00 - 10:00' },
+        { id: 'ts3', start: '10:00', end: '11:00', label: '10:00 - 11:00' },
+        { id: 'ts4', start: '11:00', end: '11:30', label: '11:00 - 11:30 (Break)' },
+        { id: 'ts5', start: '11:30', end: '12:30', label: '11:30 - 12:30' },
+        { id: 'ts6', start: '12:30', end: '13:30', label: '12:30 - 13:30' },
+        { id: 'ts7', start: '15:00', end: '16:00', label: '15:00 - 16:00' },
+        { id: 'ts8', start: '16:00', end: '17:00', label: '16:00 - 17:00' }
+    ]
+};
+
 export const ACADEMIC_CONFIG = {
     titleWordLimit: 20,
     submissionDeadline: "2026-03-15T23:59",
@@ -174,7 +197,18 @@ export const ACADEMIC_CONFIG = {
         { id: 'rub4', name: "Calidad de resultados", description: "Valora la precisión, validez y presentación de los datos obtenidos, así como su coherencia con los objetivos.", active: true, workTypes: ["Trabajo Original", "Revisión Sistemática"] },
         { id: 'rub5', name: "Calidad de presentación", description: "Evalúa la redacción, ortografía, estructura lógica y la calidad visual de los gráficos o tablas presentados.", active: true, workTypes: ["Trabajo Original", "Reporte de Caso", "Revisión Sistemática"] },
         { id: 'rub6', name: "Descripción del Caso", description: "Precisión y detalle en la descripción cronológica y sintomatológica del caso clínico.", active: true, workTypes: ["Reporte de Caso"] }
-    ]
+    ],
+    rooms: {
+        physical: [
+            { id: 'r1', name: 'Auditorio Principal' },
+            { id: 'r2', name: 'Sala 1 (Talleres)' },
+            { id: 'r3', name: 'Sala 2' }
+        ],
+        virtual: [
+            { id: 'v1', name: 'Sala Virtual A' },
+            { id: 'v2', name: 'Sala Virtual B' }
+        ]
+    }
 };
 
 export const MOCK_NEWS = [

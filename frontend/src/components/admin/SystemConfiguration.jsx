@@ -7,7 +7,7 @@ import PrintSettingsManager from './PrintSettingsManager';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import RoleAccessConfiguration from './RoleAccessConfiguration';
 import { api } from '../../services/api';
-import { showSuccess } from '../../utils/alerts';
+import { showSuccess, showError } from '../../utils/alerts';
 
 const SystemConfiguration = () => {
     const [config, setConfig] = useState(null);
@@ -103,14 +103,40 @@ const SystemConfiguration = () => {
     const handleSave = async () => {
         setIsSaving(true);
         try {
+            // Generate program days synchronized with duration and startDate
+            const newDays = [];
+            if (config.startDate) {
+                const start = new Date(config.startDate + 'T00:00:00');
+                // const daysOfWeek = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+
+                const duration = parseInt(config.duration) || 5;
+                for (let i = 0; i < duration; i++) {
+                    const current = new Date(start);
+                    current.setDate(start.getDate() + i);
+
+                    // Store as YYYY-MM-DD so formatters can handle locale/format later
+                    const year = current.getFullYear();
+                    const month = String(current.getMonth() + 1).padStart(2, '0');
+                    const day = String(current.getDate()).padStart(2, '0');
+                    const isoDate = `${year}-${month}-${day}`;
+
+                    newDays.push({
+                        id: `day${i + 1}`,
+                        label: `Día ${i + 1}`,
+                        date: isoDate // Changed from formatted string to ISO
+                    });
+                }
+            }
+
             await Promise.all([
                 api.content.saveConfig({ ...config }),
-                api.treasury.updatePricing(pricingConfig)
+                api.treasury.updatePricing(pricingConfig),
+                newDays.length > 0 ? api.program.saveDays(newDays) : Promise.resolve()
             ]);
             showSuccess('Los cambios han sido aplicados correctamente.', 'Configuración guardada');
         } catch (err) {
             console.error(err);
-            // showError('Error al guardar la configuración'); // Import showError if not available or just log
+            showError('Hubo un problema al guardar la configuración. Por favor intenta nuevamente.', 'Error al guardar');
         } finally {
             setIsSaving(false);
         }
