@@ -235,9 +235,6 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
                 category: "GENERAL",
                 categoryColor: null,
                 speakers: [],
-                category: "GENERAL",
-                categoryColor: null,
-                speakers: [],
                 description: null,
                 virtualLocation: formData.virtualLocation
             });
