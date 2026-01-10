@@ -23,6 +23,7 @@ import LoginModal from './views/LoginModal';
 import BasesView from './views/BasesView';
 import NotificationMenu from './components/common/NotificationMenu';
 import TasksQuickAccess from './components/common/TasksQuickAccess';
+import ProfileDropdown, { ROLE_LABELS } from './components/common/ProfileDropdown';
 import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
 import SmartRegistrationForm from './views/RegistrationView';
@@ -328,31 +329,7 @@ function SIMRAppContent() {
   const eventYear = config?.eventYear || '2026';
   const eventName = `SIMR ${eventYear}`;
 
-  const ROLE_LABELS = {
-    organizacion: 'Organización',
-    secretaria: 'Secretaría',
-    investigacion: 'Investigación',
-    asistencia: 'Asistencia',
-    jurado: 'Jurado',
-    contabilidad: 'Contabilidad',
-    aula_virtual: 'Aula Virtual',
-    trabajos: 'Trabajos',
-    academico: 'Académico',
-    perfil_basico: 'Mi Perfil'
-  };
 
-  const ROLE_ICONS = {
-    organizacion: Users,
-    secretaria: FileText,
-    investigacion: BookOpen,
-    asistencia: Users,
-    jurado: Award,
-    contabilidad: DollarSign,
-    aula_virtual: Users,
-    trabajos: User,
-    academico: BookOpen,
-    perfil_basico: CircleUser
-  };
 
   return (
     <div className="min-h-screen print:min-h-0 bg-gray-50 print:bg-white font-sans text-gray-800">
@@ -367,7 +344,8 @@ function SIMRAppContent() {
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center gap-8 text-sm font-medium text-gray-700">
-            {visibleNavItems.map(item => {
+            {/* Only show public sections when NOT in Aula Virtual */}
+            {currentView !== 'participant-dashboard' && visibleNavItems.map(item => {
               const isActive = currentView === item.id;
               return (
                 <button
@@ -386,7 +364,7 @@ function SIMRAppContent() {
                 </button>
               );
             })}
-            {!user && (
+            {!user && currentView !== 'participant-dashboard' && (
               <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
             )}
 
@@ -420,70 +398,14 @@ function SIMRAppContent() {
 
                 {/* Role Switcher Dropdown */}
                 {isRoleMenuOpen && (
-                  <div className="absolute top-14 right-0 bg-white border border-gray-100 rounded-xl shadow-xl w-60 py-2 z-50 animate-fadeIn overflow-hidden">
-
-                    {/* User Profile Section */}
-                    <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-                      <p className="text-sm font-bold text-gray-900 truncate">{user.name}</p>
-                      <p className="text-xs text-gray-500 truncate">{user.email}</p>
-                      <button
-                        onClick={(e) => { e.stopPropagation(); navigate('profile'); setIsRoleMenuOpen(false); }}
-                        className="text-xs text-blue-600 font-medium hover:underline mt-1 flex items-center gap-1"
-                      >
-                        Ver mi perfil
-                      </button>
-                    </div>
-
-                    {/* Use modules (RBAC) instead of profiles (legacy) */
-                      user.modules && user.modules.length > 0 && (
-                        <>
-                          <div className="px-4 py-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mt-1">Navegación</div>
-                          {(() => {
-                            const uniqueLabels = new Set();
-                            return user.modules
-                              .filter(m => m !== 'perfil_basico' && m !== 'mi_perfil' && m !== 'ponente')
-                              .filter(module => {
-                                const label = ROLE_LABELS[module] || module;
-                                if (uniqueLabels.has(label)) return false;
-                                uniqueLabels.add(label);
-                                return true;
-                              })
-                              .map(module => {
-                                const Icon = ROLE_ICONS[module] || Users;
-                                const isDashboardActive = activeRole === module && currentView === getDashboardView(module);
-                                return (
-                                  <button
-                                    key={module}
-                                    onClick={() => handleRoleSwitch(module)}
-                                    className={`w-full text-left px-4 py-3 text-sm hover:bg-blue-50 flex items-center justify-between transition-colors
-                                           ${isDashboardActive ? 'text-blue-700 font-bold bg-blue-50' : 'text-gray-600'}
-                                           `}
-                                  >
-                                    <div className="flex items-center gap-3">
-                                      <div className={`p-1.5 rounded-lg ${isDashboardActive ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'}`}>
-                                        <Icon size={16} />
-                                      </div>
-                                      {ROLE_LABELS[module] || module}
-                                    </div>
-                                    {isDashboardActive && <div className="w-1.5 h-1.5 rounded-full bg-blue-600"></div>}
-                                  </button>
-                                );
-                              });
-                          })()}
-                          <div className="my-1 border-t border-gray-100"></div>
-                        </>
-                      )}
-
-                    <button
-                      onClick={() => { handleLogout(); setIsRoleMenuOpen(false); }}
-                      className="w-full text-left px-4 py-3 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
-                    >
-                      <div className="p-1.5 rounded-lg bg-red-100 text-red-600">
-                        <LogOut size={16} />
-                      </div>
-                      Cerrar Sesión
-                    </button>
-                  </div>
+                  <ProfileDropdown
+                    user={user}
+                    activeRole={activeRole}
+                    onRoleChange={handleRoleSwitch}
+                    onProfileClick={() => navigate('profile')}
+                    onLogout={handleLogout}
+                    onClose={() => setIsRoleMenuOpen(false)}
+                  />
                 )}
               </div>
             ) : (
@@ -500,24 +422,28 @@ function SIMRAppContent() {
         {/* Mobile Menu */}
         {isMobileMenuOpen && (
           <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4">
-            <button onClick={() => navigate('home')} className={`block w-full text-left font-medium py-2 ${currentView === 'home' ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}`}>Inicio</button>
+            {currentView !== 'participant-dashboard' && (
+              <>
+                <button onClick={() => navigate('home')} className={`block w-full text-left font-medium py-2 ${currentView === 'home' ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}`}>Inicio</button>
 
-            {visibleNavItems.filter(item => item.id !== 'home').map(item => (
-              <button
-                key={item.id}
-                onClick={() => navigate(item.id)}
-                className={`block w-full text-left font-medium py-2 
-                  ${currentView === item.id ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}
-                  ${item.isBadge ? 'text-blue-700 font-bold' : ''}
-                `}
-              >
-                {item.label}
-              </button>
-            ))}
+                {visibleNavItems.filter(item => item.id !== 'home').map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => navigate(item.id)}
+                    className={`block w-full text-left font-medium py-2 
+                      ${currentView === item.id ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}
+                      ${item.isBadge ? 'text-blue-700 font-bold' : ''}
+                    `}
+                  >
+                    {item.label}
+                  </button>
+                ))}
 
-            <button onClick={() => navigate('rbac_demo')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">Demo RBAC</button>
-            {!user && (
-              <button onClick={() => navigate('registration')} className={`block w-full text-left font-medium py-2 ${currentView === 'registration' ? 'text-blue-700 font-bold' : 'text-blue-700'}`}>Inscripción</button>
+                <button onClick={() => navigate('rbac_demo')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">Demo RBAC</button>
+                {!user && (
+                  <button onClick={() => navigate('registration')} className={`block w-full text-left font-medium py-2 ${currentView === 'registration' ? 'text-blue-700 font-bold' : 'text-blue-700'}`}>Inscripción</button>
+                )}
+              </>
             )}
             {user ? (
               <>
@@ -543,7 +469,7 @@ function SIMRAppContent() {
       </nav>
 
       {/* Main Content Area */}
-      <main className={`max-w-7xl mx-auto px-4 md:px-8 ${['home', 'login', 'registration'].includes(currentView) ? 'py-0' : 'py-8'}`}>
+      <main className={`${['home', 'login', 'registration'].includes(currentView) ? 'py-0' : currentView === 'participant-dashboard' ? '' : 'py-8'} ${currentView === 'participant-dashboard' ? 'h-[calc(100vh-4rem)] overflow-hidden' : 'max-w-7xl mx-auto px-4 md:px-8'}`}>
         {currentView === 'home' && <HomeView navigate={navigate} user={user} />}
         {currentView === 'roadmap' && (isSectionDevelopment('roadmap') ? <DevelopmentView title="Roadmap en Desarrollo" /> : <RoadmapView />)}
         {currentView === 'bases' && (isSectionDevelopment('bases') ? <DevelopmentView title="Bases en Desarrollo" /> : <BasesView activeTab={basesTab} />)}
