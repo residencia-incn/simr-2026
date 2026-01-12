@@ -22,7 +22,7 @@ A lo largo de los módulos, exploraremos:
         difficulty: 'MEDIO', // BASICO, MEDIO, AVANZADO
         coverImage: '/images/courses/neurologia-clinica.jpg',
         coverGradient: 'from-teal-100 to-teal-300',
-        enrolledStudents: 1240,
+        enrolledStudents: 11,
         rating: 4.8,
         totalRatings: 342,
         duration: '8 semanas',
@@ -119,24 +119,26 @@ export const mockModules = [
         isRequired: true,
     },
     {
-        id: 2,
+        id: 10,
         courseId: 1,
-        title: 'Neuroimagen Avanzada',
-        description: 'Técnicas de neuroimagen y su interpretación',
+        title: 'Día 1: Neurovasculares',
+        description: 'Módulo intensivo sobre patología vascular',
         order: 2,
         status: 'PUBLICADO',
-        duration: '3 semanas',
+        duration: '1 día',
         isRequired: true,
+        isSequential: true, // Enable sequential locking
     },
     {
-        id: 3,
+        id: 11,
         courseId: 1,
-        title: 'Casos Clínicos Prácticos',
-        description: 'Análisis de casos reales y resolución de dilemas diagnósticos',
+        title: 'Día 2: Neuroinmunología',
+        description: 'Enfoque en esclerosis múltiple y otras autoinmunes',
         order: 3,
         status: 'PUBLICADO',
-        duration: '3 semanas',
-        isRequired: false,
+        duration: '1 día',
+        isRequired: true,
+        isSequential: true, // Enable sequential locking
     },
 ];
 
@@ -146,22 +148,51 @@ export const mockLessons = [
         id: 1,
         moduleId: 1,
         title: 'Bienvenida y Objetivos del Curso',
-        type: 'VIDEO', // VIDEO, LECTURA, QUIZ, TAREA
+        type: 'VIDEO',
         duration: '05:20',
         order: 1,
         isRequired: true,
         status: 'PUBLICADO',
-        videoUrl: 'https://example.com/videos/intro.mp4',
+        videoId: 2,
+        videoUrl: null, // Should use videoId lookup
+        content: null,
+        completedBy: [],
+    },
+    {
+        id: 101,
+        moduleId: 10, // Día 1
+        title: 'Reumatología',
+        type: 'VIDEO',
+        duration: '1:49:17',
+        order: 1,
+        isRequired: true,
+        status: 'PUBLICADO',
+        videoId: 101, // LINKS TO VIDEO 101 in mockVideos
+        videoUrl: null, // Crucial: No direct URL, forces lookup
+        content: null,
+        completedBy: [],
+    },
+    {
+        id: 102,
+        moduleId: 10,
+        title: 'SIMR 2026 - Taller de Neuroimagen',
+        type: 'VIDEO',
+        duration: '4:35:54',
+        order: 2,
+        isRequired: false,
+        status: 'PUBLICADO',
+        videoId: 102,
+        videoUrl: null,
         content: null,
         completedBy: [],
     },
     {
         id: 2,
-        moduleId: 1,
+        moduleId: 11, // Día 2
         title: 'Lectura: Historia Clínica Neurológica',
         type: 'LECTURA',
         duration: '15 min',
-        order: 2,
+        order: 1,
         isRequired: false,
         status: 'PUBLICADO',
         videoUrl: null,
@@ -306,6 +337,179 @@ export const mockInstructors = [
         bio: 'Especialista en neurología pediátrica con certificación internacional.',
         avatar: '/avatars/instructor3.jpg',
         coursesCount: 1,
+    },
+];
+
+// ========== READINGS DATA (from ReadingManagement) ==========
+export const mockReadings = [
+    {
+        id: 1,
+        title: 'Guía de Práctica Clínica en Epilepsia 2024',
+        module: 'Módulo 1: Introducción',
+        updatedAt: '12 May 2024',
+        format: 'PDF',
+        type: 'pdf',
+        views: 124,
+    },
+    {
+        id: 2,
+        title: 'Atlas de Neuroanatomía Funcional (NIH)',
+        module: 'Módulo 2: Neuroimagen',
+        updatedAt: '05 May 2024',
+        format: 'ENLACE',
+        type: 'link',
+        views: 89,
+    },
+    {
+        id: 3,
+        title: 'Caso Clínico: Esclerosis Múltiple Remitente',
+        module: 'Módulo 3: Casos Interactivos',
+        updatedAt: '28 Abr 2024',
+        format: 'TEXTO',
+        type: 'text',
+        views: 215,
+    },
+    {
+        id: 4,
+        title: 'Manual de Farmacoterapia en Parkinson',
+        module: 'Módulo 1: Introducción',
+        updatedAt: '22 Abr 2024',
+        format: 'PDF',
+        type: 'pdf',
+        views: 156,
+    },
+    {
+        id: 5,
+        title: 'Sociedad Española de Neurología - Artículos',
+        module: 'Módulo 1: Introducción',
+        updatedAt: '15 Abr 2024',
+        format: 'ENLACE',
+        type: 'link',
+        views: 45,
+    },
+];
+
+// ========== VIDEOS DATA (New) ==========
+export const mockVideos = [
+    {
+        id: 1,
+        title: 'Introducción a la Epilepsia Refractaria',
+        description: 'Una visión general completa sobre el diagnóstico y manejo de la epilepsia refractaria en pacientes adultos.',
+        courseId: 1,
+        courseName: 'Diplomado en Neurología Clínica',
+        category: 'Curso',
+        specialty: 'Epilepsia',
+        categoryColor: 'bg-indigo-100 text-indigo-700',
+        speaker: 'Dr. Carlos Mendoza',
+        duration: '45:12',
+        date: '2023-10-12',
+        thumbnail: 'https://img.freepik.com/free-photo/brain-scan-x-ray_53876-88746.jpg',
+        sourceType: 'local',
+        sourceUrl: '/videos/epilepsia-intro.mp4',
+        status: 'LISTO',
+        views: 1250,
+        size: '450 MB'
+    },
+    {
+        id: 101,
+        title: 'Reumatología - Sesión Completa',
+        description: 'Grabación completa de la sesión de Reumatología del Día 1.',
+        courseId: 1,
+        courseName: 'Neurología Clínica Avanzada',
+        category: 'Congreso',
+        specialty: 'Neuroinmunología',
+        categoryColor: 'bg-red-100 text-red-700',
+        speaker: 'Dr. Especialista',
+        duration: '1:49:17',
+        date: '2024-01-15',
+        thumbnail: 'https://img.freepik.com/free-photo/rheumatology-concept_23-2148761405.jpg',
+        sourceType: 'local', // Or youtube, but user said "local" is what they want to avoid as *source of truth* in lesson. Here in DB it's fine.
+        sourceUrl: 'https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', // Dummy valid video
+        status: 'LISTO',
+        views: 50,
+        size: '1.2 GB'
+    },
+    {
+        id: 102,
+        title: 'Taller de Neuroimagen - Sesión Tarde',
+        description: 'Taller práctico de interpretación de neuroimágenes.',
+        courseId: 1,
+        courseName: 'Neurología Clínica Avanzada',
+        category: 'Taller',
+        specialty: 'Neuroimagen',
+        categoryColor: 'bg-blue-100 text-blue-700',
+        speaker: 'Dra. Radióloga',
+        duration: '4:35:54',
+        date: '2024-01-15',
+        thumbnail: 'https://img.freepik.com/free-photo/mri-scan_23-2149245678.jpg',
+        sourceType: 'youtube', // Mix it up
+        sourceUrl: 'https://youtube.com/watch?v=dQw4w9WgXcQ',
+        status: 'LISTO',
+        views: 12,
+        size: '0 MB'
+    },
+    {
+        id: 2,
+        title: 'Manejo Agudo del ACV Isquémico',
+        description: 'Protocolos actualizados para el manejo agudo, incluyendo trombolisis y trombectomía mecánica.',
+        courseId: 2,
+        courseName: 'Maestría en Stroke',
+        category: 'Taller',
+        specialty: 'Vascular',
+        categoryColor: 'bg-purple-100 text-purple-700',
+        speaker: 'Dra. Ana Patricia López',
+        duration: '1:02:45',
+        date: '2023-10-08',
+        thumbnail: 'https://img.freepik.com/free-photo/doctor-explaining-diagnosis_23-2148761405.jpg',
+        sourceType: 'youtube',
+        sourceUrl: 'https://youtube.com/watch?v=example1',
+        status: 'LISTO',
+        views: 3420,
+        size: '0 MB'
+    },
+    {
+        id: 3,
+        title: 'Farmacología de Nuevos Antiepilépticos',
+        description: 'Revisión de los últimos fármacos aprobados y sus perfiles de seguridad.',
+        courseId: 3,
+        courseName: 'Actualización Farmacológica 2023',
+        category: 'Webinar',
+        specialty: 'Farmacia',
+        categoryColor: 'bg-green-100 text-green-700',
+        speaker: 'Dr. Roberto García',
+        duration: '38:20',
+        date: '2023-10-05',
+        thumbnail: 'https://img.freepik.com/free-vector/video-player-template-flat-style_23-2147775537.jpg',
+        sourceType: 'bunny',
+        sourceId: 'video-guid-123',
+        status: 'LISTO',
+        views: 890,
+        size: '0 MB'
+    }
+];
+
+// ========== EXAMS DATA (New) ==========
+export const mockExams = [
+    {
+        id: 1,
+        title: 'Evaluación Módulo 1: Fundamentos',
+        questions: 10,
+        timeLimit: '20 min',
+        type: 'Quiz',
+    },
+    {
+        id: 2,
+        title: 'Examen Parcial: Neuroanatomía',
+        questions: 25,
+        timeLimit: '45 min',
+        type: 'Examen',
+    },
+    {
+        id: 3,
+        title: 'Autoevaluación: Farmacología',
+        questions: 15,
+        timeLimit: '30 min',
+        type: 'Quiz',
     },
 ];
 

@@ -45,7 +45,7 @@ interface CourseListViewProps {
 }
 
 const CourseListView: React.FC<CourseListViewProps> = ({ onCreate, onEdit }) => {
-    const { courses, deleteCourse, addCourse, getStats } = useAulaVirtual();
+    const { courses, deleteCourse, addCourse, getStats, getModulesByCourseId, getLessonsByModuleId, getMaterialsByCourseId } = useAulaVirtual();
     const [searchTerm, setSearchTerm] = useState('');
 
     // Transform courses for display
@@ -63,14 +63,41 @@ const CourseListView: React.FC<CourseListViewProps> = ({ onCreate, onEdit }) => 
     const handleDuplicate = (courseId: number) => {
         const originalCourse = courses.find(c => c.id === courseId);
         if (originalCourse) {
-            const newCourse = {
+            // 1. Hydrate Modules (if not already embedded)
+            let sourceModules = originalCourse.modules;
+            if (!sourceModules || sourceModules.length === 0) {
+                // If it's a legacy/mock course, modules are normalized. Fetch and nest them.
+                const normalizedModules = getModulesByCourseId(courseId);
+                sourceModules = normalizedModules.map(m => ({
+                    ...m,
+                    items: getLessonsByModuleId(m.id)
+                }));
+            }
+
+            // 2. Hydrate Materials (if not already embedded)
+            let sourceMaterials = originalCourse.materials;
+            if (!sourceMaterials || sourceMaterials.length === 0) {
+                sourceMaterials = getMaterialsByCourseId(courseId);
+            }
+
+            // Deep clone to ensure nested objects are completely independent
+            // We construct a temporary object with the hydrated data to clone
+            const fullDataObject = {
                 ...originalCourse,
+                modules: sourceModules || [],
+                materials: sourceMaterials || []
+            };
+
+            const clonedCourse = JSON.parse(JSON.stringify(fullDataObject));
+
+            const newCourse = {
+                ...clonedCourse,
                 id: Math.max(...courses.map(c => c.id)) + 1,
                 title: `${originalCourse.title} (Copia)`,
-                slug: `${originalCourse.slug}-copia`,
+                slug: `${originalCourse.slug}-copia-${Date.now()}`,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                enrolledStudents: 0,
+                // enrolledStudents: Inherit from original because accessConfig is inherited
                 rating: 0,
                 totalRatings: 0,
                 status: 'BORRADOR' as const

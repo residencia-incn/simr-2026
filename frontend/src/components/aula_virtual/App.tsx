@@ -10,6 +10,9 @@ import CourseEditorContainer from './pages/admin/CourseEditorContainer';
 import ExamManager from './pages/admin/ExamManager';
 import CertificateBuilder from './pages/admin/CertificateBuilder';
 import VideoManagerContainer from './pages/admin/VideoManagerContainer';
+import EnrollmentManager from './pages/admin/EnrollmentManager'; // New Import
+import ReadingManagement from './pages/admin/ReadingManagement'; // New Import
+import ReadingEditor from './pages/admin/ReadingEditor'; // New Import
 
 // Student Pages
 import Dashboard from './pages/student/Dashboard';
@@ -25,6 +28,11 @@ const App: React.FC = () => {
   // Default view
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.STUDENT_DASHBOARD);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  // State for reading editor navigation
+  const [selectedReadingId, setSelectedReadingId] = useState<number | null>(null);
+  // State for course navigation
+  const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+  const [selectedVideoId, setSelectedVideoId] = useState<number | null>(null);
 
   const handleViewChange = async (newView: ViewState) => {
     // Check if leaving course editor with unsaved changes
@@ -50,6 +58,21 @@ const App: React.FC = () => {
     setCurrentView(newView);
   };
 
+  const handleEditReading = (id: number | null) => {
+    setSelectedReadingId(id);
+    setCurrentView(ViewState.ADMIN_READING_EDITOR);
+  };
+
+  const handleCourseSelect = (courseId: number) => {
+    setSelectedCourseId(courseId);
+    setCurrentView(ViewState.STUDENT_COURSE_DETAIL);
+  };
+
+  const handleVideoSelect = (videoId: number) => {
+    setSelectedVideoId(videoId);
+    setCurrentView(ViewState.STUDENT_PLAYER);
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case ViewState.ADMIN_DASHBOARD:
@@ -62,14 +85,29 @@ const App: React.FC = () => {
         return <CertificateBuilder />;
       case ViewState.ADMIN_VIDEO_MANAGER:
         return <VideoManagerContainer />;
+      case ViewState.ADMIN_ENROLLMENT_MANAGER:
+        return <EnrollmentManager />;
+      case ViewState.ADMIN_READING_MANAGER:
+        return <ReadingManagement onEdit={handleEditReading} />;
+      case ViewState.ADMIN_READING_EDITOR:
+        return (
+          <ReadingEditor
+            readingId={selectedReadingId}
+            onCancel={() => setCurrentView(ViewState.ADMIN_READING_MANAGER)}
+            onSave={() => {
+              Swal.fire('Guardado', 'La lectura se ha guardado correctamente', 'success');
+              setCurrentView(ViewState.ADMIN_READING_MANAGER);
+            }}
+          />
+        );
       case ViewState.STUDENT_DASHBOARD:
         return <Dashboard />;
       case ViewState.STUDENT_COURSE_CATALOG:
-        return <CourseCatalog setView={setCurrentView} />;
+        return <CourseCatalog setView={setCurrentView} onCourseSelect={handleCourseSelect} />;
       case ViewState.STUDENT_COURSE_DETAIL:
-        return <CourseDashboard setView={setCurrentView} />;
+        return <CourseDashboard setView={setCurrentView} courseId={selectedCourseId} onVideoSelect={handleVideoSelect} />;
       case ViewState.STUDENT_PLAYER:
-        return <CoursePlayer setView={setCurrentView} />;
+        return <CoursePlayer setView={setCurrentView} courseId={selectedCourseId} initialVideoId={selectedVideoId} />;
       case ViewState.STUDENT_LIVE:
         return <LiveEvent />;
       case ViewState.STUDENT_EXAM:
@@ -85,7 +123,7 @@ const App: React.FC = () => {
 
   return (
     <AulaVirtualProvider>
-      <div className="flex h-screen bg-background-light">
+      <div className="flex h-full bg-background-light">
         <Navigation currentView={currentView} setView={handleViewChange} />
         <div className="flex-1 flex flex-col overflow-hidden">
           {renderContent()}

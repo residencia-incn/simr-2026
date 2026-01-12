@@ -45,6 +45,8 @@ export const MOCK_USERS = [
             'aula_virtual', 'contabilidad', 'asistencia', 'academico'],
         permissions: ['admin:all'], // Super admin tiene acceso total
         isSuperAdmin: true, // FLAG PARA FILTRAR
+        isSuperAdmin: true, // FLAG PARA FILTRAR
+        image: 'https://images.unsplash.com/photo-1470252649378-9c29740c9fa8?q=80&w=150&auto=format&fit=crop', // Sunset Avatar
 
         // Legacy (mantener por compatibilidad)
         profiles: ['organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos',
@@ -84,6 +86,7 @@ export const MOCK_USERS = [
         // Legacy
         profiles: ['aula_virtual', 'trabajos', 'perfil_basico'],
 
+        specialty: 'Psiquiatría',
         occupation: 'Especialista',
         institution: 'Hospital Rebagliati',
         registrationType: 'presencial',
@@ -140,7 +143,7 @@ export const MOCK_USERS = [
         profiles: ['aula_virtual', 'perfil_basico'],
         isSuperAdmin: false,
 
-
+        specialty: 'Neurología',
         occupation: 'Especialista',
         institution: 'Mayo Clinic',
         modality: 'Presencial',
@@ -656,31 +659,7 @@ export const MOCK_USERS = [
         registrationType: 'presencial',
         status: 'Confirmado'
     },
-    {
-        id: 'user-lupo',
-        email: 'lupo@gmail.com',
-        password: '123456',
-        name: 'Dr. Lupo',
-        firstName: 'Lupo',
-        lastName: 'Usuario',
-        dni: '10101010',
-        eventRoles: ['organizador'],
-        organizerFunction: 'admin',
-        hasPaid: true,
-        modality: 'presencial',
-        modules: ['mi_perfil', 'organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos', 'aula_virtual', 'contabilidad', 'asistencia', 'academico'],
-        permissions: ['admin:all'],
-        isSuperAdmin: true,
 
-        // Legacy
-        profiles: ['organizacion', 'secretaria', 'investigacion', 'jurado', 'trabajos', 'aula_virtual', 'contabilidad', 'asistencia', 'academico', 'perfil_basico'],
-
-        occupation: 'Organizador',
-        institution: 'SIMR 2026',
-        registrationType: 'presencial',
-        status: 'Confirmado',
-        image: null
-    },
     {
         id: 'user-trujillo',
         email: 'trujillo@gmail.com',

@@ -1,30 +1,80 @@
 import React from 'react';
 import Button from '../../../ui/Button'; // Adjusted path
+import { useAuth } from '../../../../context/AuthContext';
 import { Calendar, Search, ChevronLeft, ChevronRight, Video, MoreHorizontal, Bell, Clock, HelpCircle, PlusCircle } from 'lucide-react';
 
 const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+
+  // Date State
+  const [currentDate, setCurrentDate] = React.useState(new Date());
+
+  // Dynamic Current Date String for Header
+  const dateString = new Intl.DateTimeFormat('es-ES', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }).format(new Date());
+
+  // Calendar Logic
+  const daysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
+  const firstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
+
+  const handlePrevMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
+  };
+
+  const handleNextMonth = () => {
+    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
+  };
+
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth();
+  const currentDay = new Date().getDate(); // For highlighting today
+  const isCurrentMonthDisplay = new Date().getMonth() === currentMonth && new Date().getFullYear() === currentYear;
+
+  const totalDays = daysInMonth(currentYear, currentMonth);
+  const startDay = firstDayOfMonth(currentYear, currentMonth);
+
+  const monthName = new Intl.DateTimeFormat('es-ES', { month: 'long', year: 'numeric' }).format(currentDate);
+
+  // Calendar Grid Generation
+  const calendarDays = [];
+  // Empty slots for days before start of month
+  for (let i = 0; i < startDay; i++) {
+    calendarDays.push(<div key={`empty-${i}`} className="h-10 w-10"></div>);
+  }
+  // Days of month
+  for (let d = 1; d <= totalDays; d++) {
+    const isToday = isCurrentMonthDisplay && d === currentDay;
+    // Mock events logic - In a real scenario, this would check against a list of events
+    // Highlighting random days for demonstration as requested "resaltar los dias de nuestros cursos"
+    const hasEvent = [5, 12, 20, 25].includes(d);
+    const hasExam = [15, 28].includes(d);
+
+    calendarDays.push(
+      <div key={d} className={`h-10 w-10 rounded-full flex flex-col items-center justify-center text-sm cursor-pointer relative transition-colors ${isToday ? 'font-bold bg-primary text-white shadow-lg shadow-primary/50 z-10' : 'text-slate-700 hover:bg-slate-100'}`}>
+        {d}
+        {hasEvent && !isToday && <span className="absolute bottom-1.5 w-1 h-1 bg-primary rounded-full"></span>}
+        {hasExam && !isToday && <span className="absolute bottom-1.5 w-1 h-1 bg-red-500 rounded-full"></span>}
+      </div>
+    );
+  }
+
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden relative">
       {/* Header */}
       <header className="w-full px-6 py-6 md:px-10 flex flex-col gap-6 shrink-0 z-10 bg-background-light">
         <div className="flex flex-wrap justify-between items-end gap-4">
           <div className="flex flex-col gap-1">
-            <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">Planificación Académica</p>
-            <h2 className="text-slate-900 text-3xl md:text-4xl font-black tracking-tight">Mi Agenda Personal</h2>
-            <p className="text-primary text-lg font-medium mt-1 flex items-center gap-2">
+            {/* Removed "Planificación Académica" */}
+            <h2 className="text-slate-900 text-3xl md:text-4xl font-black tracking-tight">Bienvenido {user?.name || 'Estudiante'}</h2>
+            <p className="text-primary text-lg font-medium mt-1 flex items-center gap-2 capitalize">
               <Calendar className="w-5 h-5" />
-              Martes, 24 de Octubre 2023
+              {dateString}
             </p>
           </div>
-          <Button
-            className="rounded-xl shadow-lg shadow-primary/25"
-            onClick={() => { }}
-            loading={false}
-            disabled={false}
-          >
-            <PlusCircle className="w-5 h-5" />
-            <span>Agregar Nota Personal</span>
-          </Button>
         </div>
 
         {/* Search Bar */}
@@ -62,12 +112,12 @@ const Dashboard: React.FC = () => {
             {/* Calendar Widget */}
             <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-slate-900 font-bold text-lg">Octubre 2023</h3>
+                <h3 className="text-slate-900 font-bold text-lg capitalize">{monthName}</h3>
                 <div className="flex gap-2">
-                  <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
+                  <button onClick={handlePrevMonth} className="p-1 rounded hover:bg-slate-100 text-slate-500">
                     <ChevronLeft className="w-5 h-5" />
                   </button>
-                  <button className="p-1 rounded hover:bg-slate-100 text-slate-500">
+                  <button onClick={handleNextMonth} className="p-1 rounded hover:bg-slate-100 text-slate-500">
                     <ChevronRight className="w-5 h-5" />
                   </button>
                 </div>
@@ -78,21 +128,7 @@ const Dashboard: React.FC = () => {
                 ))}
               </div>
               <div className="grid grid-cols-7 gap-2">
-                {[28, 29, 30].map(d => (
-                  <div key={`prev-${d}`} className="h-10 w-10 flex items-center justify-center text-sm text-slate-300">{d}</div>
-                ))}
-                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31].map(d => {
-                  const isToday = d === 24;
-                  const hasEvent = [5, 25, 28].includes(d);
-                  const hasExam = [10].includes(d);
-                  return (
-                    <div key={d} className={`h-10 w-10 rounded-full flex flex-col items-center justify-center text-sm cursor-pointer relative ${isToday ? 'font-bold bg-primary text-white shadow-lg shadow-primary/50 z-10' : 'text-slate-700 hover:bg-slate-100'}`}>
-                      {d}
-                      {hasEvent && !isToday && <span className="absolute bottom-1.5 w-1 h-1 bg-primary rounded-full"></span>}
-                      {hasExam && !isToday && <span className="absolute bottom-1.5 w-1 h-1 bg-red-500 rounded-full"></span>}
-                    </div>
-                  );
-                })}
+                {calendarDays}
               </div>
               <div className="mt-4 pt-4 border-t border-slate-100 flex gap-4 text-xs">
                 <div className="flex items-center gap-2">
