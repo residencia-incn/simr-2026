@@ -1,19 +1,22 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
-import { mockCourses, mockModules, mockLessons, mockEnrollments, mockCourseMaterials, mockInstructors, mockVideos } from '../../../data/mockAulaVirtualData';
-import { MOCK_USERS } from '../../../data/mockUsers';
-import { Course, Module, Lesson, Enrollment, CourseMaterial, Instructor, User, Video, PlayerConfig, UserLessonProgress, VideoNote } from '../types';
+// Mock data imports removed for SQL migration
+const mockCourses: any[] = [];
+const mockModules: any[] = [];
+const mockLessons: any[] = [];
+const mockEnrollments: any[] = [];
+const mockCourseMaterials: any[] = [];
+const mockInstructors: any[] = [];
+const mockVideos: any[] = [];
+const mockExams: any[] = [];
+const MOCK_USERS: any[] = [];
+import { Course, Module, Lesson, Enrollment, CourseMaterial, Instructor, User, Video, PlayerConfig, UserLessonProgress, VideoNote, Exam, StudentExamAttempt } from '../types';
+
 
 // ========== TYPES ========== (Imported from types.ts, re-exporting if needed or just using them)
 
-const MOCK_CURRENT_USER: User = {
-    id: 'USR002',
-    name: 'Dr. Juan Perez',
-    email: 'juan.perez@example.com',
-    avatar: 'https://ui-avatars.com/api/?name=Juan+Perez&background=0D8ABC&color=fff',
-    role: 'student',
-    modality: 'Presencial',
-    purchasedItems: ['w_1767220000001'] // Taller de Neuroimagen Avanzada (Matches api.js)
-};
+const USER_STORAGE_KEY = 'simr_user'; // Key used by main App
+
+const FALLBACK_USER: User | null = null;
 
 const DEFAULT_PLAYER_CONFIG: PlayerConfig = {
     defaultPlayer: 'plyr',
@@ -42,6 +45,11 @@ interface AulaVirtualContextType {
     courseCategories: string[];
     userProgress: UserLessonProgress[];
     userNotes: VideoNote[]; // Added notes state
+    exams: Exam[];
+    questionTags: string[];
+    examAttempts: StudentExamAttempt[]; // State for exam attempts
+
+    // Course Actions
 
     // Course Actions
     addCourse: (course: Course) => void;
@@ -76,6 +84,8 @@ interface AulaVirtualContextType {
     updateLessonProgress: (lessonId: number, data: { playedSeconds: number; totalSeconds: number }, completed?: boolean, videoId?: number) => void;
     getLessonProgress: (lessonId: number) => UserLessonProgress | undefined;
     getVideoProgress: (videoId: number) => UserLessonProgress | undefined;
+    markLessonsAsUnlocked: (lessonIds: number[]) => void;
+    markLessonsAsLocked: (lessonIds: number[]) => void;
 
     // Stats
     getStats: () => {
@@ -88,13 +98,24 @@ interface AulaVirtualContextType {
     // Notes Actions
     saveUserNote: (note: Partial<VideoNote>) => void;
     deleteUserNote: (noteId: string) => void;
-    getUserNotes: (lessonId: number) => VideoNote[];
+    getUserNotes: (userId: string, courseId?: string | number) => VideoNote[];
+
+    // Exam Actions
+    addExam: (exam: Exam) => void;
+    updateExam: (id: string | number, updates: Partial<Exam>) => void;
+    deleteExam: (id: string | number) => void;
+    getExamById: (id: string | number) => Exam | undefined;
+    updateQuestionTags: (tags: string[]) => void;
+
+    // Student Exam Actions
+    saveExamAttempt: (attempt: StudentExamAttempt) => void;
+    getExamAttempts: (userId: string, examId: string | number) => StudentExamAttempt[];
 }
 
 const AulaVirtualContext = createContext<AulaVirtualContextType | undefined>(undefined);
 
 // ========== CONSTANTS ==========
-const STORAGE_KEY = 'aula_virtual_data_v2';
+const STORAGE_KEY = 'aula_virtual_data_v7';
 
 // ========== PROVIDER ==========
 interface AulaVirtualProviderProps {
@@ -105,12 +126,32 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
     // Initialize state from localStorage or use mock data
     const [courses, setCourses] = useState<Course[]>(() => {
         const stored = localStorage.getItem(`${STORAGE_KEY}_courses`);
-        return stored ? JSON.parse(stored) : mockCourses;
+        const initialData = stored ? JSON.parse(stored) : mockCourses;
+        // V3 Migration: Standardize IDs
+        return initialData.map((c: any) => ({
+            ...c,
+            id: String(c.id).startsWith('Cu_') ? c.id : `Cu_${c.id}`
+        }));
     });
 
     const [videos, setVideos] = useState<Video[]>(() => {
         const stored = localStorage.getItem(`${STORAGE_KEY}_videos`);
-        return stored ? JSON.parse(stored) : mockVideos;
+        const initialData = stored ? JSON.parse(stored) : mockVideos;
+        // V3 Migration: Update reference courseIds
+        return initialData.map((v: any) => ({
+            ...v,
+            courseId: String(v.courseId).startsWith('Cu_') ? v.courseId : `Cu_${v.courseId}`
+        }));
+    });
+
+    const [exams, setExams] = useState<Exam[]>(() => {
+        const stored = localStorage.getItem(`${STORAGE_KEY}_exams`);
+        const initialData = stored ? JSON.parse(stored) : (mockExams as unknown as Exam[]);
+        // V3 Migration: Update reference courseIds
+        return initialData.map((e: any) => ({
+            ...e,
+            courseId: String(e.courseId).startsWith('Cu_') ? e.courseId : `Cu_${e.courseId}`
+        }));
     });
 
     const [playerConfig, setPlayerConfig] = useState<PlayerConfig>(() => {
@@ -124,11 +165,33 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
     const [materials] = useState<CourseMaterial[]>(mockCourseMaterials);
     const [instructors] = useState<Instructor[]>(mockInstructors);
 
-    const [currentUser] = useState<User>(MOCK_CURRENT_USER);
+    // User State - Sync with Main App Storage
+    const [currentUser] = useState<User>(() => {
+        try {
+            const storedUser = localStorage.getItem(USER_STORAGE_KEY);
+            if (storedUser) {
+                const userData = JSON.parse(storedUser);
+                // Attempt to start fresh from MOCK_USERS to ensure purchasedItems are up to date
+                // matching the ID from storage.
+                const freshUser = MOCK_USERS.find((u: any) => u.id === userData.id);
+                if (freshUser) {
+                    return freshUser as unknown as User;
+                }
+                return userData as User;
+            }
+        } catch (e) {
+            console.warn('Error loading user from storage', e);
+        }
+        return null as unknown as User;
+    });
     // Cast MOCK_USERS to User[] to avoid strict type conflicts if any, though interfaces should match
     const [users] = useState<User[]>(MOCK_USERS as unknown as User[]);
     const [specialties] = useState<string[]>(['Neurología', 'Neuropediatría', 'Neurocirugía', 'Medicina Interna', 'Psiquiatría', 'Epilepsia', 'Vascular', 'Farmacia', 'Investigación']);
     const [courseCategories] = useState<string[]>(['Curso', 'Taller', 'Congreso', 'Diplomado', 'Seminario', 'Webinar']);
+    const [questionTags, setQuestionTags] = useState<string[]>(() => {
+        const stored = localStorage.getItem(`${STORAGE_KEY}_question_tags`);
+        return stored ? JSON.parse(stored) : ['General', 'Neurología', 'Examen Admisión', 'Residantado', 'Casos Clínicos'];
+    });
 
 
     // Persist courses to localStorage whenever they change
@@ -141,10 +204,19 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         localStorage.setItem(`${STORAGE_KEY}_videos`, JSON.stringify(videos));
     }, [videos]);
 
+    // Persist exams
+    useEffect(() => {
+        localStorage.setItem(`${STORAGE_KEY}_exams`, JSON.stringify(exams));
+    }, [exams]);
+
     // Persist player config to localStorage
     useEffect(() => {
         localStorage.setItem(`${STORAGE_KEY}_player_config`, JSON.stringify(playerConfig));
     }, [playerConfig]);
+
+    useEffect(() => {
+        localStorage.setItem(`${STORAGE_KEY}_question_tags`, JSON.stringify(questionTags));
+    }, [questionTags]);
 
     // ========== COURSE ACTIONS ==========
     const addCourse = (course: Course) => {
@@ -186,7 +258,33 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         setVideos(prev => prev.filter(video => video.id !== id));
     };
 
+    // ========== EXAM ACTIONS ==========
+    const addExam = (exam: Exam) => {
+        setExams(prev => [exam, ...prev]);
+    };
+
+    const updateExam = (id: string | number, updates: Partial<Exam>) => {
+        setExams(prev =>
+            prev.map(exam =>
+                exam.id === id ? { ...exam, ...updates, updatedAt: new Date().toISOString() } : exam
+            )
+        );
+    };
+
+    const deleteExam = (id: string | number) => {
+        setExams(prev => prev.filter(exam => exam.id !== id));
+    };
+
+    const getExamById = useCallback((id: string | number) => {
+        return exams.find(exam => exam.id === id);
+    }, [exams]);
+
+    const updateQuestionTags = (tags: string[]) => {
+        setQuestionTags(tags);
+    };
+
     // ========== PLAYER ACTIONS ==========
+
     const updatePlayerConfig = (config: PlayerConfig) => {
         setPlayerConfig(config);
     };
@@ -198,9 +296,15 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         if (course && course.modules && course.modules.length > 0) {
             return course.modules as Module[];
         }
-        // 2. Fallback to global flat list (Legacy / Mock)
-        return modules.filter(module => module.courseId === courseId);
-    }, [courses, modules]);
+        // 2. Fallback to global flat list (Legacy / Mock) -> HYDRATE WITH LESSONS
+        return modules
+            .filter(module => module.courseId === courseId)
+            .map(m => ({
+                ...m,
+                // Hydrate 'items' or 'lessons' for the editor to recognize content
+                items: lessons.filter(l => l.moduleId === m.id)
+            }));
+    }, [courses, modules, lessons]);
 
     // ========== LESSON ACTIONS ==========
     const getLessonsByModuleId = useCallback((moduleId: number) => {
@@ -258,17 +362,17 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         setUserProgress(prev => {
             const existingIndex = prev.findIndex(p => p.lessonId === lessonId && p.userId === currentUser.id);
             const now = new Date().toISOString();
-            let newProgress;
+            let newProgress = [...prev];
+            let currentRecord;
 
+            // 1. Update/Create CURRENT Lesson Record
             if (existingIndex >= 0) {
-                // Update existing
-                const currentRecord = prev[existingIndex];
+                currentRecord = newProgress[existingIndex];
                 const isCompleted = currentRecord.completed || completed;
 
-                newProgress = [...prev];
                 newProgress[existingIndex] = {
                     ...currentRecord,
-                    videoId: videoId || currentRecord.videoId, // Update videoId if provided
+                    videoId: videoId || currentRecord.videoId,
                     data: {
                         ...currentRecord.data,
                         ...data,
@@ -278,24 +382,78 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
                     updatedAt: now
                 };
             } else {
-                // Create new
-                newProgress = [...prev, {
+                currentRecord = {
                     userId: currentUser.id,
                     lessonId,
-                    videoId, // Store videoId
-                    data: {
-                        ...data,
-                        lastPosition: data.playedSeconds
-                    },
+                    videoId,
+                    data: { ...data, lastPosition: data.playedSeconds },
                     completed,
-                    updatedAt: now
-                }];
+                    updatedAt: now,
+                    isUnlocked: true // Implicitly unlocked if we are updating it? Or rely on default?
+                };
+                newProgress.push(currentRecord as any);
             }
-            // Sync Save to LocalStorage (Critical for Close/Unload reliability)
+
+            // 2. LOGIC FOR UNLOCKING NEXT LESSON (Persistent "0"/"1" State)
+            if (completed || (currentRecord && currentRecord.completed)) {
+                // Find where we are in the course structure
+                // Iterate all courses -> modules -> lessons to find current lesson ID
+                // Note: This is an expensive operation inside a setter, but necessary for "Live DB" simulation without backend
+                let foundCurrent = false;
+                let nextLessonId: number | null = null;
+
+                // Flatten traversal to find next ID
+                // Using 'courses' from closure (careful with stale closures, but 'courses' usually static-ish)
+                // Better to use a functional approach if possible, but for this context:
+                for (const course of courses) {
+                    if (foundCurrent && nextLessonId) break;
+
+                    const modules = course.modules || []; // Assuming nested structure V2
+                    for (const module of modules) {
+                        if (foundCurrent && nextLessonId) break;
+
+                        const lessons = module.items || module.lessons || [];
+                        for (const lesson of lessons) {
+                            if (foundCurrent) {
+                                nextLessonId = lesson.id;
+                                break;
+                            }
+                            if (lesson.id === lessonId) {
+                                foundCurrent = true;
+                            }
+                        }
+                    }
+                }
+
+                if (nextLessonId) {
+                    // Unlock the next lesson
+                    const nextIndex = newProgress.findIndex(p => p.lessonId === nextLessonId && p.userId === currentUser.id);
+                    if (nextIndex >= 0) {
+                        // Update existing next lesson record to unlock it
+                        newProgress[nextIndex] = {
+                            ...newProgress[nextIndex],
+                            isUnlocked: true,
+                            updatedAt: now
+                        };
+                    } else {
+                        // Create new record for next lesson as Unlocked "1"
+                        newProgress.push({
+                            userId: currentUser.id,
+                            lessonId: nextLessonId!,
+                            data: { playedSeconds: 0, totalSeconds: 0, lastPosition: 0 },
+                            completed: false,
+                            isUnlocked: true,
+                            updatedAt: now
+                        } as any);
+                    }
+                }
+            }
+
+            // Sync Save to LocalStorage
             localStorage.setItem(`${STORAGE_KEY}_progress`, JSON.stringify(newProgress));
             return newProgress;
         });
-    }, [currentUser.id]);
+    }, [currentUser.id, courses]); // Added courses dependency
 
     const getLessonProgress = (lessonId: number) => {
         return userProgress.find(p => p.lessonId === lessonId && p.userId === currentUser.id);
@@ -310,16 +468,178 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         return records.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
     };
 
+    const markLessonsAsUnlocked = useCallback((lessonIds: number[]) => {
+        if (lessonIds.length === 0) return;
+
+        setUserProgress(prev => {
+            const now = new Date().toISOString();
+            const newProgress = [...prev];
+            let changed = false;
+
+            lessonIds.forEach(id => {
+                const index = newProgress.findIndex(p => p.lessonId === id && p.userId === currentUser.id);
+                if (index >= 0) {
+                    // Update existing only if currently locked or undefined
+                    if (!newProgress[index].isUnlocked) {
+                        newProgress[index] = { ...newProgress[index], isUnlocked: true, updatedAt: now };
+                        changed = true;
+                    }
+                } else {
+                    // Create new record as unlocked
+                    newProgress.push({
+                        userId: currentUser.id,
+                        lessonId: id,
+                        data: { playedSeconds: 0, totalSeconds: 0 },
+                        completed: false,
+                        isUnlocked: true,
+                        updatedAt: now
+                    } as any);
+                    changed = true;
+                }
+            });
+
+            if (changed) {
+                localStorage.setItem(`${STORAGE_KEY}_progress`, JSON.stringify(newProgress));
+                return newProgress;
+            }
+            return prev;
+        });
+    }, [currentUser.id]);
+
+    const markLessonsAsLocked = useCallback((lessonIds: number[]) => {
+        if (lessonIds.length === 0) return;
+
+        setUserProgress(prev => {
+            const now = new Date().toISOString();
+            const newProgress = [...prev];
+            let changed = false;
+
+            lessonIds.forEach(id => {
+                const index = newProgress.findIndex(p => p.lessonId === id && p.userId === currentUser.id);
+                if (index >= 0) {
+                    // Update existing only if currently unlocked
+                    if (newProgress[index].isUnlocked) {
+                        newProgress[index] = { ...newProgress[index], isUnlocked: false, updatedAt: now };
+                        changed = true;
+                    }
+                }
+                // If it doesn't exist, it's implicitly locked, so no need to create a record just to say it's locked
+            });
+
+            if (changed) {
+                localStorage.setItem(`${STORAGE_KEY}_progress`, JSON.stringify(newProgress));
+                return newProgress;
+            }
+            return prev;
+        });
+    }, [currentUser.id]);
+
+    // ========== EXAM ATTEMPTS STATE ==========
+    const [examAttempts, setExamAttempts] = useState<StudentExamAttempt[]>(() => {
+        const stored = localStorage.getItem(`${STORAGE_KEY}_exam_attempts`);
+        return stored ? JSON.parse(stored) : [];
+    });
+
+    // Persist exam attempts
+    useEffect(() => {
+        localStorage.setItem(`${STORAGE_KEY}_exam_attempts`, JSON.stringify(examAttempts));
+    }, [examAttempts]);
+
+    const saveExamAttempt = useCallback((attempt: StudentExamAttempt) => {
+        setExamAttempts(prev => {
+            const index = prev.findIndex(a => a.id === attempt.id);
+            if (index >= 0) {
+                const newAttempts = [...prev];
+                newAttempts[index] = attempt;
+                return newAttempts;
+            }
+            return [...prev, attempt];
+        });
+    }, []);
+
+    const getExamAttempts = useCallback((userId: string, examId: string | number) => {
+        return examAttempts.filter(a => a.userId === userId && a.examId === examId);
+    }, [examAttempts]);
+
+    // ========== SYNC FINAL EXAM STATUS LOGIC (DATABASE LEVEL) ==========
+    // Effectively updates 'userProgress.isUnlocked' for Final Exams based on Rules
+    useEffect(() => {
+        if (!courses || courses.length === 0) return;
+
+        let hasChanges = false;
+        const now = new Date();
+        const newProgress = JSON.parse(JSON.stringify(userProgress));
+
+        courses.forEach(course => {
+            if (course.finalExamId) {
+                // 1. Find the Lesson associated with this Final Exam (Robust Search)
+                const found = lessons.find((l: any) => l.content && l.content.toString() === course.finalExamId?.toString());
+                const finalExamLessonId = found ? found.id : null;
+
+                if (finalExamLessonId) {
+                    const progressIndex = newProgress.findIndex((p: any) => p.lessonId === finalExamLessonId && p.userId === currentUser.id);
+                    let currentStatus = progressIndex >= 0 ? !!newProgress[progressIndex].isUnlocked : false;
+
+                    // 2. CHECK CONDITION
+                    let shouldBeUnlocked = false;
+                    const condition = course.finalExamCondition || (course.finalExamDate ? 'date' : 'content');
+
+                    if (condition === 'date') {
+                        if (course.finalExamDate) {
+                            const openDate = new Date(course.finalExamDate);
+                            if (!isNaN(openDate.getTime()) && now >= openDate) {
+                                shouldBeUnlocked = true;
+                            }
+                        }
+                    }
+                    else if (condition === 'content') {
+                        const courseModules = course.modules || [];
+                        const allLessons = courseModules.flatMap(m => m.items || m.lessons || []);
+                        const totalRequired = allLessons.filter(l => l.isRequired && l.id !== finalExamLessonId).length;
+
+                        const completedRequired = allLessons.filter(l => {
+                            if (!l.isRequired || l.id === finalExamLessonId) return false;
+                            const p = newProgress.find((up: any) => up.lessonId === l.id && up.userId === currentUser.id);
+                            return p?.completed;
+                        }).length;
+
+                        if (completedRequired >= totalRequired && totalRequired > 0) {
+                            shouldBeUnlocked = true;
+                        }
+                    }
+
+                    // 3. UPDATE DB IF CHANGED
+                    if (shouldBeUnlocked !== currentStatus) {
+                        if (progressIndex >= 0) {
+                            newProgress[progressIndex].isUnlocked = shouldBeUnlocked;
+                            newProgress[progressIndex].updatedAt = now.toISOString();
+                        } else {
+                            newProgress.push({
+                                userId: currentUser.id,
+                                lessonId: finalExamLessonId,
+                                data: { playedSeconds: 0, totalSeconds: 0 },
+                                completed: false,
+                                isUnlocked: shouldBeUnlocked,
+                                updatedAt: now.toISOString()
+                            });
+                        }
+                        hasChanges = true;
+                    }
+                }
+            }
+        });
+
+        if (hasChanges) {
+            setUserProgress(newProgress);
+        }
+
+    }, [courses, currentUser.id, userProgress, lessons]);
+
     // ========== NOTES STATE ==========
     const [userNotes, setUserNotes] = useState<VideoNote[]>(() => {
         const stored = localStorage.getItem(`${STORAGE_KEY}_notes`);
         return stored ? JSON.parse(stored) : [];
     });
-
-    // Persist notes (Effect) - Kept as backup
-    useEffect(() => {
-        localStorage.setItem(`${STORAGE_KEY}_notes`, JSON.stringify(userNotes));
-    }, [userNotes]);
 
     // ========== NOTES ACTIONS ==========
     const saveUserNote = useCallback((note: Partial<VideoNote>) => {
@@ -358,12 +678,16 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
     }, [currentUser.id]);
 
     const deleteUserNote = useCallback((noteId: string) => {
-        setUserNotes(prev => prev.filter(n => n.id !== noteId));
+        setUserNotes(prev => {
+            const newNotes = prev.filter(n => n.id !== noteId);
+            localStorage.setItem(`${STORAGE_KEY}_notes`, JSON.stringify(newNotes));
+            return newNotes;
+        });
     }, []);
 
-    const getUserNotes = (lessonId: number) => {
-        return userNotes.filter(n => n.lessonId === lessonId && n.userId === currentUser.id).sort((a, b) => a.timestamp - b.timestamp);
-    };
+    const getUserNotes = useCallback((userId: string, courseId?: number | string | undefined) => {
+        return userNotes.filter(n => n.userId === userId && (!courseId || n.courseId === courseId));
+    }, [userNotes]);
 
     const value: AulaVirtualContextType = {
         // State
@@ -401,13 +725,29 @@ export const AulaVirtualProvider: React.FC<AulaVirtualProviderProps> = ({ childr
         updateLessonProgress,
         getLessonProgress,
         getVideoProgress,
+        markLessonsAsUnlocked,
+        markLessonsAsLocked,
 
         getStats,
 
         // Notes Actions
         saveUserNote,
         deleteUserNote,
-        getUserNotes
+        getUserNotes,
+
+        // Exam Actions
+        exams,
+        addExam,
+        updateExam,
+        deleteExam,
+        getExamById,
+        questionTags,
+        updateQuestionTags,
+
+        // Student Exam Actions
+        examAttempts,
+        saveExamAttempt,
+        getExamAttempts
     };
 
     return (

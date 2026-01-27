@@ -108,6 +108,8 @@ export const showConfirm = async (
     return result.isConfirmed;
 };
 
+export const confirm = showConfirm;
+
 /**
  * Show a delete confirmation dialog (red theme)
  * @param {string} message - The confirmation message
@@ -159,6 +161,33 @@ export const closeAlert = () => {
  * @param {string} message - The message to display
  * @param {string} type - Type: 'success', 'error', 'warning', 'info'
  */
+/**
+ * Show an input dialog (replaces native prompt)
+ * @param {string} message - The message/label for the input
+ * @param {string} title - Optional title
+ * @param {object} options - Additional options (placeholder, inputType, etc.)
+ * @returns {Promise<string|null>} - The input value or null if cancelled
+ */
+export const showInput = async (
+    message,
+    title = 'Entrada de datos',
+    options = {}
+) => {
+    const result = await Swal.fire({
+        title,
+        text: message,
+        input: options.inputType || 'text',
+        inputPlaceholder: options.placeholder || '',
+        showCancelButton: true,
+        confirmButtonText: options.confirmText || 'Aceptar',
+        cancelButtonText: 'Cancelar',
+        ...defaultConfig,
+        ...options
+    });
+
+    return result.isConfirmed ? result.value : null;
+};
+
 export const showToast = (message, type = 'success') => {
     const Toast = Swal.mixin({
         toast: true,
@@ -185,6 +214,7 @@ export default {
     info: showInfo,
     confirm: showConfirm,
     deleteConfirm: showDeleteConfirm,
+    input: showInput,
     loading: showLoading,
     close: closeAlert,
     toast: showToast,

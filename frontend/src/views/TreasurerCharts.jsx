@@ -1,89 +1,226 @@
 import React from 'react';
 import { Card } from '../components/ui';
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+    PieChart, Pie, Cell, LineChart, Line, AreaChart, Area
+} from 'recharts';
+import { Users, DollarSign, AlertCircle, Bookmark } from 'lucide-react';
 
-const TreasurerCharts = ({ transactions, categories }) => {
+const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899'];
+const CONTRIB_COLORS = ['#10b981', '#fcd34d']; // Paid, Pending
+const PENALTY_COLORS = ['#fbbf24', '#f87171', '#94a3b8']; // Tardanza, Falta, Otros
 
-    // 1. Calculate Income vs Expense
-    const income = transactions.filter(t => t.type === 'income').reduce((sum, t) => sum + t.amount, 0);
-    const expense = transactions.filter(t => t.type === 'expense').reduce((sum, t) => sum + t.amount, 0);
-    const maxVal = Math.max(income, expense, 1); // Avoid div by 0
+const TreasurerCharts = ({ transactions, categories, stats }) => {
+    if (!stats) return <div className="text-center p-10 text-gray-500">Cargando estadísticas...</div>;
 
-    const incomeHeight = (income / maxVal) * 100;
-    const expenseHeight = (expense / maxVal) * 100;
+    const { summary, contributions, penalties, registrationsByModality, workshopInscriptions, expenseDistribution } = stats;
 
-    // 2. Calculate Expenses by Category
-    const expensesByCategory = {};
-    transactions
-        .filter(t => t.type === 'expense')
-        .forEach(t => {
-            expensesByCategory[t.category] = (expensesByCategory[t.category] || 0) + t.amount;
-        });
+    const summaryData = [
+        { name: 'Ingresos', value: summary.total_income },
+        { name: 'Egresos', value: summary.total_expenses }
+    ];
 
-    const expenseCategories = Object.keys(expensesByCategory).map(cat => ({
-        name: cat,
-        amount: expensesByCategory[cat],
-        percentage: (expensesByCategory[cat] / (expense || 1)) * 100
-    })).sort((a, b) => b.amount - a.amount); // Sort desc
+    const contribData = [
+        { name: 'Al Día', value: contributions.paid_count },
+        { name: 'Pendientes', value: contributions.pending_count }
+    ];
+
+    const penaltyData = [
+        { name: 'Tardanzas', value: penalties.tardanza_count },
+        { name: 'Faltas', value: penalties.falta_count },
+        { name: 'Otros', value: penalties.other_count }
+    ];
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-            {/* Chart 1: Income vs Expense Bar Chart */}
-            <Card className="p-6">
-                <h3 className="font-bold text-gray-900 mb-6">Balance General</h3>
-                <div className="flex justify-center items-end h-48 gap-8 px-8">
-                    {/* Income Bar */}
-                    <div className="flex flex-col items-center group w-20">
-                        <div className="relative w-full bg-gray-100 rounded-t-lg h-40 flex items-end">
-                            <div
-                                className="w-full bg-green-500 rounded-t-lg transition-all duration-1000 group-hover:bg-green-400"
-                                style={{ height: `${incomeHeight}%` }}
-                            ></div>
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                S/ {income.toFixed(2)}
-                            </div>
-                        </div>
-                        <span className="mt-2 text-sm font-medium text-gray-600">Ingresos</span>
+        <div className="space-y-6 animate-fadeIn">
+            {/* Top Stats Overview */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="p-4 flex items-center gap-4 border-l-4 border-l-blue-500">
+                    <div className="p-3 bg-blue-50 text-blue-500 rounded-xl">
+                        <Users size={24} />
                     </div>
-
-                    {/* Expense Bar */}
-                    <div className="flex flex-col items-center group w-20">
-                        <div className="relative w-full bg-gray-100 rounded-t-lg h-40 flex items-end">
-                            <div
-                                className="w-full bg-red-500 rounded-t-lg transition-all duration-1000 group-hover:bg-red-400"
-                                style={{ height: `${expenseHeight}%` }}
-                            ></div>
-                            <div className="absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs py-1 px-2 rounded opacity-0 group-hover:opacity-100 transition-opacity">
-                                S/ {expense.toFixed(2)}
-                            </div>
-                        </div>
-                        <span className="mt-2 text-sm font-medium text-gray-600">Egresos</span>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Inscritos Totales</p>
+                        <h4 className="text-xl font-black text-slate-800">
+                            {registrationsByModality.reduce((acc, curr) => acc + curr.value, 0)}
+                        </h4>
                     </div>
-                </div>
-            </Card>
+                </Card>
+                <Card className="p-4 flex items-center gap-4 border-l-4 border-l-emerald-500">
+                    <div className="p-3 bg-emerald-50 text-emerald-500 rounded-xl">
+                        <DollarSign size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Balance Neto</p>
+                        <h4 className="text-xl font-black text-emerald-600">S/ {summary.balance.toFixed(2)}</h4>
+                    </div>
+                </Card>
+                <Card className="p-4 flex items-center gap-4 border-l-4 border-l-amber-500">
+                    <div className="p-3 bg-amber-50 text-amber-500 rounded-xl">
+                        <AlertCircle size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Cuotas Pendientes</p>
+                        <h4 className="text-xl font-black text-amber-600">{contributions.pending_count}</h4>
+                    </div>
+                </Card>
+                <Card className="p-4 flex items-center gap-4 border-l-4 border-l-purple-500">
+                    <div className="p-3 bg-purple-50 text-purple-500 rounded-xl">
+                        <Bookmark size={24} />
+                    </div>
+                    <div>
+                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Talleres Activos</p>
+                        <h4 className="text-xl font-black text-slate-800">{workshopInscriptions.length}</h4>
+                    </div>
+                </Card>
+            </div>
 
-            {/* Chart 2: Expense Distribution */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Balance Chart */}
+                <Card className="p-6 md:col-span-1 shadow-sm border-gray-100">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-4 bg-emerald-500 rounded-full"></div>
+                        Balance General
+                    </h3>
+                    <div className="h-64 w-full" style={{ minHeight: '256px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={summaryData}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                <Tooltip
+                                    cursor={{ fill: '#f8fafc' }}
+                                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                                />
+                                <Bar dataKey="value" radius={[8, 8, 0, 0]}>
+                                    {summaryData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={index === 0 ? '#10b981' : '#f43f5e'} />
+                                    ))}
+                                </Bar>
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                {/* Contribution Status */}
+                <Card className="p-6 md:col-span-1 shadow-sm border-gray-100">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-4 bg-blue-500 rounded-full"></div>
+                        Cumplimiento de Aportes
+                    </h3>
+                    <div className="h-64 w-full" style={{ minHeight: '256px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={contribData}
+                                    cx="50%"
+                                    cy="50%"
+                                    innerRadius={60}
+                                    outerRadius={80}
+                                    paddingAngle={5}
+                                    dataKey="value"
+                                >
+                                    {contribData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={CONTRIB_COLORS[index % CONTRIB_COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                <Legend verticalAlign="bottom" height={36} />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                {/* Penalty Breakdown */}
+                <Card className="p-6 md:col-span-1 shadow-sm border-gray-100">
+                    <h3 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <div className="w-2 h-4 bg-rose-500 rounded-full"></div>
+                        Factores de Multas
+                    </h3>
+                    <div className="h-64 w-full" style={{ minHeight: '256px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                    data={penaltyData}
+                                    cx="50%"
+                                    cy="50%"
+                                    outerRadius={80}
+                                    dataKey="value"
+                                    label
+                                >
+                                    {penaltyData.map((entry, index) => (
+                                        <Cell key={`cell-${index}`} fill={PENALTY_COLORS[index % PENALTY_COLORS.length]} />
+                                    ))}
+                                </Pie>
+                                <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }} />
+                                <Legend />
+                            </PieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Registrations by Modality */}
+                <Card className="p-6">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <div className="w-2 h-4 bg-indigo-500 rounded-full"></div>
+                        Inscripciones por Modalidad
+                    </h3>
+                    <div className="h-72 w-full" style={{ minHeight: '288px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={registrationsByModality} layout="vertical">
+                                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f1f5f9" />
+                                <XAxis type="number" hide />
+                                <YAxis dataKey="name" type="category" width={120} axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 11 }} />
+                                <Tooltip cursor={{ fill: '#f1f5f9' }} />
+                                <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} barSize={20} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+
+                {/* Workshop Inscriptions */}
+                <Card className="p-6">
+                    <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                        <div className="w-2 h-4 bg-cyan-500 rounded-full"></div>
+                        Demanda de Talleres
+                    </h3>
+                    <div className="h-72 w-full" style={{ minHeight: '288px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={workshopInscriptions}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 10 }} height={60} interval={0} angle={-30} textAnchor="end" />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                <Tooltip cursor={{ fill: '#f1f5f9' }} />
+                                <Bar dataKey="value" fill="#06b6d4" radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </div>
+                </Card>
+            </div>
+
+            {/* Expense Distribution Full Width */}
             <Card className="p-6">
-                <h3 className="font-bold text-gray-900 mb-4">Distribución de Gastos</h3>
-                {expenseCategories.length > 0 ? (
-                    <div className="space-y-3">
-                        {expenseCategories.map((cat, idx) => (
-                            <div key={idx} className="group">
-                                <div className="flex justify-between text-sm mb-1">
-                                    <span className="text-gray-700 font-medium">{cat.name}</span>
-                                    <span className="text-gray-500">S/ {cat.amount.toFixed(2)} ({cat.percentage.toFixed(1)}%)</span>
-                                </div>
-                                <div className="w-full bg-gray-100 rounded-full h-2.5">
-                                    <div
-                                        className="bg-blue-600 h-2.5 rounded-full transition-all duration-1000"
-                                        style={{ width: `${cat.percentage}%` }}
-                                    ></div>
-                                </div>
-                            </div>
-                        ))}
+                <h3 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                    <div className="w-2 h-4 bg-slate-800 rounded-full"></div>
+                    Distribución de Egresos por Categoría
+                </h3>
+                {expenseDistribution.length > 0 ? (
+                    <div className="h-80 w-full" style={{ minHeight: '320px' }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={expenseDistribution}>
+                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                <YAxis axisLine={false} tickLine={false} tick={{ fill: '#64748b', fontSize: 12 }} />
+                                <Tooltip cursor={{ fill: '#f1f5f9' }} />
+                                <Bar dataKey="value" fill="#475569" radius={[4, 4, 0, 0]} label={{ position: 'top', formatter: (val) => `S/ ${val.toFixed(2)}`, fill: '#64748b', fontSize: 10 }} />
+                            </BarChart>
+                        </ResponsiveContainer>
                     </div>
                 ) : (
-                    <div className="h-48 flex items-center justify-center text-gray-400 text-sm">
-                        No hay gastos registrados
+                    <div className="h-32 flex items-center justify-center text-gray-400">
+                        No hay datos de distribución de gastos disponibles
                     </div>
                 )}
             </Card>

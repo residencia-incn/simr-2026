@@ -30,7 +30,10 @@ const VideoPreviewModal: React.FC<VideoPreviewModalProps> = ({ isOpen, onClose, 
                 </div>
                 <div className="w-full md:w-1/4 bg-white flex flex-col border-l border-gray-100">
                     <div className="p-4 border-b border-gray-100 flex justify-between items-start">
-                        <h3 className="font-bold text-gray-900 text-lg leading-tight line-clamp-2 pr-2">{video.title}</h3>
+                        <div>
+                            <h3 className="font-bold text-gray-900 text-lg leading-tight line-clamp-2 pr-2">{video.title}</h3>
+                            <span className="text-xs text-gray-400 font-mono mt-1 block">{video.id}</span>
+                        </div>
                         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full text-gray-400 hover:text-gray-600 transition-colors"><span className="material-symbols-outlined">close</span></button>
                     </div>
                     <div className="p-6 overflow-y-auto space-y-6">

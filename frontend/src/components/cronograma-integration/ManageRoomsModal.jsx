@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../ui/Button';
 import { api } from '../../services/api';
+import { showDeleteConfirm } from '../../utils/alerts';
 
 const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initialVirtualLocation }) => {
     const [activeTab, setActiveTab] = useState('physical'); // 'physical' | 'virtual'
@@ -10,6 +11,7 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
     const [isLoading, setIsLoading] = useState(true);
     const [editingRoom, setEditingRoom] = useState(null); // null | { id, name, type }
     const [newRoomName, setNewRoomName] = useState('');
+    const inputRef = React.useRef(null);
 
     useEffect(() => {
         if (isOpen) {
@@ -22,13 +24,12 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
     const loadRooms = async () => {
         setIsLoading(true);
         try {
-            const config = await api.academic.getConfig();
-            if (config && config.rooms) {
-                setRooms(config.rooms);
-            } else {
-                // Initialize if missing
-                setRooms({ physical: [], virtual: [] });
-            }
+            const locations = await api.program.getLocations();
+            const newRooms = {
+                physical: locations.filter(l => l.type !== 'virtual'), // Default to physical if type missing, or specific check
+                virtual: locations.filter(l => l.type === 'virtual')
+            };
+            setRooms(newRooms);
         } catch (error) {
             console.error("Error loading rooms:", error);
         } finally {
@@ -36,67 +37,84 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
         }
     };
 
-    const handleSaveRooms = async (updatedRooms) => {
-        try {
-            const config = await api.academic.getConfig();
-            const newConfig = { ...config, rooms: updatedRooms };
-            await api.academic.saveConfig(newConfig);
-            setRooms(updatedRooms);
-        } catch (error) {
-            console.error("Error saving rooms:", error);
-        }
-    };
-
-    const handleAddRoom = () => {
+    const handleAddRoom = async () => {
         if (!newRoomName.trim()) return;
-        const newRoom = { id: `${activeTab === 'physical' ? 'r' : 'v'}-${Date.now()}`, name: newRoomName.trim() };
-        const updatedRooms = {
-            ...rooms,
-            [activeTab]: [...rooms[activeTab], newRoom]
-        };
-        handleSaveRooms(updatedRooms);
-        setNewRoomName('');
+        try {
+            setIsLoading(true);
+            const payload = {
+                name: newRoomName.trim(),
+                type: activeTab === 'physical' ? 'fisica' : 'virtual',
+                color: '#3b82f6'
+            };
+            const newRoom = await api.program.createLocation(payload);
+
+            setRooms(prev => ({
+                ...prev,
+                [activeTab]: [...prev[activeTab], newRoom]
+            }));
+            setNewRoomName('');
+        } catch (error) {
+            console.error("Error adding room:", error);
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    const handleDeleteRoom = (roomId) => {
-        if (!window.confirm('¿Estás seguro de eliminar esta sala?')) return;
-        const updatedRooms = {
-            ...rooms,
-            [activeTab]: rooms[activeTab].filter(r => r.id !== roomId)
-        };
-        handleSaveRooms(updatedRooms);
-        // Clear selection if deleted
-        if (activeTab === 'physical' && selectedPhysical === rooms[activeTab].find(r => r.id === roomId)?.name) {
-            setSelectedPhysical('');
-        }
-        if (activeTab === 'virtual' && selectedVirtual === rooms[activeTab].find(r => r.id === roomId)?.name) {
-            setSelectedVirtual('');
+    const handleDeleteRoom = async (roomId) => {
+        const confirmed = await showDeleteConfirm('¿Estás seguro de eliminar esta sala? Esta acción no se puede deshacer.', 'Eliminar Sala');
+        if (!confirmed) return;
+
+        try {
+            // Optimistic update or wait? Wait is safer for sync
+            await api.program.deleteLocation(roomId);
+
+            setRooms(prev => ({
+                ...prev,
+                [activeTab]: prev[activeTab].filter(r => r.id !== roomId)
+            }));
+
+            // Clear selection if deleted
+            if (activeTab === 'physical' && selectedPhysical === rooms[activeTab].find(r => r.id === roomId)?.name) {
+                setSelectedPhysical('');
+            }
+            if (activeTab === 'virtual' && selectedVirtual === rooms[activeTab].find(r => r.id === roomId)?.name) {
+                setSelectedVirtual('');
+            }
+        } catch (error) {
+            console.error("Error deleting room:", error);
         }
     };
 
     const handleStartEdit = (room) => {
         setEditingRoom({ ...room, type: activeTab });
         setNewRoomName(room.name);
+        // Focus input after render
+        setTimeout(() => inputRef.current?.focus(), 50);
     };
 
-    const handleUpdateRoom = () => {
+    const handleUpdateRoom = async () => {
         if (!editingRoom || !newRoomName.trim()) return;
-        const updatedRooms = {
-            ...rooms,
-            [activeTab]: rooms[activeTab].map(r => r.id === editingRoom.id ? { ...r, name: newRoomName.trim() } : r)
-        };
+        try {
+            const updated = await api.program.updateLocation(editingRoom.id, { name: newRoomName.trim() });
 
-        // Update selection if name changed
-        if (activeTab === 'physical' && selectedPhysical === editingRoom.name) {
-            setSelectedPhysical(newRoomName.trim());
-        }
-        if (activeTab === 'virtual' && selectedVirtual === editingRoom.name) {
-            setSelectedVirtual(newRoomName.trim());
-        }
+            setRooms(prev => ({
+                ...prev,
+                [activeTab]: prev[activeTab].map(r => r.id === editingRoom.id ? updated : r)
+            }));
 
-        handleSaveRooms(updatedRooms);
-        setEditingRoom(null);
-        setNewRoomName('');
+            // Update selection if name changed
+            if (activeTab === 'physical' && selectedPhysical === editingRoom.name) {
+                setSelectedPhysical(updated.name);
+            }
+            if (activeTab === 'virtual' && selectedVirtual === editingRoom.name) {
+                setSelectedVirtual(updated.name);
+            }
+
+            setEditingRoom(null);
+            setNewRoomName('');
+        } catch (error) {
+            console.error("Error updating room:", error);
+        }
     };
 
     const handleCancelEdit = () => {
@@ -105,9 +123,13 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
     };
 
     const handleConfirm = () => {
+        // Find full objects based on selected names
+        const physicalRoom = rooms.physical.find(r => r.name === selectedPhysical);
+        const virtualRoom = rooms.virtual.find(r => r.name === selectedVirtual);
+
         onConfirm({
-            physical: selectedPhysical,
-            virtual: selectedVirtual
+            physical: physicalRoom ? { id: physicalRoom.id, name: physicalRoom.name } : null,
+            virtual: virtualRoom ? { id: virtualRoom.id, name: virtualRoom.name } : null
         });
         onClose();
     };
@@ -154,12 +176,13 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
 
                     {/* Room List & Actions */}
                     <div className="p-6 overflow-y-auto flex-1">
-                        <div className="mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <div className="mb-6 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-lg border border-slate-200 dark:border-slate-700 sticky top-0 z-20">
                             <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
-                                {editingRoom ? 'Editar Nombre' : 'Agregar Nueva Sala'}
+                                {editingRoom ? 'Editar Nombre de Sala' : 'Agregar Nueva Sala'}
                             </label>
                             <div className="flex gap-2">
                                 <input
+                                    ref={inputRef}
                                     type="text"
                                     value={newRoomName}
                                     onChange={(e) => setNewRoomName(e.target.value)}
@@ -171,7 +194,7 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
                                 />
                                 {editingRoom ? (
                                     <>
-                                        <Button onClick={handleUpdateRoom} disabled={!newRoomName.trim()} variant="solid" className="bg-green-600 hover:bg-green-700">
+                                        <Button onClick={handleUpdateRoom} disabled={!newRoomName.trim()} variant="solid" className="bg-green-600 hover:bg-green-700 text-white">
                                             Actualizar
                                         </Button>
                                         <Button onClick={handleCancelEdit} variant="outline">
@@ -199,17 +222,20 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
                                 <div className="space-y-2">
                                     {/* Option: None */}
                                     <label className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-all ${(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === ''
-                                            ? 'bg-primary-50 border-primary ring-1 ring-primary dark:bg-primary-900/20 dark:border-primary-800'
-                                            : 'bg-white border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'
+                                        ? 'bg-primary/5 border-primary ring-1 ring-primary dark:bg-primary/10 dark:border-primary-800'
+                                        : 'bg-white border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'
                                         }`}>
                                         <div className="flex items-center gap-3">
-                                            <input
-                                                type="radio"
-                                                name="roomSelection"
-                                                checked={(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === ''}
-                                                onChange={() => activeTab === 'physical' ? setSelectedPhysical('') : setSelectedVirtual('')}
-                                                className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                                            />
+                                            <div className="relative flex items-center justify-center">
+                                                <input
+                                                    type="radio"
+                                                    name="roomSelection"
+                                                    checked={(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === ''}
+                                                    onChange={() => activeTab === 'physical' ? setSelectedPhysical('') : setSelectedVirtual('')}
+                                                    className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border border-slate-300 checked:border-primary transition-all focus:outline-none dark:border-slate-600"
+                                                />
+                                                <div className="absolute w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform duration-200"></div>
+                                            </div>
                                             <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                                                 Sin asignar
                                             </span>
@@ -221,32 +247,35 @@ const ManageRoomsModal = ({ isOpen, onClose, onConfirm, initialLocation, initial
                                         <div
                                             key={room.id}
                                             className={`group flex items-center justify-between p-3 rounded-lg border transition-all ${(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === room.name
-                                                    ? 'bg-primary-50 border-primary ring-1 ring-primary z-10 dark:bg-primary-900/20 dark:border-primary-800'
-                                                    : 'bg-white border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'
+                                                ? 'bg-primary/5 border-primary ring-1 ring-primary dark:bg-primary/10 dark:border-primary-800'
+                                                : 'bg-white border-slate-200 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:hover:bg-slate-700'
                                                 }`}
                                         >
                                             <label className="flex flex-1 items-center gap-3 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    name="roomSelection"
-                                                    checked={(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === room.name}
-                                                    onChange={() => activeTab === 'physical' ? setSelectedPhysical(room.name) : setSelectedVirtual(room.name)}
-                                                    className="h-4 w-4 text-primary border-slate-300 focus:ring-primary"
-                                                />
+                                                <div className="relative flex items-center justify-center">
+                                                    <input
+                                                        type="radio"
+                                                        name="roomSelection"
+                                                        checked={(activeTab === 'physical' ? selectedPhysical : selectedVirtual) === room.name}
+                                                        onChange={() => activeTab === 'physical' ? setSelectedPhysical(room.name) : setSelectedVirtual(room.name)}
+                                                        className="peer h-5 w-5 cursor-pointer appearance-none rounded-full border border-slate-300 checked:border-primary transition-all focus:outline-none dark:border-slate-600"
+                                                    />
+                                                    <div className="absolute w-2.5 h-2.5 rounded-full bg-primary transform scale-0 peer-checked:scale-100 transition-transform duration-200"></div>
+                                                </div>
                                                 <span className="text-sm font-medium text-slate-900 dark:text-white">
                                                     {room.name}
                                                 </span>
                                             </label>
-                                            <div className="flex items-center gap-1 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <div className="flex items-center gap-1">
                                                 <button
-                                                    onClick={() => handleStartEdit(room)}
+                                                    onClick={(e) => { e.stopPropagation(); handleStartEdit(room); }}
                                                     className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                                                     title="Editar"
                                                 >
                                                     <span className="material-symbols-outlined text-[18px]">edit</span>
                                                 </button>
                                                 <button
-                                                    onClick={() => handleDeleteRoom(room.id)}
+                                                    onClick={(e) => { e.stopPropagation(); handleDeleteRoom(room.id); }}
                                                     className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                                     title="Eliminar"
                                                 >

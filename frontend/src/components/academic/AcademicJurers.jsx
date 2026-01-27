@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, UserPlus, User, Mail, Shield, CheckCircle, XCircle, FileText, ChevronRight, Plus } from 'lucide-react';
 import { api } from '../../services/api';
+import { showDeleteConfirm } from '../../utils/alerts';
 import { useModal } from '../../hooks';
 import Card from '../ui/Card';
 import Button from '../ui/Button';
@@ -61,8 +62,9 @@ const AcademicJurers = ({ works, onUpdate }) => {
         ));
     };
 
-    const handleRemoveJuror = (id) => {
-        if (confirm("¿Está seguro de quitar a este usuario de la lista de jurados?")) {
+    const handleRemoveJuror = async (id) => {
+        const confirmed = await showDeleteConfirm("¿Está seguro de quitar a este usuario de la lista de jurados?", "Quitar Jurado");
+        if (confirmed) {
             setJurors(prev => prev.filter(j => j.id !== id));
             if (selectedJurorId === id) setSelectedJurorId(null);
         }
@@ -111,7 +113,7 @@ const AcademicJurers = ({ works, onUpdate }) => {
                             <div className="flex items-start justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${juror.active ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                                        {juror.name.charAt(4)}
+                                        {juror.name.charAt(0)}
                                     </div>
                                     <div>
                                         <h4 className={`font-bold text-sm ${juror.active ? 'text-gray-900' : 'text-gray-500'}`}>{juror.name}</h4>
@@ -132,7 +134,7 @@ const AcademicJurers = ({ works, onUpdate }) => {
                         <div className="flex justify-between items-start mb-6 pb-6 border-b border-gray-200">
                             <div className="flex items-center gap-4">
                                 <div className="w-16 h-16 rounded-full bg-white border border-gray-200 flex items-center justify-center text-2xl font-bold text-blue-600 shadow-sm">
-                                    {selectedJuror.name.charAt(4)}
+                                    {selectedJuror.name.charAt(0)}
                                 </div>
                                 <div>
                                     <h2 className="text-xl font-bold text-gray-900">{selectedJuror.name}</h2>

@@ -25,13 +25,14 @@ import AttendanceManager from './AttendanceManager';
 import AcademicDashboard from './AcademicDashboard'; // Import AcademicDashboard
 // import VirtualClassroomManager from '../components/admin/VirtualClassroomManager';
 import { api } from '../services/api';
+import { storage } from '../services/storage';
 import { showSuccess, showError } from '../utils/alerts';
 
 const AdminDashboard = ({ user }) => {
     const [activeTab, setActiveTab] = useState('overview');
     const [confirmConfig, setConfirmConfig] = useState({ isOpen: false, title: '', message: '', onConfirm: null, type: 'danger' });
     const [admissionTab, setAdmissionTab] = useState('list'); // 'list' or 'verification'
-    const isSuperAdmin = user?.profiles?.includes('organizacion') || user?.profiles?.includes('admin') || user?.role === 'superadmin';
+    const isSuperAdmin = user?.isSuperAdmin || user?.role === 'superadmin' || user?.modules?.includes('organizacion') || user?.profiles?.includes('admin');
 
     // State - Data
     const [registrations, setRegistrations] = useState([]);
@@ -41,38 +42,52 @@ const AdminDashboard = ({ user }) => {
     const [loading, setLoading] = useState(true);
 
     // Initial Data Load
-    const loadData = async () => {
-        setLoading(true);
-        // Load each section independently so one failure doesn't break the whole dashboard
+    const loadData = async (isInitial = false) => {
         try {
-            const regData = await api.registrations.getAll().catch(e => { console.error("Reg error", e); return []; });
+            if (isInitial) {
+                // Cargar desde caché para respuesta inmediata
+                const cached = storage.get('simr_admin_dashboard_cache');
+                if (cached) {
+                    if (cached.registrations) setRegistrations(cached.registrations);
+                    if (cached.attendees) setAttendees(cached.attendees);
+                    if (cached.treasuryStats) setTreasuryStats(cached.treasuryStats);
+                    if (cached.works) setWorks(cached.works);
+                    setLoading(false);
+                }
+            }
+
+            // Carga en PARALELO para evitar bloqueos secuenciales
+            const [regData, attData, treasData, worksData] = await Promise.all([
+                api.registrations.getAll().catch(e => { console.error("Reg error", e); return []; }),
+                api.attendees.getAll().catch(e => { console.error("Attendees error", e); return []; }),
+                api.treasury.getStats().catch(e => { console.error("Treasury error", e); return { income: 0, expense: 0, balance: 0 }; }),
+                api.works.getAll().catch(e => { console.error("Works error", e); return []; })
+            ]);
+
             setRegistrations(regData);
-        } catch (e) { console.error("Reg fatal", e); }
-
-        try {
-            const attData = await api.attendees.getAll().catch(e => { console.error("Attendees error", e); return []; });
             setAttendees(attData);
-        } catch (e) { console.error("Attendees fatal", e); }
-
-        try {
-            const treasData = await api.treasury.getStats().catch(e => { console.error("Treasury error", e); return { income: 0, expense: 0, balance: 0 }; });
             setTreasuryStats(treasData);
-        } catch (e) { console.error("Treasury fatal", e); }
-
-        try {
-            const worksData = await api.works.getAll().catch(e => { console.error("Works error", e); return []; });
             setWorks(worksData);
-        } catch (e) { console.error("Works fatal", e); }
 
-        setLoading(false);
+            // Guardar en caché para la próxima vez
+            storage.set('simr_admin_dashboard_cache', {
+                registrations: regData,
+                attendees: attData,
+                treasuryStats: treasData,
+                works: worksData,
+                updatedAt: new Date().toISOString()
+            });
+
+            setLoading(false);
+        } catch (err) {
+            console.error("Fatal dashboard load error", err);
+            // Si falla todo, al menos quitamos el loading para ver qué hay
+            setLoading(false);
+        }
     };
 
     useEffect(() => {
-        loadData();
-        // Optional: Listen for global updates to refresh dashboard
-        const handleRefresh = () => loadData();
-        window.addEventListener('storage', handleRefresh); // Only cross-tab
-        return () => window.removeEventListener('storage', handleRefresh);
+        loadData(true);
     }, []);
 
     // Helper to switch main tab and reset sub-tab if needed
@@ -124,9 +139,9 @@ const AdminDashboard = ({ user }) => {
         return <div className="p-8 text-center text-gray-500">Cargando panel de control...</div>;
     }
 
-    const hasAdminRole = user?.profiles?.includes('organizacion') || user?.profiles?.includes('admin');
-    const hasSecretaryRole = user?.profiles?.includes('secretaria') || user?.profiles?.includes('organizacion');
-    const hasCommitteeRole = user?.profiles?.some(r => ['organizacion', 'academico', 'contabilidad', 'secretaria'].includes(r));
+    const hasAdminRole = isSuperAdmin || user?.modules?.includes('organizacion');
+    const hasSecretaryRole = isSuperAdmin || user?.modules?.includes('secretaria') || user?.modules?.includes('organizacion');
+    const hasCommitteeRole = isSuperAdmin || user?.modules?.some(m => ['organizacion', 'academico', 'contabilidad', 'secretaria'].includes(m));
 
     const navItems = [
         { id: 'overview', label: 'Resumen', icon: LayoutDashboard },
@@ -209,7 +224,7 @@ const AdminDashboard = ({ user }) => {
                                     <div>
                                         <p className="text-sm text-gray-600 font-medium">Balance Total</p>
                                         <h3 className="text-2xl font-bold text-gray-900">
-                                            S/ {treasuryStats.balance.toFixed(2)}
+                                            S/ {(treasuryStats?.balance || 0).toFixed(2)}
                                         </h3>
                                     </div>
                                 </div>
@@ -222,7 +237,7 @@ const AdminDashboard = ({ user }) => {
                                     <div>
                                         <p className="text-sm text-gray-600 font-medium">Total Ingresos</p>
                                         <h3 className="text-2xl font-bold text-gray-900">
-                                            S/ {treasuryStats.income.toFixed(2)}
+                                            S/ {(treasuryStats?.income || 0).toFixed(2)}
                                         </h3>
                                     </div>
                                 </div>
@@ -235,7 +250,7 @@ const AdminDashboard = ({ user }) => {
                                     <div>
                                         <p className="text-sm text-gray-600 font-medium">Total Egresos</p>
                                         <h3 className="text-2xl font-bold text-gray-900">
-                                            S/ {treasuryStats.expense.toFixed(2)}
+                                            S/ {(treasuryStats?.expense || 0).toFixed(2)}
                                         </h3>
                                     </div>
                                 </div>
@@ -258,52 +273,30 @@ const AdminDashboard = ({ user }) => {
 
                 {activeTab === 'admission' && (
                     <div className="space-y-6 animate-fadeIn">
-                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                        <div className="flex justify-between items-center mb-6">
                             <div>
                                 <h3 className="text-xl font-bold text-gray-900">Admisión y Asistencia</h3>
                                 <p className="text-gray-500 text-sm">Gestión de inscripciones y participantes</p>
                             </div>
-
-                            <div className="flex p-1 bg-gray-100 rounded-lg">
-                                <button
-                                    onClick={() => setAdmissionTab('list')}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${admissionTab === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                                >
-                                    Lista de Asistentes
-                                </button>
-                                <button
-                                    onClick={() => setAdmissionTab('verification')}
-                                    className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${admissionTab === 'verification' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                                >
-                                    Solicitudes por Aprobar {registrations.length > 0 && <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">{registrations.length}</span>}
-                                </button>
-                            </div>
                         </div>
 
-                        {admissionTab === 'list' ? (
-                            <>
-                                <div className="flex justify-between items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
-                                    <div className="flex items-center gap-2 text-blue-800">
-                                        <Users size={20} />
-                                        <span className="font-semibold">Total Inscritos Confirmados</span>
+                        <div className="animate-slideUp">
+                            <div className="flex justify-between items-center bg-blue-50 p-4 rounded-xl border border-blue-100 mb-6 px-6">
+                                <div className="flex items-center gap-3 text-blue-800">
+                                    <Users size={24} className="opacity-80" />
+                                    <div>
+                                        <p className="text-xs uppercase font-bold tracking-wider opacity-70">Total Inscritos Confirmados</p>
+                                        <p className="text-2xl font-black">{attendees.length}</p>
                                     </div>
-                                    <span className="text-2xl font-bold text-blue-900">{attendees.length}</span>
                                 </div>
-                                <AttendeeList attendees={attendees} />
-                            </>
-                        ) : (
-                            <div className="space-y-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <CheckSquare className="text-orange-600" />
-                                    <h4 className="font-bold text-gray-900">Validación de Pagos Pendientes</h4>
+                                <div className="h-12 w-px bg-blue-200 mx-4 hidden md:block"></div>
+                                <div className="hidden md:flex flex-col text-right">
+                                    <p className="text-xs text-blue-600 font-medium">Actualizado hace un momento</p>
+                                    <p className="text-[10px] text-blue-400">Sincronizado con base de datos</p>
                                 </div>
-                                <VerificationList
-                                    pendingRegistrations={registrations}
-                                    onApprove={handleApproveRegistration}
-                                    onReject={handleRejectRegistration}
-                                />
                             </div>
-                        )}
+                            <AttendeeList attendees={attendees} />
+                        </div>
                     </div>
                 )}
 

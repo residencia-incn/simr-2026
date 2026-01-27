@@ -4,11 +4,13 @@ import {
     BarChart, Bar, PieChart, Pie, Cell, Legend
 } from 'recharts';
 import { Clock, TrendingUp, Users, Award, Download, Share2 } from 'lucide-react';
-import { INITIAL_ANALYTICS } from '../../data/mockData';
 import Card from '../ui/Card';
 
 const SuperAdminAnalytics = () => {
-    const { realTimeUsers, engagement, moduleAttendance, distribution } = INITIAL_ANALYTICS;
+    const realTimeUsers = [];
+    const engagement = { avgStudyTime: 0, completionRate: 0, avgTimePerStudent: 0, certifiedProjects: 0 };
+    const moduleAttendance = [];
+    const distribution = [];
     const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
 
     return (

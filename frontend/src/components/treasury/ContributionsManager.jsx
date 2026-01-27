@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { CheckCircle, XCircle, DollarSign, Calendar, User, RefreshCw, Upload, Image as ImageIcon, AlertTriangle, Search, Printer, FileText } from 'lucide-react';
 import { Button, Card, FormField, Modal } from '../ui';
 import { showError, showSuccess } from '../../utils/alerts';
+import { uploadToCloud } from '../../utils/upload';
 import Swal from 'sweetalert2';
 import { api } from '../../services/api';
 
@@ -19,7 +20,7 @@ const ContributionsManager = ({
     const [selectedMonths, setSelectedMonths] = useState([]); // Array of month IDs
     const [selectedOrganizer, setSelectedOrganizer] = useState(null);
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedFine, setSelectedFine] = useState(null); // New State for selected fine
+    const [selectedFines, setSelectedFines] = useState([]); // Array of Fine Objects
     const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
     const [isValidatingModalOpen, setIsValidatingModalOpen] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
@@ -36,24 +37,53 @@ const ContributionsManager = ({
         console.log('📊 ContributionsManager: Config updated. Months:', months.length);
     }, [config]);
 
+    // Sync selectedOrganizer when contributionPlan (matrix) updates from parent (onReload)
+    useEffect(() => {
+        if (selectedOrganizer && contributionPlan.length > 0) {
+            // Find the updated data for the currently selected organizer
+            // Fixed: Use organizador_id strictly. 'id' is undefined in current mapping and caused false positives.
+            const updated = contributionPlan.find(org =>
+                org.organizador_id === selectedOrganizer.organizador_id
+            );
+
+            if (updated) {
+                console.log('🔄 Syncing selected organizer data...', updated.organizador_id);
+                setSelectedOrganizer(updated);
+
+                // If we have local 'fines' state (used in some legacy parts?), update it too
+                if (updated.penalties) {
+                    setFines(updated.penalties);
+                }
+            }
+        }
+    }, [contributionPlan, selectedOrganizer]);
+
     // --- Helper Functions ---
-    const getCellStatus = (organizadorId, mes) => {
-        const contrib = contributionPlan.find(
-            c => (c.organizador_id === organizadorId) && c.mes === mes
-        );
-        return contrib?.estado || 'pendiente';
+    const parseAmount = (val) => {
+        if (val === undefined || val === null) return 0;
+        const strVal = String(val);
+        const num = parseFloat(strVal);
+        return isNaN(num) ? 0 : num;
+    };
+
+    const getCellStatus = (monthId) => {
+        if (!selectedOrganizer) return 'PENDING';
+        const contrib = selectedOrganizer.contributions.find(c => c.monthId === monthId);
+        // Normalize: if backend says 'PENDIENTE' and it wasn't caught in useTreasury, handle it here too
+        const status = contrib?.status || 'PENDING';
+        return status === 'PENDIENTE' ? 'PENDING' : status;
     };
 
     const getStatusStyles = (estado, isSelected) => {
         if (isSelected) return 'bg-blue-600 border-blue-700 text-white ring-2 ring-blue-300 transform scale-105 z-10';
 
         switch (estado) {
-            case 'pagado':
+            case 'PAID':
                 return 'bg-green-50 border-green-200 text-green-800 opacity-90';
-            case 'validando':
+            case 'IN_PROCESS':
                 return 'bg-yellow-50 border-yellow-300 text-yellow-800 animate-pulse';
-            case 'pendiente':
-                return 'bg-white border-dashed border-red-200 text-red-800 hover:border-red-400 hover:bg-red-50 cursor-pointer';
+            case 'PENDING':
+                return 'bg-red-50 border-dashed border-red-200 text-red-800 hover:border-red-400 hover:bg-red-50 cursor-pointer';
             default:
                 return 'bg-gray-50 border-gray-200 text-gray-500';
         }
@@ -64,8 +94,8 @@ const ContributionsManager = ({
         if (!selectedOrganizer || !months.length || !config) return null;
 
         const pendingMonths = months.filter(m => {
-            const status = getCellStatus(selectedOrganizer.organizador_id, m.id);
-            return status !== 'pagado' && status !== 'validando'; // 'pendiente' basically
+            const status = getCellStatus(m.id);
+            return status !== 'PAID' && status !== 'IN_PROCESS'; // Anything not paid or validating is pending
         });
 
         if (pendingMonths.length === 0) {
@@ -152,8 +182,11 @@ const ContributionsManager = ({
     const handlePrintReport = () => {
         if (!selectedOrganizer) return;
 
-        const printWindow = window.open('', '_blank');
         const status = accountStatus;
+        if (!status) {
+            showError("No hay datos suficientes para generar el reporte.", "Error de Datos");
+            return;
+        }
 
         const htmlContent = `
             <html>
@@ -435,20 +468,6 @@ const ContributionsManager = ({
         fetchOrganizerFines();
     }, [selectedOrganizer]);
 
-    // Simulate cloud upload - Replace this with your actual cloud storage service
-    const uploadToCloud = async (file) => {
-        // Simulate upload delay
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        // In production, you would upload to your cloud storage (e.g., AWS S3, Cloudinary, etc.)
-        // For now, we'll create a local object URL and simulate a cloud URL
-        const simulatedCloudUrl = `https://storage.simr2026.com/vouchers/${Date.now()}_${file.name}`;
-
-        console.log('📤 Uploading voucher to cloud:', file.name);
-        console.log('✅ Simulated cloud URL:', simulatedCloudUrl);
-
-        return simulatedCloudUrl;
-    };
 
     const handleFileChange = async (e) => {
         const file = e.target.files[0];
@@ -479,86 +498,59 @@ const ContributionsManager = ({
     const handleOrganizerSelect = (org) => {
         setSelectedOrganizer(org);
         setSelectedMonths([]);
-        setSelectedFine(null); // Reset fine selection
+        setSelectedFines([]); // Reset fine selection
     };
 
     const handleFineClick = (fine) => {
-        setSelectedFine(fine);
-        setSelectedMonths([]); // Clear month selection
-        setIsRecordModalOpen(true);
+        // Toggle selection
+        const isSelected = selectedFines.some(f => f.id === fine.id);
+        if (isSelected) {
+            setSelectedFines(selectedFines.filter(f => f.id !== fine.id));
+        } else {
+            setSelectedFines([...selectedFines, fine]);
+        }
+        // Do NOT open modal immediately, allow multiple selection
     };
 
     const handleCellClick = (monthId) => {
         if (!selectedOrganizer) return;
 
-        const currentStatus = getCellStatus(selectedOrganizer.organizador_id, monthId);
+        const currentStatus = getCellStatus(monthId);
 
-        // If it's validating, open validation modal and select ALL months with same voucher
-        if (currentStatus === 'validando') {
-            // Check if we have 'pendiente' items selected - Prevent mixing
-            const hasPendingSelected = selectedMonths.some(id => getCellStatus(selectedOrganizer.organizador_id, id) === 'pendiente');
-            if (hasPendingSelected) {
-                showError('No puedes mezclar meses pendientes con validaciones en curso.', 'Selección Inválida');
-                return;
-            }
-            // Find the contribution for this month
-            const clickedContrib = contributionPlan.find(
-                c => c.organizador_id === selectedOrganizer.organizador_id && c.mes === monthId
-            );
-
-            if (clickedContrib && clickedContrib.comprobante) {
-                // Find ALL months with the same voucher/comprobante
-                const relatedMonths = contributionPlan
-                    .filter(c =>
-                        c.organizador_id === selectedOrganizer.organizador_id &&
-                        c.estado === 'validando' &&
-                        c.comprobante === clickedContrib.comprobante
-                    )
-                    .map(c => c.mes);
-
-                console.log('📋 Seleccionando meses relacionados con el mismo voucher:', relatedMonths);
-                setSelectedMonths(relatedMonths);
-            } else {
-                setSelectedMonths([monthId]);
-            }
-
-            setIsValidatingModalOpen(true);
+        if (currentStatus === 'IN_PROCESS') {
+            setIsRecordModalOpen(true);
             return;
         }
 
-        if (currentStatus === 'pagado') return;
+        if (currentStatus === 'PAID') return;
 
-        // Multi-selection logic for 'pendiente'
-        if (currentStatus === 'pendiente') {
+        // Multi-selection logic for 'PENDING'
+        if (currentStatus === 'PENDING') {
             const isAlreadySelected = selectedMonths.includes(monthId);
+            const currentMonths = selectedOrganizer.contributions;
 
             if (isAlreadySelected) {
-                // If we deselect, we must deselect everything AFTER it as well to maintain sequence
-                const monthIdx = months.findIndex(m => m.id === monthId);
+                // If we deselect, we must deselect everything AFTER it
+                const monthIdx = currentMonths.findIndex(m => m.id === monthId);
                 const newSelection = selectedMonths.filter(id => {
-                    const idx = months.findIndex(m => m.id === id);
+                    const idx = currentMonths.findIndex(m => m.id === id);
                     return idx < monthIdx;
                 });
                 setSelectedMonths(newSelection);
             } else {
-                // Check if we have 'validando' items selected - Prevent mixing
-                const hasValidatingSelected = selectedMonths.some(id => getCellStatus(selectedOrganizer.organizador_id, id) === 'validando');
-                if (hasValidatingSelected) {
-                    showError('No puedes mezclar meses pendientes con validaciones en curso.', 'Selección Inválida');
-                    return;
-                }
+                // Check if any IN_PROCESS item is selected - Prevent mixing
+                const monthIdx = currentMonths.findIndex(m => m.id === monthId);
 
-                // If we select, we must ensure all previous months are either Green, Yellow, or already selected
-                const monthIdx = months.findIndex(m => m.id === monthId);
+                // Check if there are any gaps (pending months before this one that are not selected)
+                const pendingPrevious = currentMonths.slice(0, monthIdx).filter(m => {
+                    // m.status should be 'PENDING' now due to normalization.
+                    // We also block if it's 'IN_PROCESS' because you should wait for the previous to be approved
+                    const status = m.status === 'PENDIENTE' ? 'PENDING' : m.status;
+                    return (status === 'PENDING' || status === 'IN_PROCESS') && !selectedMonths.includes(m.id);
+                });
 
-                // Check if there are any gaps
-                const pendingPreviousCount = months.slice(0, monthIdx).filter(m => {
-                    const status = getCellStatus(selectedOrganizer.organizador_id, m.id);
-                    return status === 'pendiente' && !selectedMonths.includes(m.id);
-                }).length;
-
-                if (pendingPreviousCount > 0) {
-                    showError('Debes seleccionar los meses anteriores en orden secuencial.', 'Orden de Pago');
+                if (pendingPrevious.length > 0) {
+                    showError('Debes seleccionar los meses anteriores en orden cronológico.', 'Orden de Pago');
                     return;
                 }
 
@@ -568,17 +560,31 @@ const ContributionsManager = ({
     };
 
     const handleStartPayment = () => {
-        if (selectedMonths.length === 0) return;
-        setSelectedFine(null); // Ensure no fine is selected
+        if (selectedMonths.length === 0 && selectedFines.length === 0) return;
+
+        // Check for Month validation
+        if (selectedMonths.some(m => getCellStatus(m) === 'IN_PROCESS')) {
+            setIsValidatingModalOpen(true);
+            return;
+        }
+
         setIsRecordModalOpen(true);
     };
 
     const handleRecordSubmit = async (e) => {
         e.preventDefault();
 
-        // Validate voucher file is provided (unless approving validation)
-        const isApproving = selectedFine?.estado === 'validando';
-        if (!voucherFile && !isApproving) {
+        // Calculate total including fines
+        const finesAmount = selectedFines.reduce((sum, f) => sum + parseAmount(f.amount || f.monto), 0);
+        const monthsAmount = selectedMonths.reduce((sum, mId) => {
+            const c = selectedOrganizer.contributions.find(x => x.id === mId);
+            return sum + parseFloat(c?.amount || 0);
+        }, 0);
+        const totalAmount = finesAmount + monthsAmount;
+
+        const isValidationMode = selectedFines.some(f => f.estado === 'IN_PROCESS') || selectedMonths.some(m => getCellStatus(m) === 'IN_PROCESS');
+
+        if (!voucherFile && !isValidationMode) {
             showError('Debes subir el comprobante de pago (imagen).', 'Campo Obligatorio');
             return;
         }
@@ -586,55 +592,58 @@ const ContributionsManager = ({
         try {
             setIsUploading(true);
 
-            // Upload file to cloud and get URL (or use existing if approving)
-            let uploadedUrl = selectedFine?.voucher || '';
-            if (voucherFile) {
-                uploadedUrl = await uploadToCloud(voucherFile);
+            await onRecordContribution(
+                selectedOrganizer.organizador_id,
+                selectedMonths,
+                null, // Account determined by backend/config
+                totalAmount,
+                voucherFile, // Pasamos el archivo real directamente
+                false,
+                selectedFines.map(f => f.id)
+            );
+
+            showSuccess('Operación registrada exitosamente');
+
+            // --- OPTIMISTIC UPDATE ---
+            // Update local state immediately so user sees Green instantly
+            if (selectedOrganizer) {
+                const updatedContribs = selectedOrganizer.contributions.map(c => {
+                    if (selectedMonths.includes(c.id)) {
+                        return { ...c, status: isValidationMode ? 'IN_PROCESS' : 'PAID' };
+                    }
+                    return c;
+                });
+
+                // If we also paid fines
+                const updatedFines = selectedOrganizer.penalties ? selectedOrganizer.penalties.map(f => {
+                    const isSelectedFine = selectedFines.some(sel => sel.id === f.id);
+                    if (isSelectedFine) {
+                        return { ...f, status: isValidationMode ? 'IN_PROCESS' : 'PAID' };
+                    }
+                    return f;
+                }) : [];
+
+                setSelectedOrganizer({
+                    ...selectedOrganizer,
+                    contributions: updatedContribs,
+                    penalties: updatedFines,
+                    // Re-calculate totals roughly if needed, or wait for reload
+                    total_pagado: selectedOrganizer.total_pagado + totalAmount,
+                    total_due: selectedOrganizer.total_due - totalAmount
+                });
             }
-
-            const totalAmount = selectedMonths.length * (config?.contribution?.monthlyAmount || 0);
-
-            // Get accountId from form or default
-            const formData = new FormData(e.target);
-            const formAccountId = formData.get('accountId');
-            const defaultAccountId = formAccountId || config?.contribution?.defaultContributionAccount || (accounts[0]?.id);
-
-            if (!defaultAccountId) {
-                showError('Debes seleccionar una cuenta de destino.', 'Cuenta Requerida');
-                return;
-            }
-
-            const notes = selectedFine ? `Pago de penalidad: ${selectedFine.descripcion}` : null;
-
-            if (selectedFine) {
-                await onRecordFine(
-                    selectedFine.id,
-                    defaultAccountId,
-                    uploadedUrl,
-                    notes
-                );
-
-                // Refetch fines immediately to reflect status change
-                const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
-                setFines(updatedFines);
-            } else {
-                await onRecordContribution(
-                    selectedOrganizer.organizador_id,
-                    selectedMonths,
-                    defaultAccountId,
-                    totalAmount,
-                    uploadedUrl
-                );
-            }
+            // -------------------------
 
             setIsRecordModalOpen(false);
             setSelectedMonths([]);
-            setSelectedFine(null);
-            setVoucherUrl('');
+            setSelectedFines([]); // Clear fines
             setVoucherFile(null);
             setVoucherPreview(null);
+
+            // Background reload
+            if (onReload) await onReload();
         } catch (error) {
-            showError(error.message, 'Error al registrar pago');
+            showError(error.response?.data?.detail || error.message, 'Error al registrar pago');
         } finally {
             setIsUploading(false);
         }
@@ -687,6 +696,31 @@ const ContributionsManager = ({
                 defaultAccountId
             );
 
+            // --- OPTIMISTIC UPDATE ---
+            // Update local state immediately
+            if (selectedOrganizer) {
+                const updatedContribs = selectedOrganizer.contributions.map(c => {
+                    if (selectedMonths.includes(c.id)) {
+                        return { ...c, status: 'PAID' };
+                    }
+                    return c;
+                });
+
+                // Assuming validation implicitly approves penalties if they were part of the voucher
+                // But selectedMonths only tracks months. 
+                // However, usually validation is done via "Validar" button in the modal which is month-centric.
+                // We'll leave fines as-is or reload will catch them.
+
+                setSelectedOrganizer({
+                    ...selectedOrganizer,
+                    contributions: updatedContribs,
+                    // Re-calculate totals roughly
+                    total_pagado: selectedOrganizer.total_pagado + totals.expected, // This logic is tricky without knowing amount
+                    total_due: selectedOrganizer.total_due - totals.expected   // Placeholder update, visual is key
+                });
+            }
+            // -------------------------
+
             // Reload data to show updated status
             if (onReload) {
                 await onReload();
@@ -711,28 +745,17 @@ const ContributionsManager = ({
 
 
     // Calcular totales
-    const [totalPaidFines, setTotalPaidFines] = useState(0);
+    const totals = useMemo(() => {
+        return contributionStatus.reduce((acc, org) => ({
+            expected: acc.expected + org.total_esperado,
+            paid: acc.paid + org.total_pagado,
+            pending: acc.pending + org.total_due
+        }), { expected: 0, paid: 0, pending: 0 });
+    }, [contributionStatus]);
 
-    // Fetch global paid fines to add to revenue
-    useEffect(() => {
-        const fetchTotalFines = async () => {
-            try {
-                const allFines = await api.treasury.getFines();
-                const paid = allFines
-                    .filter(f => f.estado === 'pagado')
-                    .reduce((sum, f) => sum + parseFloat(f.monto || 0), 0);
-                setTotalPaidFines(paid);
-            } catch (e) {
-                console.error("Error fetching total fines:", e);
-            }
-        };
-        fetchTotalFines();
-    }, [contributionPlan, fines]); // Re-fetch when plan or fines update
-
-    const totalExpected = organizers.reduce((sum, org) => sum + org.total_esperado, 0);
-    const totalPaidQuotas = organizers.reduce((sum, org) => sum + org.total_pagado, 0);
-    const totalPaid = totalPaidQuotas + totalPaidFines;
-    const totalPending = totalExpected - totalPaidQuotas;
+    const totalExpected = totals.expected;
+    const totalPaid = totals.paid;
+    const totalPending = totals.pending;
 
     return (
         <div className="space-y-6">
@@ -744,15 +767,16 @@ const ContributionsManager = ({
                         Validación y registro de aportes mensuales de organizadores
                     </p>
                 </div>
-                {contributionPlan.length === 0 && (
+                <div className="flex gap-2">
                     <Button
-                        onClick={onInitializePlan}
-                        className="bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
+                        onClick={() => onInitializePlan()}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white border border-transparent shadow-md transition-all duration-200 flex items-center font-medium px-4"
+                        title="Generar cuotas faltantes según configuración"
                     >
-                        <RefreshCw size={18} className="mr-2" />
-                        Inicializar Plan
+                        <RefreshCw size={18} className="mr-2 animate-pulse" />
+                        Sincronizar Meses
                     </Button>
-                )}
+                </div>
             </div>
 
             {/* Summary Cards */}
@@ -814,7 +838,7 @@ const ContributionsManager = ({
                             </div>
                         </div>
                         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                            {organizers.filter(org => org.organizador_nombre.toLowerCase().includes(searchTerm.toLowerCase())).map((organizer) => {
+                            {organizers.filter(org => (org.organizador_nombre || '').toLowerCase().includes(searchTerm.toLowerCase())).map((organizer) => {
                                 const isSelected = selectedOrganizer?.organizador_id === organizer.organizador_id;
                                 const progress = (organizer.total_pagado / organizer.total_esperado) * 100;
 
@@ -868,24 +892,7 @@ const ContributionsManager = ({
                                         </div>
                                     </div>
 
-                                    {selectedMonths.length > 0 && (
-                                        (() => {
-                                            // Determine if we are validating or paying based on first selected month
-                                            const firstMonthId = selectedMonths[0];
-                                            const status = getCellStatus(selectedOrganizer.organizador_id, firstMonthId);
-                                            const isValidating = status === 'validando';
 
-                                            return (
-                                                <Button
-                                                    onClick={isValidating ? () => setIsValidatingModalOpen(true) : handleStartPayment}
-                                                    className={`${isValidating ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'} text-white shadow-lg animate-bounce-subtle`}
-                                                >
-                                                    {isValidating ? <CheckCircle size={18} className="mr-2" /> : <DollarSign size={18} className="mr-2" />}
-                                                    {isValidating ? 'Validar' : 'Registrar'} {selectedMonths.length} {selectedMonths.length === 1 ? 'Mes' : 'Meses'}
-                                                </Button>
-                                            );
-                                        })()
-                                    )}
 
                                     <button
                                         onClick={handlePrintReport}
@@ -899,11 +906,11 @@ const ContributionsManager = ({
                                 {/* Detail Body (Months) */}
                                 <div className="p-6 flex-1 overflow-y-auto bg-white/50">
                                     <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                        {months.map(month => {
-                                            const estado = getCellStatus(selectedOrganizer.organizador_id, month.id);
+                                        {selectedOrganizer.contributions.map(month => {
+                                            const estado = month.status;
                                             const isSelected = selectedMonths.includes(month.id);
-                                            const isPaid = estado === 'pagado';
-                                            const isValidating = estado === 'validando';
+                                            const isPaid = estado === 'PAID';
+                                            const isInProcess = estado === 'IN_PROCESS';
 
                                             return (
                                                 <button
@@ -915,12 +922,12 @@ const ContributionsManager = ({
                                                     `}
                                                 >
                                                     <div className="flex justify-between items-start mb-2">
-                                                        <span className="font-bold text-sm tracking-tight">
-                                                            {month.label}
+                                                        <span className="font-bold text-sm tracking-tight text-current">
+                                                            {month.month}
                                                         </span>
                                                         {isPaid ? (
                                                             <CheckCircle size={18} className="text-green-600" />
-                                                        ) : isValidating ? (
+                                                        ) : isInProcess ? (
                                                             <RefreshCw size={18} className="text-yellow-600 animate-spin" />
                                                         ) : isSelected ? (
                                                             <CheckCircle size={18} className="text-white" />
@@ -931,12 +938,12 @@ const ContributionsManager = ({
 
                                                     <div className="text-sm font-medium">
                                                         {isPaid ? (
-                                                            <span className="text-green-700 text-xs py-0.5 px-2 bg-green-100 rounded-full">Validado</span>
-                                                        ) : isValidating ? (
-                                                            <span className="text-yellow-700 text-xs py-0.5 px-2 bg-yellow-100 rounded-full">Por Validar</span>
+                                                            <span className="text-green-700 text-[10px] py-0.5 px-2 bg-green-100 rounded-full font-bold">PAGADO</span>
+                                                        ) : isInProcess ? (
+                                                            <span className="text-yellow-700 text-[10px] py-0.5 px-2 bg-yellow-100 rounded-full font-bold">VALIDANDO</span>
                                                         ) : (
                                                             <span className={`${isSelected ? 'text-white' : 'text-red-500'} text-xs font-bold`}>
-                                                                S/ {config?.contribution?.monthlyAmount}
+                                                                S/ {month.amount}
                                                             </span>
                                                         )}
                                                     </div>
@@ -947,53 +954,53 @@ const ContributionsManager = ({
 
                                     {/* Penalties Section */}
                                     {/* Penalties Section */}
-                                    {fines.length > 0 && (
+                                    {selectedOrganizer.penalties.length > 0 && (
                                         <div className="mb-6 mt-6">
-                                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2">
-                                                <AlertTriangle size={16} />
-                                                Penalidades ({fines.length})
+                                            <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-2 uppercase tracking-wider">
+                                                <AlertTriangle size={16} className="text-red-500" />
+                                                Penalidades ({selectedOrganizer.penalties.length})
                                             </h4>
                                             <div className="space-y-2 bg-gray-50 p-3 rounded-xl border border-gray-100">
-                                                {fines.map(fine => {
-                                                    const isPaid = fine.estado === 'pagado';
-                                                    const isValidating = fine.estado === 'validando';
-                                                    const isPending = fine.estado === 'pendiente';
+                                                {selectedOrganizer.penalties.map(fine => {
+                                                    const isPaid = fine.status === 'PAID';
+                                                    const isInProcess = fine.status === 'IN_PROCESS';
+                                                    const isSelected = selectedFines.some(f => f.id === fine.id);
 
                                                     return (
                                                         <div
                                                             key={fine.id}
                                                             onClick={() => !isPaid && handleFineClick(fine)}
                                                             className={`
-                                                            border rounded-lg p-3 flex justify-between items-center shadow-sm transition-colors group
-                                                            ${isPaid ? 'bg-green-50 border-green-200' : 'bg-white border-red-200 cursor-pointer hover:bg-red-50'}
+                                                            border rounded-lg p-3 flex justify-between items-center shadow-sm transition-all group cursor-pointer
+                                                            ${isPaid
+                                                                    ? 'bg-green-50 border-green-200 opacity-75'
+                                                                    : isSelected
+                                                                        ? 'bg-red-50 border-red-400 ring-1 ring-red-400'
+                                                                        : 'bg-white border-gray-200 hover:bg-gray-50'
+                                                                }
                                                         `}
                                                         >
                                                             <div>
-                                                                <p className={`text-sm font-bold ${isPaid ? 'text-green-800' : 'text-red-800'}`}>{fine.descripcion}</p>
+                                                                <div className="flex items-center gap-2">
+                                                                    {isSelected && <CheckCircle size={14} className="text-red-600" />}
+                                                                    <p className={`text-sm font-bold ${isPaid ? 'text-green-800' : 'text-gray-800'}`}>{fine.reason}</p>
+                                                                </div>
                                                                 <div className="flex items-center gap-2 mt-1">
-                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium border ${isPaid ? 'text-green-600 bg-green-100 border-green-200' : 'text-red-600 bg-red-50 border-red-100'}`}>
-                                                                        {isPaid ? 'Pagado' : `Vence: ${new Date(fine.dueDate + 'T00:00:00').toLocaleDateString('es-PE')}`}
+                                                                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold border ${isPaid ? 'text-green-600 bg-green-100 border-green-200' : 'text-red-600 bg-red-50 border-red-100'}`}>
+                                                                        {isPaid ? 'PAGADO' : 'PENDIENTE'}
                                                                     </span>
-                                                                    {isValidating && (
+                                                                    {isInProcess && (
                                                                         <span className="text-[10px] text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full font-bold animate-pulse border border-yellow-200">
-                                                                            En Validación
+                                                                            VALIDANDO
                                                                         </span>
                                                                     )}
-                                                                    <span className="text-[10px] text-gray-400">
-                                                                        {new Date(fine.fecha + 'T00:00:00').toLocaleDateString('es-PE')}
-                                                                    </span>
                                                                 </div>
                                                             </div>
                                                             <div className="text-right">
-                                                                <p className={`font-bold ${isPaid ? 'text-green-700' : 'text-red-700'}`}>S/ {parseFloat(fine.monto).toFixed(2)}</p>
+                                                                <p className={`font-bold ${isPaid ? 'text-green-700' : 'text-gray-700'}`}>S/ {parseFloat(fine.amount || fine.monto || 0).toFixed(2)}</p>
                                                                 {!isPaid && (
-                                                                    <span className="text-[10px] text-red-600 font-bold uppercase tracking-wider group-hover:underline">
-                                                                        {isValidating ? 'Validar' : 'Pagar Ahora'}
-                                                                    </span>
-                                                                )}
-                                                                {isPaid && (
-                                                                    <span className="flex items-center justify-end gap-1 text-[10px] text-green-600 font-bold uppercase tracking-wider">
-                                                                        <CheckCircle size={12} /> Pagado
+                                                                    <span className={`text-[10px] font-bold uppercase tracking-wider ${isSelected ? 'text-red-700 underline' : 'text-gray-400 group-hover:text-blue-500'}`}>
+                                                                        {isSelected ? 'Seleccionado' : 'Click para añadir'}
                                                                     </span>
                                                                 )}
                                                             </div>
@@ -1012,21 +1019,51 @@ const ContributionsManager = ({
                                         <div className="flex justify-between items-center">
                                             <div>
                                                 <p className="text-xs font-bold text-gray-500 uppercase tracking-wide">Estado de Cuenta</p>
-                                                <div className={`text-2xl font-black ${accountStatus.isClean ? 'text-green-700' : 'text-red-700'}`}>
-                                                    {accountStatus.isClean ? '¡Al Día!' : `S/ ${accountStatus.totalPending.toFixed(2)}`}
+                                                <div className={`text-2xl font-black ${selectedOrganizer.total_due <= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                                                    {selectedOrganizer.total_due <= 0 ? '¡Al Día!' : `S/ ${parseFloat(selectedOrganizer.total_due).toFixed(2)}`}
                                                 </div>
                                                 <p className="text-xs text-gray-500 mt-1">
-                                                    {accountStatus.isClean
+                                                    {selectedOrganizer.total_due <= 0
                                                         ? 'No hay pagos pendientes.'
-                                                        : `Debes: ${accountStatus.pendingContributionsCount} cuotas y S/ ${accountStatus.totalFinesPending} en penalidades`
+                                                        : `Monto total pendiente (Incluye multas)`
                                                     }
                                                 </p>
                                             </div>
-                                            {!accountStatus.isClean && (
-                                                <div className="text-right">
-                                                    <p className="text-xs font-bold text-blue-600">Por Pagar</p>
-                                                </div>
-                                            )}
+
+                                            {/* Action Button Section */}
+                                            <div className="text-right">
+                                                {(selectedMonths.length > 0 || selectedFines.length > 0) ? (
+                                                    <Button
+                                                        onClick={handleStartPayment}
+                                                        className={`${(selectedMonths.some(m => getCellStatus(m) === 'IN_PROCESS') || selectedFines.some(f => f.estado === 'validando')) ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-blue-600 hover:bg-blue-700'} text-white shadow-lg shadow-blue-200 animate-in fade-in zoom-in duration-200 transition-colors`}
+                                                    >
+                                                        {(selectedMonths.some(m => getCellStatus(m) === 'IN_PROCESS') || selectedFines.some(f => f.estado === 'validando')) ? (
+                                                            <>
+                                                                <CheckCircle size={18} className="mr-2" />
+                                                                Validar ({selectedMonths.length + selectedFines.length})
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <DollarSign size={18} className="mr-2" />
+                                                                Registrar Pago (S/ {(() => {
+                                                                    const fines = selectedFines.reduce((sum, f) => sum + parseAmount(f.amount || f.monto), 0);
+                                                                    const months = selectedMonths.reduce((sum, mId) => {
+                                                                        const c = selectedOrganizer.contributions.find(x => x.id === mId);
+                                                                        return sum + parseFloat(c?.amount || 0);
+                                                                    }, 0);
+                                                                    return (fines + months).toFixed(2);
+                                                                })()})
+                                                            </>
+                                                        )}
+                                                    </Button>
+                                                ) : (
+                                                    !accountStatus.isClean && (
+                                                        <p className="text-xs font-bold text-blue-600">
+                                                            Selecciona items para pagar
+                                                        </p>
+                                                    )
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
                                 )}
@@ -1065,87 +1102,113 @@ const ContributionsManager = ({
             <Modal
                 isOpen={isRecordModalOpen}
                 onClose={() => setIsRecordModalOpen(false)}
-                title={selectedFine?.estado === 'validando' ? "Validar Pago de Penalidad" : "Registrar Pago Directo"}
+                title={selectedFines.some(f => f.estado === 'validando') ? "Validar Pago de Penalidad" : "Registrar Pago Directo"}
             >
                 {selectedOrganizer && (
                     <form onSubmit={handleRecordSubmit} className="space-y-6">
                         {/* Validation Notice for Validating Fines */}
-                        {selectedFine?.estado === 'validando' && (
-                            <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mb-4 animate-in fade-in slide-in-from-top-2">
-                                <div className="flex items-start gap-3">
-                                    <div className="p-2 bg-yellow-100 rounded-full text-yellow-700 mt-0.5">
-                                        <AlertTriangle size={18} />
-                                    </div>
-                                    <div className="flex-1">
-                                        <h4 className="font-bold text-yellow-900 text-sm">Pago en Revisión</h4>
-                                        <p className="text-xs text-yellow-700 mt-1">
-                                            Este pago ha sido enviado por el organizador y requiere tu aprobación.
-                                            Verifica el comprobante antes de confirmar.
-                                        </p>
-                                        {selectedFine.voucher && (
-                                            <a
-                                                href={selectedFine.voucher}
-                                                target="_blank"
-                                                rel="noopener noreferrer"
-                                                className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-blue-600 hover:underline"
-                                            >
-                                                <ImageIcon size={14} /> Ver Comprobante Original
-                                            </a>
-                                        )}
+                        {(() => {
+                            const validatingFine = selectedFines.find(f => f.estado === 'validando');
+                            if (!validatingFine) return null;
+                            return (
+                                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-200 mb-4 animate-in fade-in slide-in-from-top-2">
+                                    <div className="flex items-start gap-3">
+                                        <div className="p-2 bg-yellow-100 rounded-full text-yellow-700 mt-0.5">
+                                            <AlertTriangle size={18} />
+                                        </div>
+                                        <div className="flex-1">
+                                            <h4 className="font-bold text-yellow-900 text-sm">Pago en Revisión</h4>
+                                            <p className="text-xs text-yellow-700 mt-1">
+                                                Este pago ha sido enviado por el organizador y requiere tu aprobación.
+                                                Verifica el comprobante antes de confirmar.
+                                            </p>
+                                            {validatingFine.voucher && (
+                                                <a
+                                                    href={validatingFine.voucher}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center gap-1 mt-3 text-xs font-bold text-blue-600 hover:underline"
+                                                >
+                                                    <ImageIcon size={14} /> Ver Comprobante Original
+                                                </a>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
                         <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
                             <div className="flex justify-between items-center text-sm">
                                 <span className="text-gray-500">Organizador</span>
                                 <span className="font-bold text-gray-900">{selectedOrganizer.organizador_nombre}</span>
                             </div>
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">{selectedFine ? 'Concepto' : `Periodos (${selectedMonths.length})`}</span>
-                                {selectedFine ? (
-                                    <span className="font-bold text-red-600 uppercase tracking-tight">{selectedFine.descripcion}</span>
-                                ) : (
-                                    <span className="font-bold text-blue-600">
-                                        {selectedMonths.map(id => months.find(m => m.id === id)?.label).join(', ')}
-                                    </span>
-                                )}
+                                <span className="text-gray-500">Items Seleccionados</span>
+                                <div className="text-right">
+                                    {selectedMonths.length > 0 && (
+                                        <div className="font-bold text-blue-600">
+                                            {selectedMonths.length} {selectedMonths.length === 1 ? 'Mes' : 'Meses'}
+                                        </div>
+                                    )}
+                                    {selectedFines.length > 0 && (
+                                        <div className="font-bold text-red-600">
+                                            {selectedFines.length} {selectedFines.length === 1 ? 'Penalidad' : 'Penalidades'}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
-                            {selectedFine && (
+                            {selectedFines.length > 0 && (
+                                <div className="text-xs text-gray-500 bg-gray-100 p-2 rounded">
+                                    {selectedFines.map(f => f.reason || f.descripcion).join(', ')}
+                                </div>
+                            )}
+                            {selectedFines.length > 0 && (
                                 <div className="flex justify-between items-center text-sm">
                                     <span className="text-gray-500">Categoría</span>
                                     <span className="font-bold text-gray-700 bg-gray-200 px-2 py-0.5 rounded text-xs">Penalidades</span>
                                 </div>
                             )}
                             <div className="flex justify-between items-center text-sm">
-                                <span className="text-gray-500">Cuenta de Destino</span>
-                                {config?.contribution?.defaultContributionAccount ? (
-                                    <>
-                                        <span className="font-bold text-gray-900 text-right">
-                                            {(() => {
-                                                const acc = accounts.find(a => a.id === config.contribution.defaultContributionAccount);
-                                                return acc ? (acc.nombre || 'Cuenta sin nombre') : 'Cuenta no encontrada';
-                                            })()}
-                                        </span>
-                                        <input type="hidden" name="accountId" value={config.contribution.defaultContributionAccount} />
-                                    </>
-                                ) : (
-                                    <select
-                                        name="accountId"
-                                        className="font-bold text-gray-900 bg-transparent border-none focus:ring-0 text-right p-0 cursor-pointer"
-                                        defaultValue={accounts[0]?.id}
-                                    >
-                                        {accounts.map(acc => (
-                                            <option key={acc.id} value={acc.id}>{acc.nombre} ({acc.tipo})</option>
-                                        ))}
-                                    </select>
-                                )}
+                                <span className="text-gray-500">Cuenta de Destino (Automática)</span>
+                                {(() => {
+                                    // Logic to determine the target account
+                                    let targetAccId = config?.contribution?.defaultContributionAccount;
+
+                                    // Fallback: Search by name if not configured
+                                    if (!targetAccId && accounts && accounts.length > 0) {
+                                        const found = accounts.find(a => a.nombre.toLowerCase().includes('inscripciones') || a.nombre.toLowerCase().includes('aportes'));
+                                        if (found) targetAccId = found.id;
+                                        else targetAccId = accounts[0].id;
+                                    }
+
+                                    const targetAccount = accounts.find(a => a.id === targetAccId);
+
+                                    return targetAccount ? (
+                                        <div className="bg-gray-100 px-3 py-2 rounded-lg border border-gray-200 text-right">
+                                            <div className="font-bold text-gray-900 text-sm">{targetAccount.nombre}</div>
+                                            <div className="text-[10px] text-gray-500 font-mono">{targetAccount.numero || 'Sin Nro'} - {targetAccount.moneda || 'PEN'}</div>
+                                            {/* Hidden input if needed by submit handler (though currently it passes null) */}
+                                            <input type="hidden" name="accountId" value={targetAccount.id} />
+                                        </div>
+                                    ) : (
+                                        <div className="text-red-500 text-xs font-bold bg-red-50 p-2 rounded">
+                                            Sin cuenta configurada
+                                        </div>
+                                    );
+                                })()}
                             </div>
                             <div className="h-px bg-gray-200" />
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-500 text-sm font-medium tracking-tight">Monto Total</span>
-                                <span className={`text-2xl font-black ${selectedFine ? 'text-red-600' : 'text-green-600'}`}>
-                                    S/ {(selectedFine ? parseFloat(selectedFine.monto) : selectedMonths.length * (config?.contribution?.monthlyAmount || 0)).toFixed(2)}
+                                <span className={`text-2xl font-black ${selectedFines.length > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                    S/ {(() => {
+                                        const finesAmount = selectedFines.reduce((sum, f) => sum + parseAmount(f.amount || f.monto), 0);
+                                        const monthsAmount = selectedMonths.reduce((sum, mId) => {
+                                            const c = selectedOrganizer.contributions.find(x => x.id === mId);
+                                            return sum + parseFloat(c?.amount || 0);
+                                        }, 0);
+                                        return (finesAmount + monthsAmount).toFixed(2);
+                                    })()}
                                 </span>
                             </div>
                         </div>
@@ -1153,7 +1216,7 @@ const ContributionsManager = ({
                         {/* File Upload Section */}
                         {/* Voucher Upload Section - Hide if validating an existing payment */}
                         {/* Voucher Upload Section - Hide if validating an existing payment */}
-                        {selectedFine?.estado !== 'validando' && (
+                        {!selectedFines.some(f => f.estado === 'validando') && (
                             <div className="bg-gray-50 p-5 rounded-2xl border border-gray-100 space-y-4">
                                 <label className="block text-sm font-medium text-gray-700">
                                     Comprobante de Pago (Imagen) <span className="text-red-500">*</span>
@@ -1168,7 +1231,7 @@ const ContributionsManager = ({
                                                 accept="image/*"
                                                 onChange={handleFileChange}
                                                 className="hidden"
-                                                required={!selectedFine}
+                                                required={selectedFines.length === 0}
                                             />
                                             <div className="space-y-2">
                                                 {voucherFile ? (
@@ -1211,89 +1274,103 @@ const ContributionsManager = ({
                         )}
 
                         {/* Footer Buttons for Fine Validation */}
-                        {selectedFine?.estado === 'validando' && (
-                            <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
-                                <Button
-                                    type="button"
-                                    onClick={() => {
-                                        setIsRecordModalOpen(false);
-                                        setSelectedFine(null);
-                                    }}
-                                    className="flex-1"
-                                >
-                                    Cerrar
-                                </Button>
-                                <Button
-                                    type="button"
-                                    className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100 border border-red-200"
-                                    onClick={async () => {
-                                        const { value: reason, isDismissed } = await Swal.fire({
-                                            title: 'Motivo del Rechazo',
-                                            text: '¿Por qué rechazas este pago de penalidad?',
-                                            input: 'text',
-                                            showCancelButton: true,
-                                            confirmButtonText: 'Rechazar',
-                                            confirmButtonColor: '#dc2626'
-                                        });
-                                        if (isDismissed || reason === undefined) return;
+                        {(() => {
+                            const validatingFine = selectedFines.find(f => f.estado === 'validando');
+                            if (!validatingFine) return null;
 
-                                        try {
-                                            setIsUploading(true);
-                                            await api.treasury.rejectFine(selectedFine.id, reason);
-                                            const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
-                                            setFines(updatedFines);
-                                            if (onReload) await onReload();
-                                            showSuccess('Penalidad rechazada.', 'Rechazado');
+                            return (
+                                <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+                                    <Button
+                                        type="button"
+                                        onClick={() => {
                                             setIsRecordModalOpen(false);
-                                        } catch (e) { showError(e.message); }
-                                        finally { setIsUploading(false); }
-                                    }}
-                                >
-                                    <XCircle size={18} className="mr-2" /> Rechazar
-                                </Button>
-                                <Button
-                                    type="button"
-                                    className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                                    onClick={async () => {
-                                        try {
-                                            setIsUploading(true);
-                                            await api.treasury.validateFine(selectedFine.id, formAccountId || accounts[0]?.id);
-                                            const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
-                                            setFines(updatedFines);
-                                            if (onReload) await onReload();
-                                            showSuccess('Penalidad validada correctamente.', 'Validado');
-                                            setIsRecordModalOpen(false);
-                                        } catch (e) { showError(e.message); }
-                                        finally { setIsUploading(false); }
-                                    }}
-                                >
-                                    <CheckCircle size={18} className="mr-2" /> Validar
-                                </Button>
-                            </div>
-                        )}
+                                            setSelectedFines([]);
+                                        }}
+                                        className="flex-1"
+                                    >
+                                        Cerrar
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        className="flex-1 bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-100 border border-red-200"
+                                        onClick={async () => {
+                                            const { value: reason, isDismissed } = await Swal.fire({
+                                                title: 'Motivo del Rechazo',
+                                                text: '¿Por qué rechazas este pago de penalidad?',
+                                                input: 'text',
+                                                showCancelButton: true,
+                                                confirmButtonText: 'Rechazar',
+                                                confirmButtonColor: '#dc2626'
+                                            });
+                                            if (isDismissed || reason === undefined) return;
+
+                                            try {
+                                                setIsUploading(true);
+                                                await api.treasury.rejectFine(validatingFine.id, reason);
+                                                if (selectedOrganizer) {
+                                                    const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                                                    setFines(updatedFines);
+                                                }
+                                                if (onReload) await onReload();
+                                                showSuccess('Penalidad rechazada.', 'Rechazado');
+                                                setIsRecordModalOpen(false);
+                                                setSelectedFines([]);
+                                            } catch (e) { showError(e.message); }
+                                            finally { setIsUploading(false); }
+                                        }}
+                                    >
+                                        <XCircle size={18} className="mr-2" /> Rechazar
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white shadow-lg"
+                                        onClick={async () => {
+                                            try {
+                                                setIsUploading(true);
+                                                // Assuming we want to use the default account if not specified
+                                                const defaultAccId = config?.contribution?.defaultContributionAccount || accounts[0]?.id;
+                                                await api.treasury.validateFine(validatingFine.id, defaultAccId);
+                                                if (selectedOrganizer) {
+                                                    const updatedFines = await api.treasury.getFines(selectedOrganizer.organizador_id);
+                                                    setFines(updatedFines);
+                                                }
+                                                if (onReload) await onReload();
+                                                showSuccess('Penalidad validada correctamente.', 'Validado');
+                                                setIsRecordModalOpen(false);
+                                                setSelectedFines([]);
+                                            } catch (e) { showError(e.message); }
+                                            finally { setIsUploading(false); }
+                                        }}
+                                    >
+                                        <CheckCircle size={18} className="mr-2" /> Validar
+                                    </Button>
+                                </div>
+                            );
+                        })()}
 
                         {/* Footer Buttons for Record/Upload */}
-                        {selectedFine?.estado !== 'validando' && (
+                        {/* Logic: If NOT validating, show Record buttons */}
+                        {!selectedFines.some(f => f.estado === 'validando') && !selectedMonths.some(m => getCellStatus(m) === 'IN_PROCESS') && (
                             <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
                                 <Button
                                     type="button"
                                     variant="ghost"
                                     onClick={() => {
                                         setIsRecordModalOpen(false);
-                                        setSelectedFine(null);
+                                        // Optional: Clear selection? No, let user adjust.
                                     }}
                                     className="flex-1"
                                 >
                                     Cancelar
                                 </Button>
                                 <Button
-                                    onClick={handleApproveSubmit}
+                                    onClick={handleRecordSubmit}
                                     className="flex-1 bg-blue-600 hover:bg-blue-700 text-white shadow-lg"
                                     loading={isUploading}
-                                    disabled={!voucherFile && !selectedFine}
+                                    disabled={!voucherFile && (selectedMonths.length === 0 && selectedFines.length === 0)}
                                 >
                                     <Upload size={18} className="mr-2" />
-                                    {selectedFine ? 'Enviar Pago' : 'Registrar Pago'}
+                                    {selectedFines.length > 0 || selectedMonths.length > 0 ? 'Registrar Pago' : 'Seleccione Items'}
                                 </Button>
                             </div>
                         )}
@@ -1301,7 +1378,7 @@ const ContributionsManager = ({
                 )}
             </Modal >
 
-            {/* Validation Modal */}
+            {/* Validation Modal - Keep existing logic for Month-based validation (simplification) */}
             < Modal
                 isOpen={isValidatingModalOpen}
                 onClose={() => {

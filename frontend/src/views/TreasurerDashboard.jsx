@@ -10,6 +10,9 @@ import ContributionsManager from '../components/treasury/ContributionsManager';
 import ReportsView from '../components/treasury/ReportsView';
 import TreasurySettings from '../components/treasury/TreasurySettings';
 import IncomeManager from '../components/treasury/IncomeManager';
+import PaymentValidationPage from '../components/treasury/PaymentValidationPage';
+import TransactionHistoryPage from '../components/treasury/TransactionHistoryPage';
+import ExpenseManager from '../components/treasury/ExpenseManager';
 import { showSuccess, showError, showConfirm, showWarning } from '../utils/alerts';
 
 
@@ -83,6 +86,7 @@ const TreasurerDashboard = ({ user }) => {
         totalExpenses: treasuryExpenses = 0,
         budgetExecution = [],
         contributionStatus = {},
+        stats,
         createAccount,
         updateAccount,
         deleteAccount,
@@ -144,83 +148,108 @@ const TreasurerDashboard = ({ user }) => {
 
     // --- Validation Logic: Merge Registrations + Contributions ---
     const pendingContributions = useMemo(() => {
-        if (!contributionPlan) return [];
-        // Group by organizer and voucher timestamp (or ID)
-        const groups = {};
-        contributionPlan.filter(c => c.estado === 'validando').forEach(c => {
-            const key = `${c.organizador_id}-${c.voucheredAt || 'novoucher'}`;
-            if (!groups[key]) {
-                const user = allUsers.find(u => u.id === c.organizador_id);
-                groups[key] = {
-                    id: key,
-                    type: 'Contribution', // Marker
-                    organizerId: c.organizador_id,
-                    name: c.organizador_nombre,
-                    voucheredAt: c.voucheredAt,
-                    voucherData: c.comprobante,
-                    months: [],
-                    amount: 0,
-                    mes_labels: [],
+        if (!contributionPlan || !Array.isArray(contributionPlan)) return [];
 
-                    // Fields for VerificationList compatibility
-                    dni: user?.documentId || user?.dni || 'Organizador',
-                    occupation: user?.occupation || user?.role || 'Comité Organizador',
-                    institution: user?.institution || 'SIMR 2026',
-                    modalidad: `Aporte: ${c.mes_label}`,
-                    ticketType: null, // Use modalidad
-                    email: user?.email || '-',
-                    breakdown: [] // Initialize breakdown array
-                };
-            }
-            groups[key].months.push(c.mes);
-            groups[key].mes_labels.push(c.mes_label);
-            groups[key].amount += c.monto_esperado;
-            groups[key].breakdown.push({
-                label: `Aporte ${c.mes_label}`,
-                price: c.monto_esperado
+        const groups = {};
+
+        contributionPlan.forEach(organizer => {
+            const pendingContribs = organizer.contributions?.filter(c =>
+                c.status === 'IN_PROCESS' || c.status === 'validando'
+            ) || [];
+
+            pendingContribs.forEach(c => {
+                const key = c.payment_id ? `PAY-${c.payment_id}` : `TEMP-${organizer.id}-${c.id}`;
+
+                if (!groups[key]) {
+                    // Try to find matching transaction for voucher and date
+                    const tx = transactions.find(t => t.id === c.payment_id);
+
+                    groups[key] = {
+                        id: c.payment_id || key,
+                        type: 'Contribution',
+                        organizerId: organizer.id,
+                        name: organizer.name,
+                        voucheredAt: tx?.date || tx?.payment_date,
+                        voucherData: tx?.voucher_url || tx?.comprobante,
+                        months: [],
+                        mes_labels: [],
+                        amount: 0,
+
+                        // Fields for VerificationList compatibility
+                        dni: organizer.documentId || organizer.dni || 'Organizador',
+                        occupation: organizer.occupation || 'Comité Organizador',
+                        institution: organizer.institution || 'SIMR 2026',
+                        modalidad: '',
+                        email: organizer.email || '-',
+                        breakdown: []
+                    };
+                }
+
+                groups[key].months.push(c.id);
+                groups[key].mes_labels.push(c.month);
+                groups[key].amount += parseFloat(c.amount || 0);
+                groups[key].breakdown.push({
+                    label: `Aporte ${c.month} ${c.year || '2026'}`,
+                    price: parseFloat(c.amount || 0)
+                });
             });
-            // Update modalida dynamically as we add months
-            groups[key].modalidad = `Aporte: ${groups[key].mes_labels.join(', ')}`;
         });
 
         return Object.values(groups).map(g => ({
             ...g,
+            modalidad: `Aporte: ${g.mes_labels.join(', ')}`,
             details: `Meses: ${g.mes_labels.join(', ')}`
         }));
-    }, [contributionPlan, allUsers]);
+    }, [contributionPlan, transactions]);
 
     const pendingFines = useMemo(() => {
-        return fines.filter(f => f.estado === 'validando').map(f => {
-            const user = allUsers.find(u => u.id === f.userId);
-            const userName = user?.name || contributionPlan.find(c => c.organizador_id === f.userId)?.organizador_nombre || 'Usuario';
-            // Use fallbacks for monto/amount and reason/description to handle data inconsistency
-            const amountVal = parseFloat(f.monto || f.amount || 0);
-            const reasonVal = f.reason || f.descripcion || 'Sin motivo';
+        if (!contributionPlan || !Array.isArray(contributionPlan)) return [];
 
-            return {
-                id: f.id,
-                type: 'Contribution',
-                isFine: true,
-                organizerId: f.userId,
-                name: userName,
-                voucheredAt: f.paidAt,
-                voucherData: f.voucher,
-                amount: amountVal,
-                modalidad: `Penalidad: ${reasonVal}`,
-                details: `Penalidad`,
+        const groups = {};
 
-                dni: user?.documentId || user?.dni || 'Organizador',
-                occupation: user?.occupation || user?.role || 'Comité Organizador',
-                institution: user?.institution || 'SIMR 2026',
-                ticketType: null,
-                email: user?.email || '-',
-                breakdown: [{
-                    label: `Penalidad: ${reasonVal}`,
-                    price: amountVal
-                }]
-            };
+        contributionPlan.forEach(organizer => {
+            const pendingPents = organizer.penalties?.filter(p =>
+                p.status === 'IN_PROCESS' || p.status === 'validando'
+            ) || [];
+
+            pendingPents.forEach(p => {
+                const key = p.payment_id ? `PAY-${p.payment_id}` : `FINE-${organizer.id}-${p.id}`;
+
+                if (!groups[key]) {
+                    const tx = transactions.find(t => t.id === p.payment_id);
+
+                    groups[key] = {
+                        id: p.payment_id || key,
+                        type: 'Contribution',
+                        isFine: true,
+                        organizerId: organizer.id,
+                        name: organizer.name,
+                        voucheredAt: tx?.date || tx?.payment_date,
+                        voucherData: tx?.voucher_url || tx?.comprobante,
+                        amount: 0,
+
+                        dni: organizer.documentId || organizer.dni || 'Organizador',
+                        occupation: organizer.occupation || 'Comité Organizador',
+                        institution: organizer.institution || 'SIMR 2026',
+                        modalidad: 'Penalidades',
+                        email: organizer.email || '-',
+                        breakdown: []
+                    };
+                }
+
+                groups[key].amount += parseFloat(p.amount || 0);
+                groups[key].breakdown.push({
+                    label: `Penalidad: ${p.reason || 'Sanción'}`,
+                    price: parseFloat(p.amount || 0)
+                });
+            });
         });
-    }, [fines, contributionPlan, allUsers]);
+
+        return Object.values(groups).map(g => ({
+            ...g,
+            details: `Penalidades acumuladas`
+        }));
+    }, [contributionPlan, transactions]);
 
     // Combine for display (Contributions first)
     const allPendingValidations = [...pendingContributions, ...pendingFines, ...pendingRegistrations];
@@ -273,16 +302,11 @@ const TreasurerDashboard = ({ user }) => {
         document.body.removeChild(link);
     };
 
-    // Transaction Form
-    const { values: formData, handleChange, setValues: setFormData, reset: resetForm } = useForm({
-        description: '',
-        amount: '',
-        accountId: '',
-        category: '',
-        date: new Date().toISOString().split('T')[0]
-    });
-
-    const categoriesList = activeTab === 'income' ? categories.income : categories.expense;
+    // Categories normalization for dropdowns
+    const categoriesNormalized = useMemo(() => ({
+        income: categories.income.map(cat => typeof cat === 'object' ? cat.name : cat),
+        expense: categories.expense.map(cat => typeof cat === 'object' ? cat.name : cat)
+    }), [categories]);
 
     // Columns definitions
     const transactionColumns = useMemo(() => [
@@ -552,52 +576,26 @@ const TreasurerDashboard = ({ user }) => {
         setNewCategory(category);
     };
 
-    const handleAddTransaction = async (e) => {
-        e.preventDefault();
+    // Transaction Handlers are now handled via handleTransactionSubmitV2
 
-        if (!formData.accountId) {
-            showWarning('Seleccione una cuenta para continuar.', 'Cuenta requerida');
-            return;
-        }
 
-        const transactionData = {
-            fecha: formData.date,
-            descripcion: formData.description,
-            monto: activeTab === 'income'
-                ? parseFloat(formData.amount)
-                : -parseFloat(formData.amount),
-            categoria: formData.category,
-            cuenta_id: formData.accountId
-        };
-
+    // Dedicated handler for manual transactions (Income/Expense)
+    const handleTransactionSubmitV2 = async (submitData) => {
         try {
-            await createTransaction(transactionData);
-            await loadData(); // Reload legacy data for compatibility
-            resetForm();
-            showSuccess(`La transacción ha sido registrada exitosamente.`, `${activeTab === 'income' ? 'Ingreso' : 'Egreso'} registrado`);
-        } catch (err) {
-            console.error(err);
-            showError(err.message, 'Error al registrar');
-        }
-    };
+            await api.treasury.addTransactionV2(submitData);
+            await Promise.all([
+                loadData(),
+                reloadTreasury()
+            ]);
 
+            // Determine message from FormData if available, or use generic
+            const amountStr = submitData.get ? submitData.get('amount') : null;
+            const isExpense = amountStr && parseFloat(amountStr) < 0;
 
-    // Dedicated handler for income modal
-    const handleIncomeSubmit = async (data) => {
-        try {
-            await api.treasury.addTransactionV2({
-                fecha: data.date || new Date().toISOString(),
-                descripcion: data.description,
-                monto: parseFloat(data.amount),
-                categoria: data.category,
-                cuenta_id: data.accountId,
-                type: 'income'
-            });
-            await loadData();
-            showSuccess('Ingreso registrado correctamente.');
+            showSuccess(`${isExpense ? 'Egreso' : 'Ingreso'} registrado correctamente.`);
         } catch (error) {
             console.error(error);
-            showError(error.message, 'Error al registrar ingreso');
+            showError(error.message, 'Error al registrar');
         }
     };
 
@@ -616,31 +614,7 @@ const TreasurerDashboard = ({ user }) => {
         }
     };
 
-    const handleCreateAccount = async (accountData) => {
-        if (!formData.accountId) {
-            showWarning('Seleccione una cuenta para continuar.', 'Cuenta requerida');
-            return;
-        }
 
-        const transactionData = {
-            fecha: formData.date,
-            descripcion: formData.description,
-            monto: parseFloat(formData.amount), // Always positive for income
-            categoria: formData.category,
-            cuenta_id: formData.accountId,
-            type: 'income' // Explicitly set type for filtering
-        };
-
-        try {
-            await createTransaction(transactionData);
-            await reloadTreasury(); // Reload treasury data to update transactions list
-            await loadData(); // Reload legacy data for compatibility
-            showSuccess('El ingreso ha sido registrado exitosamente.', 'Ingreso registrado');
-        } catch (err) {
-            console.error(err);
-            showError(err.message, 'Error al registrar');
-        }
-    };
 
     const handleDelete = async (id) => {
         setConfirmConfig({
@@ -887,6 +861,16 @@ const TreasurerDashboard = ({ user }) => {
                         </span>
                     </button>
                     <button
+                        onClick={() => handleTabChange('history')}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'history' ? 'bg-white text-blue-800 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                    >
+                        <Clock size={20} />
+                        <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                            <span className="absolute bottom-full left-1/2 -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></span>
+                            Historial
+                        </span>
+                    </button>
+                    <button
                         onClick={() => handleTabChange('income-details')}
                         className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'income-details' ? 'bg-white text-green-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
@@ -898,8 +882,8 @@ const TreasurerDashboard = ({ user }) => {
                     </button>
 
                     <button
-                        onClick={() => handleTabChange('expense')}
-                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expense' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
+                        onClick={() => handleTabChange('expenses')}
+                        className={`group relative px-3 py-2 text-sm font-medium rounded-md transition-all ${activeTab === 'expenses' ? 'bg-white text-red-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
                     >
                         <TrendingDown size={20} />
                         <span className="absolute top-full left-1/2 -translate-x-1/2 mt-2 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
@@ -1023,14 +1007,18 @@ const TreasurerDashboard = ({ user }) => {
                     confirmedAttendees={confirmedAttendees}
                     contributionStatus={contributionStatus}
                     categories={categories}
-                    onIncomeSubmit={handleIncomeSubmit}
+                    onIncomeSubmit={handleTransactionSubmitV2}
                 />
             )}
 
             {activeTab === 'summary' && (
                 <div className="space-y-6">
                     {/* Charts Integration */}
-                    <TreasurerCharts transactions={transactions} categories={categories} />
+                    <TreasurerCharts
+                        transactions={transactions}
+                        categories={categories}
+                        stats={stats}
+                    />
 
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
                         <h3 className="font-bold text-gray-900 mb-4">Últimos Movimientos</h3>
@@ -1044,200 +1032,29 @@ const TreasurerDashboard = ({ user }) => {
             )}
 
             {activeTab === 'validation' && (
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Left Column: Pending Validations */}
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                <CheckSquare className="text-orange-600" /> Validación de Pagos
-                            </h3>
-                            <div className="text-sm text-gray-500">
-                                Pendientes: <span className="font-bold text-gray-900">{allPendingValidations.length}</span>
-                            </div>
-                        </div>
-                        <VerificationList
-                            pendingRegistrations={allPendingValidations}
-                            onApprove={handleApproveRegistration}
-                            onReject={handleRejectRegistration}
-                            pricingConfig={pricingConfig}
-                        />
-                    </div>
-
-                    {/* Right Column: Recent Registrations */}
-                    <div className="space-y-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-                                <Users className="text-blue-600" /> Últimos Registrados
-                            </h3>
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-blue-600 hover:bg-blue-50"
-                                onClick={() => setShowAllRegistrations(true)}
-                            >
-                                Ver Todos
-                            </Button>
-                        </div>
-                        <div className="space-y-3">
-                            {[...confirmedAttendees]
-                                .sort((a, b) => new Date(b.registrationDate || b.date) - new Date(a.registrationDate || a.date))
-                                .slice(0, 4).map((attendee) => (
-                                    <Card
-                                        key={attendee.id}
-                                        className="p-4 hover:shadow-md transition-shadow cursor-pointer"
-                                        onClick={() => {
-                                            const item = {
-                                                name: attendee.name,
-                                                type: 'Inscripción',
-                                                secondary: attendee.email,
-                                                details: attendee.institution,
-                                                date: attendee.registrationDate || attendee.date,
-                                                amount: parseFloat(attendee.amount || 0),
-                                                voucher: attendee.voucherData || attendee.voucher,
-                                                coupon: attendee.coupon || attendee.couponCode || attendee.coupon_code || (attendee.appliedCoupon && attendee.appliedCoupon.code),
-                                                email: attendee.email,
-                                                original: attendee // Pass full object for detail view
-                                            };
-                                            handleViewDetail(item);
-                                        }}
-                                    >
-                                        <div className="flex items-start gap-3">
-                                            <div className="bg-blue-50 p-2 rounded-full">
-                                                <User className="text-blue-600" size={20} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-bold text-gray-900 truncate">{attendee.name}</h4>
-                                                <p className="text-sm text-gray-600 truncate">{attendee.email}</p>
-                                                <div className="flex items-center gap-4 mt-2 text-xs text-gray-500">
-                                                    <span className="flex items-center gap-1">
-                                                        <Calendar size={12} />
-                                                        {new Date(attendee.registrationDate || attendee.date).toLocaleString('es-PE', {
-                                                            day: '2-digit',
-                                                            month: '2-digit',
-                                                            year: 'numeric',
-                                                            hour: '2-digit',
-                                                            minute: '2-digit'
-                                                        })}
-                                                    </span>
-                                                    <span className="font-bold text-blue-600">
-                                                        S/ {parseFloat(attendee.amount || 0).toFixed(2)}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </Card>
-                                ))}
-                            {confirmedAttendees.length === 0 && (
-                                <EmptyState
-                                    icon={Users}
-                                    title="Sin registros"
-                                    description="No hay usuarios registrados aún."
-                                />
-                            )}
-                        </div>
-                    </div>
+                <div className="w-full h-full">
+                    <PaymentValidationPage
+                        onGoToHistoryTab={() => handleTabChange('history')}
+                        onRefresh={reloadTreasury}
+                    />
                 </div>
             )}
 
-            {activeTab === 'expense' && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                    {/* Form */}
-                    <div className="lg:col-span-1">
-                        <Card>
-                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
-                                <Plus size={20} className="text-red-600" />
-                                Registrar Egreso
-                            </h3>
-                            <form onSubmit={handleAddTransaction} className="space-y-4">
-                                <FormField
-                                    label="Descripción"
-                                    name="description"
-                                    value={formData.description}
-                                    onChange={handleChange}
-                                    placeholder="Ej. Pago de inscripción"
-                                    required
-                                />
-                                <FormField
-                                    label="Monto (S/)"
-                                    name="amount"
-                                    type="number"
-                                    value={formData.amount}
-                                    onChange={handleChange}
-                                    placeholder="0.00"
-                                    min="0"
-                                    step="0.01"
-                                    required
-                                />
-                                <FormField
-                                    label="Cuenta"
-                                    name="accountId"
-                                    type="select"
-                                    value={formData.accountId}
-                                    onChange={handleChange}
-                                    options={[
-                                        { value: "", label: "Seleccionar cuenta..." },
-                                        ...accounts.map(acc => ({
-                                            value: acc.id,
-                                            label: `${acc.nombre} (S/ ${(acc.saldo_actual || 0).toFixed(2)})`
-                                        }))
-                                    ]}
-                                    required
-                                />
-                                <FormField
-                                    label="Categoría"
-                                    name="category"
-                                    type="select"
-                                    value={formData.category}
-                                    onChange={handleChange}
-                                    options={[
-                                        { value: "", label: "Seleccionar..." },
-                                        ...(categoriesList || []).map(cat => ({ value: cat, label: cat }))
-                                    ]}
-                                    required
-                                />
-                                <FormField
-                                    label="Fecha"
-                                    name="date"
-                                    type="date"
-                                    value={formData.date}
-                                    onChange={handleChange}
-                                    required
-                                />
-                                <Button type="submit" className="w-full bg-red-600 hover:bg-red-700 text-white">
-                                    Guardar Egreso
-                                </Button>
-                            </form>
-                        </Card>
-                    </div>
+            {activeTab === 'history' && (
+                <TransactionHistoryPage />
+            )}
 
-                    {/* List */}
-                    <div className="lg:col-span-2 space-y-8">
-
-
-                        <div className="space-y-4">
-                            <h3 className="font-bold text-gray-900">Historial de Egresos</h3>
-                            {transactions.filter(t => t.type === activeTab).length > 0 ? (
-                                <Table
-                                    columns={historyColumns}
-                                    data={transactions.filter(t => t.type === activeTab)}
-                                />
-                            ) : (
-                                <EmptyState
-                                    icon={FileText}
-                                    title="No hay registros de egresos"
-                                    description="Comience agregando nuevos registros desde el formulario."
-                                />
-                            )}
-                        </div>
-                    </div>
-                </div>
+            {activeTab === 'expenses' && (
+                <ExpenseManager
+                    transactions={transactions}
+                    accounts={accounts}
+                    categories={categories}
+                    onExpenseSubmit={handleTransactionSubmitV2}
+                />
             )}
 
             {activeTab === 'settings' && (
                 <TreasurySettings
-                    config={config}
-                    accounts={accounts}
-                    onUpdateConfig={updateConfig}
                     onInitializePlan={initializeContributionPlan}
                     categories={categories}
                     onAddCategory={handleAddCategoryWrapper}
@@ -1267,13 +1084,9 @@ const TreasurerDashboard = ({ user }) => {
                     <AccountsManager
                         key={transactions.length} // Force re-render on transaction change
                         accounts={accounts}
-                        banks={config?.banks || []}
-                        wallets={config?.wallets || []}
                         transactions={transactions}
-                        onCreateAccount={createAccount}
-                        onUpdateAccount={updateAccount}
-                        onDeleteAccount={deleteAccount}
                         onTransfer={handleTransfer}
+                        onRefresh={reloadTreasury}
                     />
                 )
             }
@@ -1305,6 +1118,8 @@ const TreasurerDashboard = ({ user }) => {
                         user={user}
                         organizers={contributionStatus}
                         config={config}
+                        categories={categories}
+                        allUsers={allUsers}
                     />
                 )
             }

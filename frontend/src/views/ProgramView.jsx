@@ -5,8 +5,6 @@ import DetailedView from '../components/cronograma-integration/DetailedView';
 import ChecklistView from '../components/cronograma-integration/ChecklistView';
 import SpeakerSection from '../components/cronograma-integration/SpeakerSection';
 import Breadcrumbs from '../components/cronograma-integration/Breadcrumbs';
-import { INITIAL_SCHEDULE } from '../components/cronograma-integration/data/mockData';
-
 import { useProgramSchedule } from '../hooks/useProgramSchedule';
 
 const ProgramView = () => {
@@ -60,11 +58,10 @@ const ProgramView = () => {
     return (
         <div className="flex flex-col min-h-screen print:min-h-0 bg-gray-50/50 print:bg-white dark:bg-gray-900 animate-fadeIn text-slate-900 dark:text-gray-100 font-sans">
             {/* Print-only Checklist for Summary Mode */}
-            {viewMode === 'summary' && (
-                <div className="hidden print:block">
-                    <ChecklistView schedule={scheduleData} onBack={() => { }} />
-                </div>
-            )}
+            {/* Print-only Checklist (Always rendered for print) */}
+            <div id="printable-area" className="hidden print:block">
+                <ChecklistView schedule={scheduleData} onBack={() => { }} />
+            </div>
 
             <main className={`flex-grow px-4 md:px-10 py-2 md:py-4 ${viewMode === 'summary' ? 'print:hidden' : ''}`}>
                 <div className="max-w-7xl mx-auto flex flex-col gap-6">

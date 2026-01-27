@@ -1,22 +1,48 @@
-import React, { useState } from 'react';
-import { FileText, Check } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { FileText, Check, AlertCircle } from 'lucide-react';
 import { Modal, Button, LoadingSpinner } from '../ui';
 import { api } from '../../services/api';
+import { showError } from '../../utils/alerts';
 
 const AssignWorkToJuryModal = ({ isOpen, onClose, juror, works, onUpdate }) => {
     const [selectedWorks, setSelectedWorks] = useState([]);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [juryLimit, setJuryLimit] = useState(3);
+
+    useEffect(() => {
+        const fetchLimit = async () => {
+            try {
+                const settings = await api.academic.getSettings();
+                const limitSetting = settings.find(s => s.key === 'jurados_por_trabajo');
+                if (limitSetting) {
+                    setJuryLimit(parseInt(limitSetting.value));
+                }
+            } catch (error) {
+                console.error("Error fetching jury limit:", error);
+            }
+        };
+        if (isOpen) {
+            fetchLimit();
+        }
+    }, [isOpen]);
 
     // Filter available works:
-    // 1. Must be 'Aceptado'
+    // 1. Must be 'Aceptado' (case-insensitive)
     // 2. Must NOT already be assigned to this juror
+    // 3. Must NOT have reached the limit
     const availableWorks = works?.filter(w => {
-        if (w.status !== 'Aceptado') return false;
+        if (w.status?.toLowerCase() !== 'aceptado') return false;
 
         let currentJury = w.jury || [];
         if (!Array.isArray(currentJury)) currentJury = [currentJury];
 
-        return !currentJury.includes(juror?.id);
+        // Condition 2: Already assigned to this juror
+        if (currentJury.includes(juror?.id)) return false;
+
+        // Condition 3: Limit reached
+        if (currentJury.length >= juryLimit) return false;
+
+        return true;
     }) || [];
 
     const handleToggleWork = (workId) => {
@@ -32,21 +58,11 @@ const AssignWorkToJuryModal = ({ isOpen, onClose, juror, works, onUpdate }) => {
     const handleAssign = async () => {
         setIsSubmitting(true);
         try {
-            // Update each selected work SEQUENTIALLY to avoid race conditions with local storage
+            // Update each selected work SEQUENTIALLY
             for (const workId of selectedWorks) {
-                // Fetch fresh work data to ensure we have the latest attributes
-                const freshWork = await api.works.getById(workId);
-                if (!freshWork) continue;
-
-                let currentJury = freshWork.jury || [];
-                if (!Array.isArray(currentJury)) currentJury = [currentJury];
-
-                // Check again if already assigned (double safety)
-                if (currentJury.includes(juror.id)) continue;
-
-                await api.works.update({
-                    ...freshWork,
-                    jury: [...currentJury, juror.id]
+                await api.academic.assignJury({
+                    work_id: workId,
+                    jury_user_id: juror.id
                 });
             }
 
@@ -56,7 +72,7 @@ const AssignWorkToJuryModal = ({ isOpen, onClose, juror, works, onUpdate }) => {
             // Optional: Show success toast here if global toast is available
         } catch (error) {
             console.error("Error assigning works to jury:", error);
-            alert("Hubo un error al asignar los trabajos. Por favor intente nuevamente.");
+            showError(error.message || "Hubo un error al asignar los trabajos.");
         } finally {
             setIsSubmitting(false);
         }

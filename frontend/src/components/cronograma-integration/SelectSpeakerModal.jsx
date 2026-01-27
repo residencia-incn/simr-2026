@@ -18,7 +18,10 @@ const SelectSpeakerModal = ({ isOpen, onClose, onSelect, selectedSpeakers = [] }
     const loadSpeakers = async () => {
         setLoading(true);
         try {
-            const data = await api.speakers.getAll();
+            // Use the new role-based search to fetch "Ponente" users
+            // If searchTerm is empty, it returns all "ponente" users
+            // If searchTerm has value, it filters by name/dni AND role "ponente" backend-side
+            const data = await api.users.search(searchTerm, 'ponente');
             setSpeakers(data);
         } catch (error) {
             console.error("Error loading speakers:", error);
@@ -27,10 +30,18 @@ const SelectSpeakerModal = ({ isOpen, onClose, onSelect, selectedSpeakers = [] }
         }
     };
 
-    const filteredSpeakers = speakers.filter(s =>
-        s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (s.institution && s.institution.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+    // Trigger load when search term changes (debounced ideally, but simple effect for now)
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            if (isOpen) loadSpeakers();
+        }, 300);
+        return () => clearTimeout(timer);
+    }, [searchTerm, isOpen]);
+
+    // Client-side filtering is no longer needed if backend does it, 
+    // but we might keep it if we fetch ALL speakers initialy. 
+    // However, for scalability, let's rely on the effect above updating 'speakers'
+    const filteredSpeakers = speakers;
 
     const isSelected = (speakerId) => {
         return selectedSpeakers.some(s => s.id === speakerId);
@@ -73,14 +84,14 @@ const SelectSpeakerModal = ({ isOpen, onClose, onSelect, selectedSpeakers = [] }
                                 key={speaker.id}
                                 onClick={() => handleToggleSpeaker(speaker)}
                                 className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${isSelected(speaker.id)
-                                        ? 'bg-primary/5 border-primary ring-1 ring-primary/20'
-                                        : 'bg-white dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                                    ? 'bg-primary/5 border-primary ring-1 ring-primary/20'
+                                    : 'bg-white dark:bg-slate-800/30 border-slate-200 dark:border-slate-700 hover:border-primary/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div
                                         className="bg-center bg-no-repeat bg-cover rounded-full size-12 border border-slate-100 dark:border-slate-700 shadow-sm"
-                                        style={{ backgroundImage: `url("${speaker.imageUrl || speaker.image || 'https://via.placeholder.com/150'}")` }}
+                                        style={{ backgroundImage: `url("${speaker.imageUrl || speaker.image || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0id2hpdGUiPjxwYXRoIGQ9Ik0xMiAxMkMyLjcxIDEyIDEuOTg4IDYuNzUyIDQuNDA0IDQuMjI0IDQuOTYyIDMuNjQgNi40MjYgMyA4IDNoOGMxLjU3NCAwIDMuMDM4LjY0IDMuNTk2IDEuMjI0QzIyLjAxMiA2Ljc1MiAyMS4yOSAxMiAxMiAxMnpNMTIgMTRjLTQuNDIgMC04IDEuNzktOCA0djJoMTZ2LTJjMC0yLjIxLTMuNTgtNC04LTR6IiBmaWxsPSIjY2Njc2NjIi8+PC9zdmc+'}")` }}
                                     ></div>
                                     <div>
                                         <h4 className="text-sm font-bold text-slate-900 dark:text-white">{speaker.name}</h4>
@@ -91,8 +102,8 @@ const SelectSpeakerModal = ({ isOpen, onClose, onSelect, selectedSpeakers = [] }
                                     </div>
                                 </div>
                                 <div className={`size-6 rounded-full flex items-center justify-center border ${isSelected(speaker.id)
-                                        ? 'bg-primary border-primary text-white shadow-sm'
-                                        : 'border-slate-300 dark:border-slate-600'
+                                    ? 'bg-primary border-primary text-white shadow-sm'
+                                    : 'border-slate-300 dark:border-slate-600'
                                     }`}>
                                     {isSelected(speaker.id) && <span className="material-symbols-outlined text-[16px]">check</span>}
                                 </div>

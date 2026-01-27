@@ -1,473 +1,243 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
-import { Plus, Edit2, Trash2, Tag, Percent, DollarSign, Calendar, AlertCircle, FileDown, Copy } from 'lucide-react';
+import { Plus, Trash2, Tag, Calendar, History, Loader, Folder } from 'lucide-react';
+import { showToast, showDeleteConfirm, showSuccess, showError } from '../../utils/alerts';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
-import { showWarning, showError, showToast } from '../../utils/alerts';
+import CreateCouponModal from '../coupons/CreateCouponModal';
+import CouponHistoryModal from '../coupons/CouponHistoryModal';
 
 const CouponManager = () => {
     const [coupons, setCoupons] = useState([]);
-    const [redemptions, setRedemptions] = useState([]);
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentCoupon, setCurrentCoupon] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    const [formData, setFormData] = useState({
-        code: '',
-        type: 'percentage', // percentage | fixed
-        value: 0,
-        description: '',
-        maxUses: 0, // 0 = infinite
-        expiry: '',
-        active: true
-    });
+    // Modals State
+    const [isCreateOpen, setIsCreateOpen] = useState(false);
+    const [isHistoryOpen, setIsHistoryOpen] = useState(false);
+    const [editingCoupon, setEditingCoupon] = useState(null);
+    const [selectedCouponHistory, setSelectedCouponHistory] = useState(null);
 
-    const [pricing, setPricing] = useState({ ticketTypes: [], workshops: [] });
+    // Initial load ensures pricing is empty array not undefined
+    // We keep simplified catalogs for display labels (mapping IDs to Names)
+    const [catalogMap, setCatalogMap] = useState({});
 
     useEffect(() => {
         loadData();
     }, []);
 
-    // Lock body scroll when modal is open
-    useEffect(() => {
-        if (isModalOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
+    const loadData = async () => {
+        setLoading(true);
+        try {
+            // Parallel fetch
+            const [couponsData, catalogData] = await Promise.all([
+                api.coupons.getAll(),
+                api.config.getCatalog() // Unified catalog for mapping labels
+            ]);
+
+            setCoupons(couponsData); // Most recent first usually from backend
+
+            // Create a quick lookup map for labels: { "modalidad:1": "Inscripción General", ... }
+            const map = {};
+            if (Array.isArray(catalogData)) {
+                catalogData.forEach(item => {
+                    map[item.id] = item.label;
+                });
+            }
+            setCatalogMap(map);
+
+        } catch (error) {
+            console.error("Error loading data", error);
+            showError("No se pudieron cargar los cupones.");
+        } finally {
+            setLoading(false);
         }
-        return () => {
-            document.body.style.overflow = 'unset';
-        };
-    }, [isModalOpen]);
+    };
 
     const handleCopy = (code) => {
         navigator.clipboard.writeText(code);
         showToast('Código copiado', 'success');
     };
 
-    const loadData = async () => {
-        setLoading(true);
-        try {
-            const [couponsData, attendeesData, pricingData] = await Promise.all([
-                api.coupons.getAll(),
-                api.attendees.getAll(), // Get approved users instead of pending registrations
-                api.treasury.getPricing()
-            ]);
-            setCoupons(couponsData);
-            setPricing(pricingData || { ticketTypes: [], workshops: [] });
-
-            // Process Approved Users to find Coupon Redemptions
-            const logs = attendeesData
-                .filter(user => user.coupon_code || user.couponCode || user.coupon)
-                .map(user => {
-                    const couponCode = user.coupon_code || user.couponCode || user.coupon;
-                    const coupon = couponsData.find(c => c.code === couponCode);
-                    return {
-                        id: user.id,
-                        user: user.name,
-                        dni: user.dni,
-                        code: couponCode,
-                        date: new Date(user.registrationDate || user.date).toLocaleDateString(),
-                        amountPaid: user.amount || 0,
-                        email: user.email,
-                        couponId: coupon?.id || 'unknown'
-                    };
-                });
-            setRedemptions(logs);
-
-        } catch (error) {
-            console.error("Error loading data", error);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleExport = () => {
-        if (redemptions.length === 0) {
-            showWarning('No hay datos para exportar.', 'Sin datos');
-            return;
-        }
-
-        const headers = ["ID Registro", "Usuario", "DNI", "Email", "Cupón", "Monto Pagado", "Fecha"];
-        const csvContent = "data:text/csv;charset=utf-8,"
-            + headers.join(",") + "\n"
-            + redemptions.map(r => `${r.id},"${r.user}","${r.dni}","${r.email}","${r.code}",${r.amountPaid},${r.date}`).join("\n");
-
-        const encodedUri = encodeURI(csvContent);
-        const link = document.createElement("a");
-        link.setAttribute("href", encodedUri);
-        link.setAttribute("download", `reporte_cupones_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-    };
-
-    const handleOpenModal = (coupon = null) => {
-        if (coupon) {
-            setCurrentCoupon(coupon);
-            setFormData({
-                code: coupon.code,
-                type: coupon.type,
-                value: coupon.value,
-                description: coupon.description,
-                maxUses: coupon.maxUses,
-                expiry: coupon.expiry,
-                active: coupon.active
-            });
-        } else {
-            setCurrentCoupon(null);
-            setFormData({
-                code: '',
-                type: 'percentage',
-                value: 0,
-                description: '',
-                maxUses: 100,
-                expiry: new Date(new Date().setMonth(new Date().getMonth() + 1)).toISOString().split('T')[0],
-                active: true
-            });
-        }
-        setIsModalOpen(true);
-    };
-
-    const generateCode = () => {
-        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let code = '';
-        for (let i = 0; i < 8; i++) {
-            code += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        setFormData({ ...formData, code });
-    };
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        try {
-            if (currentCoupon) {
-                await api.coupons.delete(currentCoupon.id);
-                await api.coupons.create(formData);
-            } else {
-                await api.coupons.create(formData);
-            }
-            setIsModalOpen(false);
-            loadData();
-        } catch (error) {
-            console.error(error);
-            showError('No se pudo guardar el cupón.', 'Error al guardar');
-        }
-    };
-
     const handleDelete = async (id) => {
-        if (confirm('¿Eliminar este cupón permanentemente?')) {
-            await api.coupons.delete(id);
-            loadData();
+        const confirmed = await showDeleteConfirm('¿Eliminar este cupón permanentemente?', 'Eliminar Cupón');
+        if (confirmed) {
+            try {
+                await api.coupons.delete(id);
+                showSuccess('Cupón eliminado.');
+                loadData();
+            } catch (e) {
+                showError('Error eliminando cupón.');
+            }
         }
+    };
+
+    const openEdit = (coupon) => {
+        setEditingCoupon(coupon);
+        setIsCreateOpen(true);
+    };
+
+    const openHistory = (coupon) => {
+        setSelectedCouponHistory(coupon);
+        setIsHistoryOpen(true);
+    };
+
+    const handleCloseCreate = () => {
+        setIsCreateOpen(false);
+        setEditingCoupon(null);
     };
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex justify-between items-center">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-900">Gestión de Cupones y Becas</h3>
-                    <p className="text-sm text-gray-500">Administra códigos y monitorea su uso.</p>
+                    <h3 className="text-xl font-bold text-slate-900 tracking-tight">Campaña de Becas y Cupones</h3>
+                    <p className="text-sm text-slate-500 mt-1">Gestione descuentos, becas integrales y códigos promocionales.</p>
                 </div>
-                <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
-                    <Plus size={16} /> Nuevo Cupón
+                <Button onClick={() => setIsCreateOpen(true)} className="flex items-center gap-2 shadow-lg shadow-indigo-200">
+                    <Plus size={18} /> Nuevo Beneficio
                 </Button>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Left Column: Coupon List */}
-                <div className="lg:col-span-2 space-y-4">
-                    <h4 className="font-bold text-gray-700 flex items-center gap-2">
-                        <Tag size={18} /> Cupones Activos
-                    </h4>
-                    <div className="grid gap-4">
-                        {coupons.length === 0 ? (
-                            <div className="p-8 text-center bg-gray-50 rounded-lg border border-dashed border-gray-300 text-gray-500">
-                                No hay cupones creados.
-                            </div>
-                        ) : coupons.map(coupon => {
-                            const isExpired = new Date(coupon.expiry) < new Date();
-                            const isExhausted = coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses;
-                            const statusColor = !coupon.active ? 'bg-gray-100 text-gray-500' : (isExpired || isExhausted ? 'bg-red-50 text-red-600' : 'bg-green-50 text-green-700');
-                            const statusText = !coupon.active ? 'Inactivo' : (isExpired ? 'Expirado' : (isExhausted ? 'Agotado' : 'Activo'));
+            {loading ? (
+                <div className="p-12 text-center text-slate-400 flex flex-col items-center gap-3">
+                    <Loader className="animate-spin" /> Cargando cupones...
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {coupons.map(coupon => {
+                        const isExpired = new Date(coupon.expiry) < new Date();
+                        const isExhausted = coupon.maxUses > 0 && coupon.usedCount >= coupon.maxUses;
+                        const statusColor = !coupon.active ? 'bg-slate-100 text-slate-500 ring-slate-200' :
+                            (isExpired || isExhausted ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-emerald-50 text-emerald-700 ring-emerald-100');
+                        const statusText = !coupon.active ? 'Inactivo' : (isExpired ? 'Expirado' : (isExhausted ? 'Agotado' : 'Activo'));
 
-                            return (
-                                <Card key={coupon.id} className="p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-                                    <div className="flex items-center gap-4">
-                                        <div className={`p-3 rounded-lg flex flex-col items-center justify-center w-16 h-16 ${coupon.active ? 'bg-blue-50 text-blue-600' : 'bg-gray-100 text-gray-400'}`}>
-                                            <Tag size={24} />
-                                        </div>
-                                        <div>
-                                            <div className="flex items-center gap-2">
-                                                <h4 className="font-bold text-gray-900 text-lg tracking-wide font-mono">{coupon.code}</h4>
-                                                <button
+                        return (
+                            <Card key={coupon.id} className="group hover:shadow-lg transition-all duration-300 border-slate-200 relative overflow-hidden">
+                                {/* Decorative top strip */}
+                                <div className={`absolute top-0 left-0 right-0 h-1 ${coupon.active ? 'bg-indigo-500' : 'bg-slate-300'}`}></div>
+
+                                <div className="p-5">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-full bg-slate-50 flex items-center justify-center text-slate-500 group-hover:bg-indigo-50 group-hover:text-indigo-600 transition-colors">
+                                                <Tag size={18} />
+                                            </div>
+                                            <div>
+                                                <div
+                                                    className="font-mono text-lg font-bold text-slate-800 tracking-wider cursor-pointer hover:text-indigo-600"
                                                     onClick={() => handleCopy(coupon.code)}
-                                                    className="p-1 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                                    title="Copiar código"
+                                                    title="Click para copiar"
                                                 >
-                                                    <Copy size={16} />
-                                                </button>
-                                                <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${statusColor}`}>{statusText}</span>
+                                                    {coupon.code}
+                                                </div>
+                                                <div className="text-xs font-semibold text-slate-400 uppercase tracking-widest">{coupon.group_tag || 'General'}</div>
                                             </div>
-                                            <p className="text-sm text-gray-600">{coupon.description}</p>
+                                        </div>
+                                        <span className={`px-2 py-1 rounded text-[10px] uppercase font-bold ring-1 ring-inset ${statusColor}`}>
+                                            {statusText}
+                                        </span>
+                                    </div>
 
-                                            {/* Granular Discount Details Display */}
-                                            <div className="mt-2 text-xs text-gray-500 space-y-1">
-                                                {coupon.applicableModality && (
-                                                    <div className="flex items-center gap-1">
-                                                        <span className="font-bold text-blue-600">
-                                                            {pricing.ticketTypes.find(t => t.id === coupon.applicableModality)?.title || coupon.applicableModality}:
+                                    <h4 className="font-bold text-slate-700 mb-1 line-clamp-1">{coupon.description}</h4>
+
+                                    {/* Discount & Target Modules */}
+                                    <div className="space-y-2 mt-3">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-2xl font-black text-indigo-600">
+                                                {coupon.discountValue === 100 ? 'GRATIS' : `-${coupon.discountValue}%`}
+                                            </span>
+                                            {coupon.discountValue === 100 && (
+                                                <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded font-bold uppercase">Beca Total</span>
+                                            )}
+                                        </div>
+
+                                        <div className="bg-slate-50 rounded-lg p-2 border border-slate-100 min-h-[60px]">
+                                            <p className="text-[10px] text-slate-400 uppercase font-bold mb-1">Aplica a:</p>
+                                            <div className="flex flex-wrap gap-1">
+                                                {(!coupon.targetModules || coupon.targetModules.length === 0) ? (
+                                                    <span className="text-xs text-slate-400 italic">Todo el catálogo (si aplica)</span>
+                                                ) : (
+                                                    coupon.targetModules.slice(0, 3).map((modId, idx) => (
+                                                        <span key={idx} className="text-[10px] px-1.5 py-0.5 bg-white border border-slate-200 rounded text-slate-600 truncate max-w-[150px]" title={catalogMap[modId] || modId}>
+                                                            {catalogMap[modId] || modId}
                                                         </span>
-                                                        <span>{coupon.modalityDiscount}% OFF</span>
-                                                    </div>
+                                                    ))
                                                 )}
-                                                {coupon.workshopDiscounts && Object.keys(coupon.workshopDiscounts).length > 0 && (
-                                                    <div className="flex flex-wrap gap-1">
-                                                        <span className="font-bold text-orange-600">Talleres:</span>
-                                                        {Object.entries(coupon.workshopDiscounts).map(([wsId, disc]) => (
-                                                            <span key={wsId} className="bg-orange-50 text-orange-700 px-1 rounded border border-orange-100">
-                                                                {pricing.workshops.find(w => w.id === wsId)?.name || wsId} (-{disc}%)
-                                                            </span>
-                                                        ))}
-                                                    </div>
+                                                {(coupon.targetModules?.length > 3) && (
+                                                    <span className="text-[10px] px-1.5 py-0.5 text-slate-400">
+                                                        +{coupon.targetModules.length - 3} más
+                                                    </span>
                                                 )}
-                                            </div>
-
-                                            <div className="flex items-center gap-4 text-xs text-gray-400 mt-2">
-                                                <span className="flex items-center gap-1"><Tag size={12} /> Usados: {coupon.usedCount} / {coupon.maxUses === 0 ? '∞' : coupon.maxUses}</span>
-                                                <span className="flex items-center gap-1"><Calendar size={12} /> Expira: {coupon.expiry}</span>
                                             </div>
                                         </div>
                                     </div>
-                                    <button onClick={() => handleDelete(coupon.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                        <Trash2 size={16} />
-                                    </button>
-                                </Card>
-                            );
-                        })}
-                    </div>
-                </div>
 
-                {/* Right Column: Redemption Log */}
-                <div className="lg:col-span-1 space-y-4">
-                    <div className="flex justify-between items-center">
-                        <h4 className="font-bold text-gray-700 flex items-center gap-2">
-                            <Calendar size={18} /> Historial de Uso
-                        </h4>
-                        <Button variant="outline" size="sm" onClick={handleExport} disabled={redemptions.length === 0} className="text-xs h-8">
-                            <FileDown size={14} className="mr-1" /> Exportar
-                        </Button>
-                    </div>
+                                    {/* Footer Stats */}
+                                    <div className="flex items-center justify-between mt-5 pt-4 border-t border-slate-100 text-xs text-slate-500">
+                                        <div className="flex gap-3">
+                                            <span className="flex items-center gap-1" title="Usos / Límite">
+                                                <History size={12} />
+                                                <b className={coupon.usedCount > 0 ? 'text-indigo-600' : ''}>{coupon.usedCount}</b>
+                                                / {coupon.maxUses === 0 ? '∞' : coupon.maxUses}
+                                            </span>
+                                            <span className="flex items-center gap-1" title="Fecha Expiración">
+                                                <Calendar size={12} /> {coupon.expiry}
+                                            </span>
+                                        </div>
 
-                    <Card className="overflow-hidden bg-gray-50/50 border-gray-200">
-                        <div className="max-h-[600px] overflow-y-auto">
-                            {redemptions.length === 0 ? (
-                                <div className="p-8 text-center text-sm text-gray-500">
-                                    No se han registrado usos de cupones aún.
+                                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                            <button
+                                                onClick={() => openHistory(coupon)}
+                                                className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition"
+                                                title="Ver Historial"
+                                            >
+                                                <History size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => openEdit(coupon)}
+                                                className="p-1.5 hover:bg-slate-100 rounded text-slate-400 hover:text-blue-600 transition"
+                                                title="Editar"
+                                            >
+                                                <Folder size={14} /> {/* Icon changed from Edit to Folder/File generic pending Edit icon import */}
+                                            </button>
+                                            <button
+                                                onClick={() => handleDelete(coupon.id)}
+                                                className="p-1.5 hover:bg-red-50 rounded text-slate-400 hover:text-red-500 transition"
+                                                title="Eliminar"
+                                            >
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
-                            ) : (
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-100 text-gray-600 font-medium sticky top-0">
-                                        <tr>
-                                            <th className="p-3">Usuario</th>
-                                            <th className="p-3">Cupón</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-200">
-                                        {redemptions.map((log, idx) => (
-                                            <tr key={idx} className="hover:bg-white transition-colors">
-                                                <td className="p-3">
-                                                    <div className="font-medium text-gray-900">{log.user}</div>
-                                                    <div className="text-xs text-gray-500">{log.date}</div>
-                                                </td>
-                                                <td className="p-3">
-                                                    <span className="inline-block px-2 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-mono font-bold">
-                                                        {log.code}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
-                        </div>
-                    </Card>
-                </div>
-            </div>
-
-            {/* Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
-                        <div className="p-5 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-shrink-0">
-                            <h3 className="font-bold text-gray-900">{currentCoupon ? 'Editar Cupón' : 'Nuevo Cupón'}</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">×</button>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="p-5 space-y-4 overflow-y-auto">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Código del Cupón</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none uppercase font-mono"
-                                        value={formData.code}
-                                        onChange={e => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                                        placeholder="EJ: BECA2026"
-                                    />
-                                    <Button type="button" variant="outline" onClick={generateCode} title="Generar código aleatorio">Generar</Button>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Expiración</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.expiry}
-                                        onChange={e => setFormData({ ...formData, expiry: e.target.value })}
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Límite de Usos</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                        value={formData.maxUses}
-                                        onChange={e => setFormData({ ...formData, maxUses: parseInt(e.target.value) })}
-                                        placeholder="0 = Ilimitado"
-                                    />
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2 border-t border-gray-100">
-                                <ModalitySelector pricing={pricing} formData={formData} setFormData={setFormData} />
-                                <WorkshopSelector pricing={pricing} formData={formData} setFormData={setFormData} />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                    value={formData.description}
-                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                    placeholder="Ej: Beca Integral para Residentes"
-                                />
-                            </div>
-
-                            <div className="flex gap-3 pt-4 justify-end">
-                                <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                                <Button type="submit">Guardar Cupón</Button>
-                            </div>
-                        </form>
-                    </div>
+                            </Card>
+                        );
+                    })}
                 </div>
             )}
-        </div>
-    );
-};
 
-// HELPER COMPONENTS FOR THE FORM
-const ModalitySelector = ({ pricing, formData, setFormData }) => (
-    <div className="space-y-4">
-        <h4 className="font-bold text-gray-700 text-sm border-b pb-2">1. Modalidad (Ticket)</h4>
-        <div className="space-y-3 max-h-32 overflow-y-auto pr-2">
-            {pricing.ticketTypes.map(ticket => (
-                <label key={ticket.id} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${formData.applicableModality === ticket.id ? 'border-blue-500 bg-blue-50 ring-1 ring-blue-500' : 'border-gray-200 hover:bg-gray-50'}`}>
-                    <div className="flex items-center gap-3">
-                        <input
-                            type="radio"
-                            name="modality"
-                            className="text-blue-600 focus:ring-blue-500"
-                            checked={formData.applicableModality === ticket.id}
-                            onChange={() => setFormData({ ...formData, applicableModality: ticket.id, modalityDiscount: formData.modalityDiscount || 0 })}
-                        />
-                        <span className="text-sm font-medium text-gray-700">{ticket.title || ticket.name}</span>
-                    </div>
-                    {formData.applicableModality === ticket.id && (
-                        <div className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-blue-200 shadow-sm w-24">
-                            <input
-                                type="number"
-                                min="0"
-                                max="100"
-                                className="w-full text-right outline-none text-sm font-bold text-blue-700"
-                                value={formData.modalityDiscount}
-                                onChange={(e) => setFormData({ ...formData, modalityDiscount: parseFloat(e.target.value) || 0 })}
-                                onClick={(e) => e.stopPropagation()}
-                            />
-                            <span className="text-xs text-gray-400 font-bold">%</span>
-                        </div>
-                    )}
-                </label>
-            ))}
-        </div>
-        <p className="text-xs text-gray-500 italic">* Seleccione solo una modalidad aplicable.</p>
-    </div>
-);
+            {/* Empty State */}
+            {!loading && coupons.length === 0 && (
+                <div className="p-12 border-2 border-dashed border-slate-200 rounded-xl flex flex-col items-center justify-center text-slate-400">
+                    <Tag size={48} className="mb-4 opacity-20" />
+                    <p className="text-lg font-medium text-slate-600">No hay beneficios creados aún.</p>
+                    <p className="text-sm">Comience creando una nueva campaña de becas o descuentos.</p>
+                </div>
+            )}
 
-const WorkshopSelector = ({ pricing, formData, setFormData }) => {
-    const toggleWorkshop = (id) => {
-        const currentws = { ...formData.workshopDiscounts };
-        if (currentws[id] !== undefined) {
-            delete currentws[id];
-        } else {
-            currentws[id] = 0; // Default 0% (or should it be 100? Let's say 0 and user types)
-        }
-        setFormData({ ...formData, workshopDiscounts: currentws });
-    };
+            {/* Modals */}
+            <CreateCouponModal
+                isOpen={isCreateOpen}
+                onClose={handleCloseCreate}
+                onSuccess={loadData}
+                initialData={editingCoupon}
+            />
 
-    const updateWorkshopDiscount = (id, val) => {
-        setFormData({
-            ...formData,
-            workshopDiscounts: {
-                ...formData.workshopDiscounts,
-                [id]: parseFloat(val) || 0
-            }
-        });
-    };
-
-    return (
-        <div className="space-y-4">
-            <h4 className="font-bold text-gray-700 text-sm border-b pb-2">2. Talleres (Opcional)</h4>
-            <div className="space-y-3 max-h-32 overflow-y-auto pr-2">
-                {pricing.workshops.map(ws => {
-                    const isSelected = formData.workshopDiscounts && formData.workshopDiscounts[ws.id] !== undefined;
-                    return (
-                        <label key={ws.id} className={`flex items-center justify-between p-3 border rounded-lg cursor-pointer transition-all ${isSelected ? 'border-orange-500 bg-orange-50 ring-1 ring-orange-500' : 'border-gray-200 hover:bg-gray-50'}`}>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="checkbox"
-                                    className="text-orange-600 focus:ring-orange-500 rounded"
-                                    checked={isSelected}
-                                    onChange={() => toggleWorkshop(ws.id)}
-                                />
-                                <span className="text-sm font-medium text-gray-700">{ws.name}</span>
-                            </div>
-                            {isSelected && (
-                                <div className="flex items-center gap-1 bg-white px-2 py-1 rounded border border-orange-200 shadow-sm w-24">
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        className="w-full text-right outline-none text-sm font-bold text-orange-700"
-                                        value={formData.workshopDiscounts[ws.id]}
-                                        onChange={(e) => updateWorkshopDiscount(ws.id, e.target.value)}
-                                        onClick={(e) => e.stopPropagation()}
-                                    />
-                                    <span className="text-xs text-gray-400 font-bold">%</span>
-                                </div>
-                            )}
-                        </label>
-                    );
-                })}
-            </div>
-            <p className="text-xs text-gray-500 italic">* Puede seleccionar múltiples talleres.</p>
+            <CouponHistoryModal
+                isOpen={isHistoryOpen}
+                onClose={() => setIsHistoryOpen(false)}
+                coupon={selectedCouponHistory}
+            />
         </div>
     );
 };

@@ -1,0 +1,5 @@
+Users: 9
+Registration Requests: 0
+Transactions: 6
+Incomes: 12
+Last TX: 4, user_id: u_70939872, status: approved

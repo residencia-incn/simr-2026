@@ -65,7 +65,7 @@ const Navigation: React.FC<NavigationProps> = ({ currentView, setView }) => {
           <NavLink view={ViewState.STUDENT_DASHBOARD} icon="home" label="Inicio" fillIcon />
           <NavLink view={ViewState.STUDENT_COURSE_CATALOG} icon="school" label="Mis Cursos" />
           {/* Renamed Label here for clarity */}
-          <NavLink view={ViewState.STUDENT_NOTES} icon="edit_note" label="Mis Apuntes" />
+
           <NavLink view={ViewState.STUDENT_LIVE} icon="domain" label="Congreso 2024" />
           <NavLink view={ViewState.STUDENT_CERTIFICATES} icon="verified" label="Certificados" />
           <NavLink view={ViewState.STUDENT_EXAM} icon="quiz" label="Exámenes" />

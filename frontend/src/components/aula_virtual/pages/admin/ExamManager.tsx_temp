@@ -1,0 +1,339 @@
+// ========== SUB-COMPONENT: QUESTION BANK (NEW) ==========
+const QuestionBank = ({ onBack }: { onBack: () => void }) => {
+  const { exams, updateExam } = useAulaVirtual();
+  const [selectedQuestions, setSelectedQuestions] = useState<string[]>([]);
+  const [targetExamId, setTargetExamId] = useState<string>('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [isCreatingQuestion, setIsCreatingQuestion] = useState(false);
+
+  const [typeFilter, setTypeFilter] = useState<string[]>([]);
+  const [courseFilter, setCourseFilter] = useState<string>('ALL');
+  const [tagFilter, setTagFilter] = useState<string[]>([]);
+
+  const allQuestions = React.useMemo(() => {
+    return exams.flatMap(e => (e.questions || []).map(q => ({
+      ...q,
+      id: q.id.toString(),
+      originExamId: e.id,
+      originExamTitle: e.title
+    })));
+  }, [exams]);
+
+  const uniqueCourses = Array.from(new Set(allQuestions.map(q => q.originExamTitle || 'Sin Asignar')));
+  const uniqueTags = Array.from(new Set(allQuestions.flatMap(q => q.tags || [])));
+
+  const filteredQuestions = allQuestions.filter(q => {
+    const matchesSearch = q.text.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = typeFilter.length === 0 || typeFilter.includes(q.type);
+    const matchesCourse = courseFilter === 'ALL' || (q.originExamTitle || 'Sin Asignar') === courseFilter;
+    const matchesTag = tagFilter.length === 0 || (q.tags || []).some(t => tagFilter.includes(t));
+    return matchesSearch && matchesType && matchesCourse && matchesTag;
+  });
+
+  const toggleTypeFilter = (type: string) => {
+    setTypeFilter(prev => prev.includes(type) ? prev.filter(t => t !== type) : [...prev, type]);
+  };
+
+  const toggleTagFilter = (tag: string) => {
+    setTagFilter(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const handleImport = () => {
+    if (!targetExamId) {
+      Swal.fire('Error', 'Selecciona un examen de destino', 'error');
+      return;
+    }
+    const targetExam = exams.find(e => e.id.toString() === targetExamId.toString());
+    if (!targetExam) return;
+
+    const newQuestions = allQuestions
+      .filter(q => selectedQuestions.includes(q.id))
+      .map(({ originExamId, originExamTitle, ...q }: any) => ({ 
+        ...q, 
+        id: Date.now() + Math.random() 
+      }));
+
+    updateExam(targetExam.id, {
+      questions: [...(targetExam.questions || []), ...newQuestions]
+    });
+
+    Swal.fire({
+      title: 'Importación Exitosa',
+      text: `Se han agregado ${newQuestions.length} preguntas al examen "${targetExam.title}".`,
+      icon: 'success',
+      confirmButtonColor: '#2563EB'
+    });
+    setSelectedQuestions([]);
+  };
+
+  return (
+    <div className="flex-1 overflow-y-auto bg-slate-50 p-4 md:p-8 animate-fade-in text-sm">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+        <div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBack}
+              className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-slate-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-all shadow-sm group"
+            >
+              <span className="material-symbols-outlined group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+            </button>
+            <h1 className="text-3xl font-black text-slate-900 tracking-tight">Banco de Preguntas</h1>
+          </div>
+          <p className="text-slate-500 mt-2 pl-14">Gestione todas las preguntas de la plataforma y filtre por categorías.</p>
+        </div>
+        <div className="flex gap-3">
+          <button className="bg-white border border-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2 text-sm">
+            <span className="material-symbols-outlined text-[18px]">upload_file</span>
+            Importar CSV
+          </button>
+          <button 
+            onClick={() => setIsCreatingQuestion(true)}
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-lg shadow-blue-600/20 transition-all flex items-center gap-2 text-sm"
+          >
+            <span className="material-symbols-outlined text-[18px]">add_circle</span>
+            Nueva Pregunta
+          </button>
+        </div>
+      </div>
+
+      {selectedQuestions.length > 0 && (
+        <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl mb-6 flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-blue-600">
+              <span className="material-symbols-outlined">check_box</span>
+            </div>
+            <div>
+              <h4 className="font-bold text-blue-900">{selectedQuestions.length} preguntas seleccionadas</h4>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <select
+              value={targetExamId}
+              onChange={(e) => setTargetExamId(e.target.value)}
+              className="bg-white border border-blue-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Seleccionar examen de destino...</option>
+              {exams.map(e => (
+                <option key={e.id} value={e.id}>{e.title}</option>
+              ))}
+            </select>
+            <button
+              onClick={handleImport}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg shadow-sm transition-colors flex items-center gap-2"
+            >
+              <span className="material-symbols-outlined text-[18px]">input</span>
+              Importar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <aside className="lg:col-span-1 space-y-6">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm">
+            <div className="flex items-center gap-2 mb-4 text-blue-600">
+              <span className="material-symbols-outlined">filter_alt</span>
+              <h3 className="font-bold uppercase text-xs tracking-wider">Filtros Avanzados</h3>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Curso de Origen</label>
+                <select
+                  value={courseFilter}
+                  onChange={(e) => setCourseFilter(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                >
+                  <option value="ALL">Todos los cursos</option>
+                  {uniqueCourses.map(course => (
+                    <option key={course} value={course}>{course}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Tipo de Pregunta</label>
+                <div className="space-y-2">
+                  {['multiple_choice', 'true_false', 'short_answer'].map(type => (
+                    <label key={type} className="flex items-center gap-2 cursor-pointer group">
+                      <input 
+                        type="checkbox" 
+                        checked={typeFilter.includes(type)} 
+                        onChange={() => toggleTypeFilter(type)}
+                        className="rounded text-blue-600 focus:ring-blue-500 h-4 w-4"
+                      />
+                      <span className="text-sm text-slate-600 group-hover:text-blue-600 transition-colors uppercase">
+                        {type === 'multiple_choice' ? 'Opción Múltiple' : type === 'true_false' ? 'Verdadero/Falso' : 'Respuesta Corta'}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Etiquetas</label>
+                <div className="flex flex-wrap gap-2">
+                  {uniqueTags.map(tag => (
+                    <span
+                      key={tag}
+                      onClick={() => toggleTagFilter(tag)}
+                      className={`px-2 py-1 rounded text-[10px] font-bold cursor-pointer transition-all border ${
+                        tagFilter.includes(tag) 
+                          ? 'bg-blue-100 text-blue-700 border-blue-200 shadow-sm scale-105' 
+                          : 'bg-slate-50 text-slate-500 border-slate-200 hover:border-blue-200 hover:text-blue-600'
+                      }`}
+                    >
+                      {tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button 
+                onClick={() => { setCourseFilter('ALL'); setTypeFilter([]); setTagFilter([]); setSearchTerm(''); }}
+                className="w-full text-blue-600 text-xs font-bold hover:underline mt-2 pt-2 border-t border-slate-100"
+              >
+                Limpiar filtros
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-5 rounded-xl text-white shadow-xl">
+            <h3 className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-1">Total de Preguntas</h3>
+            <div className="text-3xl font-black tracking-tight mb-2">{allQuestions.length}</div>
+            <div className="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+               <div className="bg-blue-500 h-full w-[65%]"></div>
+            </div>
+          </div>
+        </aside>
+
+        <main className="lg:col-span-3">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-white sticky top-0 z-10">
+              <div className="relative w-full max-w-sm">
+                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">search</span>
+                <input
+                  type="text"
+                  placeholder="Buscar preguntas..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead className="bg-slate-50/50 text-slate-500 text-[11px] font-bold uppercase tracking-wider">
+                  <tr>
+                    <th className="px-6 py-4 w-12 text-center">
+                      <input 
+                        type="checkbox"
+                        checked={filteredQuestions.length > 0 && selectedQuestions.length === filteredQuestions.length}
+                        onChange={(e) => setSelectedQuestions(e.target.checked ? filteredQuestions.map(q => q.id) : [])}
+                        className="rounded text-blue-600 h-4 w-4"
+                      />
+                    </th>
+                    <th className="px-6 py-4">Pregunta</th>
+                    <th className="px-6 py-4">Tipo</th>
+                    <th className="px-6 py-4">Curso Origen</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-sm">
+                  {filteredQuestions.map((q) => (
+                    <tr key={q.id} className={`hover:bg-slate-50 transition-colors ${selectedQuestions.includes(q.id) ? 'bg-blue-50/30' : ''}`}>
+                      <td className="px-6 py-4 text-center">
+                        <input 
+                          type="checkbox"
+                          checked={selectedQuestions.includes(q.id)}
+                          onChange={() => setSelectedQuestions(prev => prev.includes(q.id) ? prev.filter(id => id !== q.id) : [...prev, q.id])}
+                          className="rounded text-blue-600 h-4 w-4"
+                        />
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-slate-900 leading-snug line-clamp-2 max-w-md">{q.text}</div>
+                        <div className="flex gap-2 mt-1.5 flex-wrap">
+                          {(q.tags || []).map(t => (
+                            <span key={t} className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[9px] font-bold uppercase border border-slate-200">{t}</span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase border ${
+                          q.type === 'multiple_choice' ? 'bg-blue-50 text-blue-600 border-blue-100' :
+                          q.type === 'true_false' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                          'bg-emerald-50 text-emerald-600 border-emerald-100'
+                        }`}>
+                          {q.type === 'multiple_choice' ? 'Múltiple' : q.type === 'true_false' ? 'V/F' : 'Corta'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                         <div className="text-xs text-slate-500 font-medium">{q.originExamTitle}</div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filteredQuestions.length === 0 && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-12 text-center">
+                        <div className="text-slate-400 italic">No se encontraron preguntas coincidentes</div>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </main>
+      </div>
+
+      {isCreatingQuestion && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto animate-scale-in bg-white rounded-2xl shadow-2xl">
+            <QuestionEditorForm
+              onSave={(newQuestion) => {
+                const targetInfo = targetExamId ? exams.find((e: any) => e.id.toString() === targetExamId.toString()) : exams[0];
+                if (targetInfo) {
+                  updateExam(targetInfo.id, {
+                    questions: [...(targetInfo.questions || []), newQuestion]
+                  });
+                  Swal.fire({
+                    title: 'Guardado',
+                    text: `Pregunta agregada al examen "${targetInfo.title}"`,
+                    icon: 'success',
+                    toast: true,
+                    position: 'top-end',
+                    showConfirmButton: false,
+                    timer: 3000
+                  });
+                }
+                setIsCreatingQuestion(false);
+              }}
+              onCancel={() => setIsCreatingQuestion(false)}
+              isIndependent={true}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ========== MAIN COMPONENT ==========
+const ExamManager: React.FC = () => {
+  const [viewMode, setViewMode] = useState<'LIST' | 'EDITOR' | 'QUESTION_BANK'>('LIST');
+  const [selectedExamId, setSelectedExamId] = useState<number | string | undefined>(undefined);
+
+  const handleViewEditor = (exam?: Exam) => {
+    setSelectedExamId(exam?.id);
+    setViewMode('EDITOR');
+  };
+
+  const handleBack = () => {
+    setSelectedExamId(undefined);
+    setViewMode('LIST');
+  };
+
+  if (viewMode === 'QUESTION_BANK') return <QuestionBank onBack={handleBack} />;
+  if (viewMode === 'LIST') return <ExamList onViewEditor={handleViewEditor} onViewQuestionBank={() => setViewMode('QUESTION_BANK')} />;
+  return <ExamEditor examId={selectedExamId} onBack={handleBack} />;
+};
+
+export default ExamManager;

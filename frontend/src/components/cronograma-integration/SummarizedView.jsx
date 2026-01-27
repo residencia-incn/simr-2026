@@ -23,7 +23,7 @@ const SummarizedView = ({ schedule, onDaySelect }) => {
                     >
                         <div className="bg-slate-50 dark:bg-slate-800/50 p-4 border-b border-slate-100 dark:border-slate-700">
                             <div className="flex items-center justify-between mb-1">
-                                <span className="text-xs font-bold uppercase tracking-wider text-primary">Día {day.dayNumber}</span>
+                                <span className="text-xs font-bold uppercase tracking-wider text-primary">DÍA {day.dayNumber}</span>
                                 <span className="text-xs text-slate-500 dark:text-slate-400">{formatDateLabel(day.date)}</span>
                             </div>
                             <h3 className="text-lg font-bold text-slate-900 dark:text-white truncate">{day.label}</h3>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { ViewState } from '../../types';
 import { useAulaVirtual } from '../../context/AulaVirtualContext';
+import { canUserAccessCourse } from '../../../../services/api';
 
 interface CourseCatalogProps {
   setView: (view: ViewState) => void;
@@ -31,42 +32,7 @@ const CourseCatalog: React.FC<CourseCatalogProps> = ({ setView, onCourseSelect }
   };
 
   const canAccessCourse = (course: any) => {
-    // If no config or no modalities set (and not 'all'), it might be hidden or open depending on policy.
-    // Assuming if accessConfig is missing, it's open.
-    if (!course.accessConfig) return true;
-
-    const { modalities, workshops } = course.accessConfig;
-
-    // Default: If 'all' in modalities, accessible to everyone
-    if (modalities.includes('all')) return true;
-
-    // Normalization Logic (Robust case-insensitive handling)
-    const userModality = currentUser.modality || '';
-
-    // Normalize input to lower case for comparison
-    const lowerModality = userModality.toLowerCase().trim();
-    let normalizedUserModality = userModality; // Default fallback
-
-    if (lowerModality === 'presencial_certificado' || lowerModality === 'presencial + certificado') normalizedUserModality = 'Presencial + Certificado';
-    else if (lowerModality === 'presencial' || lowerModality === 'presencial (sin certificado)') normalizedUserModality = 'Presencial (Sin Certificado)';
-    else if (lowerModality === 'virtual_certificado' || lowerModality === 'virtual + certificado') normalizedUserModality = 'Virtual + Certificado';
-    else if (lowerModality === 'virtual' || lowerModality === 'virtual (sin certificado)') normalizedUserModality = 'Virtual (Sin Certificado)';
-
-    // 1. Modality Check
-    const matchesModality = modalities.includes(normalizedUserModality);
-    if (!matchesModality) return false;
-
-    // 2. Workshop Check (If course requires selected workshops)
-    if (workshops.length > 0) {
-      const userItems = currentUser.purchasedItems || [];
-      // Compare loosely (string/number) just in case
-      const matchesWorkshop = workshops.some((wsId: string) =>
-        userItems.some(uItem => String(uItem) === String(wsId))
-      );
-      if (!matchesWorkshop) return false;
-    }
-
-    return true;
+    return canUserAccessCourse(currentUser, course);
   };
 
   // Filter courses based on status AND access rights

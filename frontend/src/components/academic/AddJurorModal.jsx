@@ -16,7 +16,13 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
         rne: '',
         residencyYear: '',
         specialty: '',
-        institution: ''
+        institution: '',
+        dni: '',
+        customOccupation: '',
+        customInstitution: '',
+        customSpecialty: '',
+        university: '',
+        customUniversity: ''
     });
 
     // Search State
@@ -97,10 +103,15 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                 setIsSearching(false);
             }
         };
-
         const timeout = setTimeout(doSearch, 300); // Debounce
         return () => clearTimeout(timeout);
     }, [searchQuery]);
+
+    // Helper to get current occupation rules
+    const currentOcc = (config.allowed_occupations || config.occupations || []).find(
+        o => (typeof o === 'string' ? o : o.name) === formData.occupation
+    );
+    const rules = currentOcc?.rules || {};
 
 
     if (!isOpen) return null;
@@ -110,13 +121,25 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
         setLoading(true);
         setError(null);
 
+        if (!formData.dni || formData.dni.length < 8) {
+            setError("DNI inválido");
+            setLoading(false);
+            return;
+        }
+
         try {
-            const fullName = `${formData.name} ${formData.lastName}`.trim();
             await api.jurors.create({
-                ...formData,
-                name: fullName,
-                firstName: formData.name,
-                lastName: formData.lastName
+                first_name: formData.name,
+                last_name: formData.lastName,
+                email: formData.email,
+                dni: formData.dni,
+                specialty: formData.specialty === 'Otro' ? formData.customSpecialty : formData.specialty,
+                institution: formData.institution === 'Otro' ? formData.customInstitution : formData.institution,
+                // Pass other fields if backend schema allows or needs them in a metadata field
+                occupation: formData.occupation === 'Otro' ? formData.customOccupation : formData.occupation,
+                cmp: formData.cmp,
+                rne: formData.rne,
+                residency_year: formData.residencyYear
             });
 
             setSuccessMessage("Jurado registrado correctamente");
@@ -145,9 +168,16 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
             }
 
             await api.jurors.create({
+                first_name: user.firstName || user.name.split(' ')[0] || '',
+                last_name: user.lastName || user.name.split(' ').slice(1).join(' ') || '',
                 email: user.email,
-                specialty: user.specialty, // Keep existing or update? create handles this
-                institution: user.institution
+                dni: user.dni || '',
+                specialty: user.specialty,
+                institution: user.institution,
+                occupation: user.occupation,
+                cmp: user.cmp_number,
+                rne: user.rne_number,
+                residency_year: user.residencyYear
             });
 
             setSuccessMessage(`Rol de jurado asignado a ${user.name}`);
@@ -249,18 +279,32 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                         </div>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
-                                        <div className="relative">
-                                            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">DNI (Usuario/Pass)</label>
                                             <input
                                                 required
-                                                type="email"
-                                                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                                value={formData.email}
-                                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                                placeholder="correo@ejemplo.com"
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                value={formData.dni}
+                                                onChange={(e) => setFormData({ ...formData, dni: e.target.value })}
+                                                placeholder="Ej. 12345678"
+                                                maxLength={8}
                                             />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+                                            <div className="relative">
+                                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                                <input
+                                                    required
+                                                    type="email"
+                                                    className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                    value={formData.email}
+                                                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                                    placeholder="correo@ejemplo.com"
+                                                />
+                                            </div>
                                         </div>
                                     </div>
 
@@ -275,32 +319,51 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                 onChange={(e) => setFormData({ ...formData, occupation: e.target.value })}
                                             >
                                                 <option value="">Seleccione una ocupación</option>
-                                                {config.occupations?.map((opt, idx) => (
-                                                    <option key={idx} value={opt}>{opt}</option>
-                                                ))}
+                                                {(config.allowed_occupations || config.occupations)?.map((opt, idx) => {
+                                                    const name = typeof opt === 'string' ? opt : opt.name;
+                                                    return <option key={idx} value={name}>{name}</option>;
+                                                })}
+                                                <option value="Otro">Otro (Especificar)</option>
                                             </select>
                                         </div>
                                     </div>
 
-                                    {/* Dynamic Fields for Medical Professionals */}
-                                    {(formData.occupation === 'Médico General' || formData.occupation === 'Médico Especialista' || formData.occupation === 'Médico Residente') && (
+                                    {/* Manual Occupation Entry */}
+                                    {formData.occupation === 'Otro' && (
+                                        <div className="animate-fadeIn">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Especifique Ocupación *</label>
+                                            <input
+                                                required
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                value={formData.customOccupation || ''}
+                                                onChange={(e) => setFormData({ ...formData, customOccupation: e.target.value })}
+                                                placeholder="Ej. Estudiante de Doctorado"
+                                            />
+                                        </div>
+                                    )}
+
+                                    {/* Dynamic Fields for Medical Professionals (Rules Based) */}
+                                    {(rules.cmp || rules.rne || rules.year || rules.specialty) && (
                                         <div className="p-4 bg-gray-50 rounded-lg border border-gray-200 space-y-4 animate-fadeIn">
                                             <div className="grid grid-cols-2 gap-4">
-                                                {/* CMP - Required for all doctors */}
-                                                <div>
-                                                    <label className="block text-sm font-medium text-gray-700 mb-1">N° CMP *</label>
-                                                    <input
-                                                        type="number"
-                                                        required
-                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
-                                                        value={formData.cmp}
-                                                        onChange={(e) => setFormData({ ...formData, cmp: e.target.value })}
-                                                        placeholder="12345"
-                                                    />
-                                                </div>
+                                                {/* CMP */}
+                                                {rules.cmp && (
+                                                    <div>
+                                                        <label className="block text-sm font-medium text-gray-700 mb-1">N° CMP *</label>
+                                                        <input
+                                                            type="number"
+                                                            required
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                            value={formData.cmp}
+                                                            onChange={(e) => setFormData({ ...formData, cmp: e.target.value })}
+                                                            placeholder="12345"
+                                                        />
+                                                    </div>
+                                                )}
 
-                                                {/* RNE - Only for Specialists */}
-                                                {formData.occupation === 'Médico Especialista' && (
+                                                {/* RNE */}
+                                                {rules.rne && (
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">N° RNE *</label>
                                                         <input
@@ -314,8 +377,8 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                     </div>
                                                 )}
 
-                                                {/* Residency Year - Only for Residents */}
-                                                {formData.occupation === 'Médico Residente' && (
+                                                {/* Residency Year */}
+                                                {rules.year && (
                                                     <div>
                                                         <label className="block text-sm font-medium text-gray-700 mb-1">Año de Residencia *</label>
                                                         <select
@@ -325,18 +388,16 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                             onChange={(e) => setFormData({ ...formData, residencyYear: e.target.value })}
                                                         >
                                                             <option value="">Seleccione...</option>
-                                                            <option value="R1">R1</option>
-                                                            <option value="R2">R2</option>
-                                                            <option value="R3">R3</option>
-                                                            <option value="R4">R4</option>
-                                                            <option value="R5">R5</option>
+                                                            {(config.residency_years || ["R1", "R2", "R3", "R4", "R5"]).map((year, idx) => (
+                                                                <option key={idx} value={year}>{year}</option>
+                                                            ))}
                                                         </select>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* Specialty - For Residents and Specialists */}
-                                            {(formData.occupation === 'Médico Especialista' || formData.occupation === 'Médico Residente') && (
+                                            {/* Specialty */}
+                                            {rules.specialty && (
                                                 <div>
                                                     <label className="block text-sm font-medium text-gray-700 mb-1">Especialidad *</label>
                                                     <select
@@ -346,13 +407,27 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                         onChange={(e) => setFormData({ ...formData, specialty: e.target.value })}
                                                     >
                                                         <option value="">Seleccione...</option>
-                                                        <option value="Neurología">Neurología</option>
-                                                        <option value="Neurocirugía">Neurocirugía</option>
-                                                        <option value="Medicina Interna">Medicina Interna</option>
-                                                        <option value="Pediatría">Pediatría</option>
-                                                        <option value="Cardiología">Cardiología</option>
-                                                        <option value="Otra">Otra</option>
+                                                        {(config.participant_specialties || config.allowed_specialties || []).map((spec, idx) => {
+                                                            const name = typeof spec === 'string' ? spec : spec.name;
+                                                            return <option key={idx} value={name}>{name}</option>;
+                                                        })}
+                                                        <option value="Otro">Otro (Especificar)</option>
                                                     </select>
+                                                </div>
+                                            )}
+
+                                            {/* Manual Specialty Entry */}
+                                            {formData.specialty === 'Otro' && (
+                                                <div className="animate-fadeIn">
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">Especifique Especialidad *</label>
+                                                    <input
+                                                        required
+                                                        type="text"
+                                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                        value={formData.customSpecialty || ''}
+                                                        onChange={(e) => setFormData({ ...formData, customSpecialty: e.target.value })}
+                                                        placeholder="Ej. Neuropediatría"
+                                                    />
                                                 </div>
                                             )}
                                         </div>
@@ -369,12 +444,29 @@ const AddJurorModal = ({ isOpen, onClose, onUpdate }) => {
                                                 onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
                                             >
                                                 <option value="">Seleccione una institución</option>
-                                                {config.institutions?.map((opt, idx) => (
-                                                    <option key={idx} value={opt}>{opt}</option>
-                                                ))}
+                                                {(config.allowed_institutions || config.institutions)?.map((opt, idx) => {
+                                                    const name = typeof opt === 'string' ? opt : opt.name;
+                                                    return <option key={idx} value={name}>{name}</option>;
+                                                })}
+                                                <option value="Otro">Otro (Especificar)</option>
                                             </select>
                                         </div>
                                     </div>
+
+                                    {/* Manual Institution Entry */}
+                                    {formData.institution === 'Otro' && (
+                                        <div className="animate-fadeIn">
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Especifique Institución *</label>
+                                            <input
+                                                required
+                                                type="text"
+                                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                                value={formData.customInstitution || ''}
+                                                onChange={(e) => setFormData({ ...formData, customInstitution: e.target.value })}
+                                                placeholder="Ej. Clínica Internacional"
+                                            />
+                                        </div>
+                                    )}
 
                                     <div className="pt-4 flex gap-3 justify-end">
                                         <Button type="button" variant="outline" onClick={onClose}>

@@ -44,15 +44,20 @@ const ImportActivityModal = ({ isOpen, onClose, onImportWork, onImportTalk }) =>
                         Object.values(session.sessions).forEach(s => {
                             if (s.linkedWorkId) scheduledIds.add(s.linkedWorkId);
                             if (s.linkedTalkId) scheduledIds.add(s.linkedTalkId);
+                            // Also check backend field external_paper_id which comes from api.program.getAll
+                            if (s.external_paper_id) scheduledIds.add(s.external_paper_id);
                             if (s.title) scheduledTitles.add(s.title.toLowerCase().trim());
                         });
+                    } else {
+                        // It might be a flat activity from getAll
+                        if (session.external_paper_id) scheduledIds.add(session.external_paper_id);
                     }
                 });
             });
 
             // 2. Filter only accepted works that NOT in schedule
             setWorks(worksData.filter(w =>
-                (w.status === 'Aceptado' || w.status === 'Aprobado') &&
+                (w.status?.toLowerCase() === 'aceptado' || w.status?.toLowerCase() === 'aprobado') &&
                 !scheduledIds.has(w.id) &&
                 !scheduledTitles.has(w.title?.toLowerCase().trim())
             ));
@@ -111,7 +116,7 @@ const ImportActivityModal = ({ isOpen, onClose, onImportWork, onImportTalk }) =>
         // Prepare mapping
         const importedData = {
             title: work.title,
-            category: work.type === 'Poster' ? 'Reporte de Caso' : 'Trabajo Original',
+            category: (work.type_name || work.type || 'Trabajo Original').trim(),
             linkedWorkId: work.id,
             authorName: work.author,
             authorId: work.authorId

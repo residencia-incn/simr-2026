@@ -3,6 +3,7 @@ import { Save, Plus, X, AlertTriangle, FileText, List, CheckSquare, Edit, Ban, E
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { api } from '../../services/api';
+import { showSuccess, showConfirm, showDeleteConfirm } from '../../utils/alerts';
 
 const AcademicConfig = () => {
     const [config, setConfig] = useState(null);
@@ -21,8 +22,7 @@ const AcademicConfig = () => {
     const [editLabelValue, setEditLabelValue] = useState("");
     const [draggedItemIndex, setDraggedItemIndex] = useState(null);
 
-    // Delete confirmation state
-    const [deleteConfirmation, setDeleteConfirmation] = useState(null); // { id, label }
+    // Delete confirmation state removed in favor of SweetAlert2
 
     useEffect(() => {
         const loadConfig = async () => {
@@ -59,7 +59,7 @@ const AcademicConfig = () => {
         setIsSaving(true);
         await api.academic.saveConfig(config);
         setIsSaving(false);
-        alert("Configuración académica guardada correctamente");
+        showSuccess("Configuración académica guardada correctamente");
     };
 
     // --- Title ---
@@ -138,8 +138,9 @@ const AcademicConfig = () => {
         }));
     };
 
-    const handleDeleteSection = (id) => {
-        if (confirm("¿Eliminar esta sección de TODOS los tipos de trabajo?")) {
+    const handleDeleteSection = async (id) => {
+        const confirmed = await showDeleteConfirm("¿Eliminar esta sección de TODOS los tipos de trabajo?", "Eliminar Sección");
+        if (confirmed) {
             setConfig(prev => ({
                 ...prev,
                 sections: prev.sections.filter(s => s.id !== id)
@@ -176,8 +177,9 @@ const AcademicConfig = () => {
         }
     };
 
-    const handleRemoveWorkType = (type) => {
-        if (confirm(`¿Eliminar el tipo de trabajo "${type}"?`)) {
+    const handleRemoveWorkType = async (type) => {
+        const confirmed = await showDeleteConfirm(`¿Eliminar el tipo de trabajo "${type}"?`, "Eliminar Tipo de Trabajo");
+        if (confirmed) {
             setConfig(prev => ({
                 ...prev,
                 workTypes: prev.workTypes.filter(t => t !== type),
@@ -592,9 +594,7 @@ const AcademicConfig = () => {
                                                 </div>
 
                                                 <button
-                                                    onClick={() => {
-                                                        setDeleteConfirmation({ id: section.id, label: section.label });
-                                                    }}
+                                                    onClick={() => handleDeleteSection(section.id)}
                                                     className="p-2 text-gray-400 hover:text-red-600 rounded-full hover:bg-red-50 transition-colors"
                                                     title="Eliminar sección globalmente"
                                                     type="button"
@@ -621,49 +621,6 @@ const AcademicConfig = () => {
                 </div>
             </div>
 
-            {/* Custom Delete Confirmation Dialog */}
-            {deleteConfirmation && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                    <div className="bg-white rounded-lg p-6 max-w-md shadow-xl">
-                        <div className="flex items-start gap-3 mb-4">
-                            <div className="p-2 bg-red-100 rounded-full">
-                                <AlertTriangle className="text-red-600" size={24} />
-                            </div>
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 mb-2">
-                                    ¿Eliminar sección?
-                                </h3>
-                                <p className="text-sm text-gray-600">
-                                    ¿Estás seguro de que deseas eliminar la sección <strong>"{deleteConfirmation.label}"</strong> de TODOS los tipos de trabajo?
-                                </p>
-                                <p className="text-xs text-gray-500 mt-2">
-                                    Esta acción no se puede deshacer.
-                                </p>
-                            </div>
-                        </div>
-                        <div className="flex justify-end gap-3">
-                            <Button
-                                variant="outline"
-                                onClick={() => setDeleteConfirmation(null)}
-                            >
-                                Cancelar
-                            </Button>
-                            <Button
-                                className="bg-red-600 text-white hover:bg-red-700"
-                                onClick={() => {
-                                    setConfig(prev => ({
-                                        ...prev,
-                                        sections: prev.sections.filter(s => s.id !== deleteConfirmation.id)
-                                    }));
-                                    setDeleteConfirmation(null);
-                                }}
-                            >
-                                Eliminar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 };

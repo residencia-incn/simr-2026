@@ -246,16 +246,20 @@ const TasksQuickAccess = ({ user }) => {
     const handleMarkAttendance = async (meeting) => {
         try {
             await api.planning.markAttendance(meeting.id, user.id, user.name);
-            alert('✅ Asistencia marcada correctamente');
+            showSuccess('Asistencia marcada correctamente', 'Asistencia');
             await loadActiveMeetings(); // Reload to show updated status
         } catch (error) {
-            alert(error.message || 'Error al marcar asistencia');
+            showError(error.message || 'Error al marcar asistencia');
         }
     };
 
     const handleSignMeeting = async (meeting) => {
         try {
-            if (!confirm(`¿Estás seguro de firmar el acta de la reunión "${meeting.title}"? Esta acción confirmará tu asistencia y salida.`)) return;
+            const confirmed = await showConfirm(
+                `¿Estás seguro de firmar el acta de la reunión "${meeting.title}"? Esta acción confirmará tu asistencia y salida.`,
+                'Firmar Acta'
+            );
+            if (!confirmed) return;
 
             await api.planning.signMeeting(meeting.id, user.id);
             await showSuccess('✅ Acta firmada exitosamente');
@@ -280,7 +284,7 @@ const TasksQuickAccess = ({ user }) => {
 
     const handleUpdateTask = async () => {
         if (newProgress !== selectedTask.progress && !newComment.trim()) {
-            alert('Por favor agregue un comentario explicando el cambio de progreso');
+            showWarning('Por favor agregue un comentario explicando el cambio de progreso', 'Comentario requerido');
             return;
         }
 

@@ -1,12 +1,31 @@
 import React, { useState } from 'react';
-import { BookOpen, Users, Code, Database, FileText, GitBranch, Map, Settings, ChevronRight, Shield, CheckCircle, AlertTriangle, Sliders } from 'lucide-react';
+import { BookOpen, Users, Code, Database, FileText, GitBranch, Map, Settings, ChevronRight, Shield, CheckCircle, AlertTriangle, Sliders, Printer } from 'lucide-react';
 import { Card } from '../components/ui';
+const MOCK_USERS = [];
+const MOCK_ATTENDEES = [];
+const PROGRAM_CONFIG = {};
+const ACADEMIC_CONFIG = {};
+const PROGRAM_DATA = { day1: [] };
+const INITIAL_WORKS = [];
+const INITIAL_POSTERS = [];
+const INITIAL_JURORS = [];
+const INITIAL_ROADMAP = [];
+const INITIAL_TRANSACTIONS = [];
+const INITIAL_BUDGETS = [];
+const COMMITTEE_DATA = [];
+const mockCourses = [];
+const mockModules = [];
+const mockLessons = [];
+const mockExams = [];
+
+import DataSchemaViewer from '../components/common/DataSchemaViewer';
 
 const DocumentationView = () => {
     const [activeSection, setActiveSection] = useState('overview');
 
     const sections = [
         { id: 'overview', label: 'Visión General', icon: BookOpen },
+        { id: 'database', label: 'Base de Datos (SQL)', icon: Database },
         { id: 'rbac', label: 'Roles y Permisos (RBAC)', icon: Shield },
         { id: 'architecture', label: 'Arquitectura', icon: Map },
         { id: 'test-users', label: 'Usuarios de Prueba', icon: Users },
@@ -240,6 +259,177 @@ const DocumentationView = () => {
                                 </div>
                             </div>
                         </Card>
+                    </div>
+                );
+
+            case 'database':
+                return (
+                    <div className="space-y-6">
+                        <style>
+                            {`
+                                @media print {
+                                    body * {
+                                        visibility: hidden;
+                                    }
+                                    #database-print-area, #database-print-area * {
+                                        visibility: visible;
+                                    }
+                                    #database-print-area {
+                                        position: absolute;
+                                        left: 0;
+                                        top: 0;
+                                        width: 100%;
+                                        background: white;
+                                        padding: 20px;
+                                        margin: 0;
+                                        overflow: visible !important;
+                                    }
+                                    /* Hide the print button itself when printing */
+                                    .no-print {
+                                        display: none !important;
+                                    }
+                                    /* Ensure tables break nicely */
+                                    tr {
+                                        page-break-inside: avoid;
+                                    }
+                                }
+                            `}
+                        </style>
+                        <div id="database-print-area">
+                            <div className="flex justify-between items-start mb-2">
+                                <div>
+                                    <h2 className="text-2xl font-bold text-gray-900">Esquemas de Base de Datos</h2>
+                                    <p className="text-gray-600 mb-6 print:text-sm">
+                                        Documentación técnica de variables y estructuras de base de datos.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={() => window.print()}
+                                    className="no-print flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                >
+                                    <Printer size={18} />
+                                    <span>Imprimir</span>
+                                </button>
+                            </div>
+
+                            <div className="space-y-8">
+                                <section>
+                                    <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Usuarios y Autenticación</h3>
+                                    <DataSchemaViewer
+                                        title="Usuarios del Sistema"
+                                        tableName="users"
+                                        data={MOCK_USERS}
+                                        description="Usuarios principales con roles, módulos y permisos."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Asistentes (Legacy)"
+                                        tableName="attendees"
+                                        data={MOCK_ATTENDEES}
+                                        description="Lista de asistentes importada de versiones anteriores."
+                                    />
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Gestión del Evento</h3>
+                                    <DataSchemaViewer
+                                        title="Comité Organizador"
+                                        tableName="committees"
+                                        data={COMMITTEE_DATA}
+                                        description="Estructura del comité y sus miembros."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Configuración del Programa"
+                                        tableName="program_config"
+                                        data={PROGRAM_CONFIG}
+                                        description="Configuración de días y franjas horarias."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Programa Científico"
+                                        tableName="program_sessions"
+                                        data={PROGRAM_DATA.day1}
+                                        description="Sesiones detalladas por día (Ejemplo Día 1)."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Roadmap de Eventos"
+                                        tableName="roadmap_events"
+                                        data={INITIAL_ROADMAP}
+                                        description="Hitos importantes del evento."
+                                    />
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Académico e Investigación</h3>
+                                    <DataSchemaViewer
+                                        title="Trabajos de Investigación"
+                                        tableName="research_works"
+                                        data={INITIAL_WORKS}
+                                        description="Trabajos enviados, aceptados y observados."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Jurados (Evaluadores)"
+                                        tableName="jurors"
+                                        data={INITIAL_JURORS}
+                                        description="Lista de jurados asignados para revisión."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Posters Científicos"
+                                        tableName="posters"
+                                        data={INITIAL_POSTERS}
+                                        description="Galería de e-posters aprobados."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Configuración Académica"
+                                        tableName="academic_config"
+                                        data={ACADEMIC_CONFIG}
+                                        description="Reglas de negocio, rubricas y plazos."
+                                    />
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Tesorería y Finanzas</h3>
+                                    <DataSchemaViewer
+                                        title="Transacciones"
+                                        tableName="transactions"
+                                        data={INITIAL_TRANSACTIONS}
+                                        description="Registro de ingresos y egresos."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Presupuestos"
+                                        tableName="budgets"
+                                        data={INITIAL_BUDGETS}
+                                        description="Asignación presupuestal por categoría."
+                                    />
+                                </section>
+
+                                <section>
+                                    <h3 className="text-xl font-bold text-blue-800 mb-4 border-b pb-2">Aula Virtual (LMS)</h3>
+                                    <DataSchemaViewer
+                                        title="Cursos"
+                                        tableName="courses"
+                                        data={mockCourses}
+                                        description="Catálogo de cursos disponibles."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Módulos de Curso"
+                                        tableName="course_modules"
+                                        data={mockModules}
+                                        description="Estructura modular de los cursos."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Lecciones"
+                                        tableName="lessons"
+                                        data={mockLessons}
+                                        description="Contenido individual (Video, Quiz, etc)."
+                                    />
+                                    <DataSchemaViewer
+                                        title="Exámenes"
+                                        tableName="exams"
+                                        data={mockExams}
+                                        description="Evaluaciones configuradas."
+                                    />
+                                </section>
+                            </div>
+                        </div>
                     </div>
                 );
 

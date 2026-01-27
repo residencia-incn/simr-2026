@@ -19,11 +19,12 @@ import SecretaryDashboard from './views/SecretaryDashboard';
 import AdmissionDashboard from './views/AdmissionDashboard';
 import TreasurerDashboard from './views/TreasurerDashboard';
 import AcademicDashboard from './views/AcademicDashboard';
+import ResearchDashboard from './views/ResearchDashboard';
 import LoginModal from './views/LoginModal';
 import BasesView from './views/BasesView';
 import NotificationMenu from './components/common/NotificationMenu';
-import TasksQuickAccess from './components/common/TasksQuickAccess';
-import ProfileDropdown, { ROLE_LABELS } from './components/common/ProfileDropdown';
+import UserDashboardWidget from './components/layout/UserDashboardWidget';
+import ProfileDropdown, { ROLE_LABELS, ROLE_ICONS } from './components/common/ProfileDropdown';
 import ProfileView from './views/ProfileView';
 import RoadmapView from './views/RoadmapView';
 import SmartRegistrationForm from './views/RegistrationView';
@@ -34,6 +35,9 @@ import { CartProvider, useCart } from './context/CartContext.jsx';
 import ShoppingCart from './components/checkout/ShoppingCart';
 import { PermissionGate } from './components/auth/PermissionGate';
 import { checkAndResetStorage } from './utils/resetStorage';
+import { MeetingWSProvider } from './context/MeetingWSContext';
+import FloatingPollModal from './components/layout/FloatingPollModal';
+import { Toaster } from 'react-hot-toast';
 
 const AccessDeniedFallback = ({ message, navigate }) => {
   useEffect(() => {
@@ -110,8 +114,9 @@ function SIMRAppContent() {
   }, []); // Run once on mount
 
   // Sync local user state with AuthContext user (which has properly derived permissions)
+  // Sync local user state with AuthContext user (which has properly derived permissions)
   useEffect(() => {
-    // Aggressively sync if authUser exists and is different from local user state (especially modules)
+    // Aggressively sync if authUser exists and is different from local user state
     if (authUser) {
       const hasDifferentModules = JSON.stringify(user?.modules) !== JSON.stringify(authUser.modules);
       const hasDifferentPermissions = JSON.stringify(user?.permissions) !== JSON.stringify(authUser.permissions);
@@ -119,6 +124,12 @@ function SIMRAppContent() {
       if (!user || user.id !== authUser.id || hasDifferentModules || hasDifferentPermissions) {
         setUser(authUser);
       }
+    } else if (user) {
+      // AuthContext has cleared user (logout), but legacy user still exists
+      // We must clear legacy user to update UI
+      setUser(null);
+      setCurrentView('home');
+      setActiveRole(null);
     }
   }, [authUser, user]);
 
@@ -132,27 +143,68 @@ function SIMRAppContent() {
   // Persistent Active Role
   const [activeRole, setActiveRole] = useState(() => {
     const savedRole = storage.get('simr_active_role');
-    // Migrate legacy 'accounting' role to 'treasurer'
+    const savedUser = storage.get('simr_user');
+
+    // Validate immediately if we have user data
+    if (savedRole && savedUser && savedUser.modules) {
+      // Handle admin implicit permission if needed
+      const effectiveModules = savedUser.modules.includes('admin')
+        ? [...savedUser.modules, 'organizacion']
+        : savedUser.modules;
+
+      if (!effectiveModules.includes(savedRole) && savedRole !== 'mi_perfil') {
+        // Found invalid role in storage - Fallback immediately
+        // This prevents the UI from momentarily rendering unauthorized views
+        console.warn(`[App] Invalid cached role '${savedRole}' detected during init. Resetting.`);
+        const validFallback = savedUser.modules.find(m => m !== 'mi_perfil') || 'mi_perfil';
+        return validFallback;
+      }
+    }
+
     return savedRole === 'accounting' ? 'treasurer' : savedRole || null;
   });
+
+  // CRITICAL SECURITY FIX: Validate activeRole against user modules
+  useEffect(() => {
+    if (user && activeRole && user.modules) {
+      // Normalize role check (handle legacy 'admin' -> 'organizacion' mapping if needed, 
+      // though AuthContext should have handled it)
+      const effectiveModules = user.modules.includes('admin')
+        ? [...user.modules, 'organizacion']
+        : user.modules;
+
+      if (!effectiveModules.includes(activeRole) && activeRole !== 'mi_perfil') {
+        console.warn(`[Security] Forcing role switch. User lacks module for active role: ${activeRole}`);
+
+        // Fallback strategy:
+        // 1. Try 'participante' if just a regular user
+        // 2. Try first available module
+        // 3. Default to 'mi_perfil'
+
+        const firstValidModule = user.modules.find(m => m !== 'mi_perfil') || 'mi_perfil';
+        setActiveRole(firstValidModule);
+        storage.set('simr_active_role', firstValidModule);
+        updateViewForRole(firstValidModule);
+      }
+    }
+  }, [user, activeRole]);
 
   // Default to 'rbac_demo' to show the new functionality immediately
   const [currentView, setCurrentView] = useState('home');
   const [basesTab, setBasesTab] = useState('bases');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isRoleMenuOpen, setIsRoleMenuOpen] = useState(false);
-  const [config, setConfig] = useState(null);
+  const [activeMeetingId, setActiveMeetingId] = useState(null);
+  const [config, setConfig] = useState(() => {
+    // Intentamos cargar desde la caché local para evitar el "parpadeo" de la UI
+    return storage.get('simr_config') || null;
+  });
   const roleMenuRef = useRef(null);
 
   // Restore view based on role if just loaded and logged in
   useEffect(() => {
-    // Check if opened with virtual classroom param
+    // Check for deep linking parameters only
     const params = new URLSearchParams(window.location.search);
-    if (params.get('virtual') === 'true') {
-      setActiveRole('aula_virtual');
-      setCurrentView('participant-dashboard');
-      return;
-    }
 
     // Support Deep Linking from Notifications
     const viewParam = params.get('view');
@@ -176,7 +228,18 @@ function SIMRAppContent() {
     const loadConfig = async () => {
       try {
         const data = await api.content.getConfig();
-        setConfig(data);
+        // Normalize backend snake_case to frontend camelCase
+        const normalizedConfig = {
+          ...data,
+          publicSections: data.public_sections || data.publicSections || [],
+          eventYear: data.event_year || data.eventYear,
+          eventName: data.event_name || data.eventName,
+          showHeroCountdown: data.show_countdown,
+          // Map othe relevant fields if needed
+        };
+        setConfig(normalizedConfig);
+        // Guardamos en caché para el próximo inicio
+        storage.set('simr_config', normalizedConfig);
       } catch (error) {
         console.error("Error loading config:", error);
       }
@@ -188,9 +251,37 @@ function SIMRAppContent() {
     return () => window.removeEventListener('config-updated', handleConfigUpdate);
   }, []);
 
+  // Detect active meeting for WebSocket signaling
+  useEffect(() => {
+    if (!user) {
+      setActiveMeetingId(null);
+      return;
+    }
+
+    const checkActiveMeeting = async () => {
+      try {
+        const summary = await api.dashboard.getSummary();
+        if (summary.meetings?.active?.length > 0) {
+          // Tomamos la primera reunión activa para el signal
+          setActiveMeetingId(summary.meetings.active[0].id);
+        } else {
+          setActiveMeetingId(null);
+        }
+      } catch (e) {
+        console.error("Error checking active meeting:", e);
+      }
+    };
+
+    checkActiveMeeting();
+    // Poll every 30 seconds to catch new meetings started by admin
+    const interval = setInterval(checkActiveMeeting, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
   const isSectionVisible = (id) => {
+    if (!config) return false; // Por defecto no mostrar nada mientras carga (si no hay caché)
     const section = config?.publicSections?.find(s => s.id === id);
-    return section ? section.isVisible : true;
+    return section ? section.isVisible : false;
   };
 
   const isSectionDevelopment = (id) => {
@@ -229,9 +320,9 @@ function SIMRAppContent() {
   useEffect(() => {
     if (user && currentView === 'registration') {
       // Redirect to their respective dashboard or home
-      const allProfiles = user.profiles || ['perfil_basico'];
-      // Filter out 'perfil_basico' to find a "real" dashboard profile, or default to it
-      const primaryProfile = allProfiles.find(p => p !== 'perfil_basico') || 'perfil_basico';
+      const allProfiles = user.profiles || ['mi_perfil'];
+      // Filter out 'mi_perfil' to find a "real" dashboard profile, or default to it
+      const primaryProfile = allProfiles.find(p => p !== 'mi_perfil') || 'mi_perfil';
       updateViewForRole(primaryProfile);
     }
   }, [user, currentView]);
@@ -262,7 +353,7 @@ function SIMRAppContent() {
 
     // RBAC: Use modules instead of profiles for initial role determination
     // Modules are derived from eventRole + organizerFunction in AuthContext
-    const allModules = (userData.modules || ['mi_perfil']).filter(m => m !== 'ponente');
+    const allModules = (userData.modules || ['mi_perfil']).filter(m => m !== 'ponente' && m !== 'organizador');
     const initialRole = allModules.find(m => m !== 'mi_perfil') || 'mi_perfil';
 
     setActiveRole(initialRole);
@@ -273,17 +364,7 @@ function SIMRAppContent() {
   };
 
   const handleRoleSwitch = (newRole) => {
-    // Special handling for Aula Virtual - open in new tab
-    if (newRole === 'aula_virtual' || newRole === 'participant') {
-      // Open the same app in a new tab with a special parameter
-      const url = `${window.location.origin}${window.location.pathname}?virtual=true`;
-      window.open(url, '_blank');
-
-      setIsRoleMenuOpen(false);
-      return;
-    }
-
-    // Normal role switching for other roles
+    // Normal role switching for all roles including Aula Virtual
     setActiveRole(newRole);
     storage.set('simr_active_role', newRole);
     updateViewForRole(newRole);
@@ -294,7 +375,7 @@ function SIMRAppContent() {
     switch (profileKey) {
       case 'organizacion': return 'admin-dashboard';
       case 'secretaria': return 'secretary-dashboard';
-      case 'investigacion': return 'academic-dashboard'; // Research role
+      case 'investigacion': return 'research-dashboard'; // Specialized Research role
       case 'jurado': return 'jury-dashboard';
       case 'contabilidad': return 'treasurer-dashboard';
       case 'asistencia': return 'admission-dashboard';
@@ -320,6 +401,15 @@ function SIMRAppContent() {
   };
 
   const navigate = (view, tab = null) => {
+    // Protección contra acceso directo a secciones desactivadas
+    const publicViews = ['bases', 'roadmap', 'program', 'committee', 'gallery', 'posters'];
+    if (publicViews.includes(view)) {
+      if (!isSectionVisible(view)) {
+        setCurrentView('home');
+        return;
+      }
+    }
+
     setCurrentView(view);
     if (tab) setBasesTab(tab);
     setIsMobileMenuOpen(false);
@@ -329,7 +419,26 @@ function SIMRAppContent() {
   const eventYear = config?.eventYear || '2026';
   const eventName = `SIMR ${eventYear}`;
 
+  // Determinamos qué rol mostrar como "activo" en la UI según la vista actual
+  const getDisplayRole = () => {
+    const dashboardRoles = {
+      'admin-dashboard': 'organizacion',
+      'secretary-dashboard': 'secretaria',
+      'jury-dashboard': 'jurado',
+      'treasurer-dashboard': 'contabilidad',
+      'admission-dashboard': 'asistencia',
+      'participant-dashboard': 'aula_virtual',
+      'resident-dashboard': 'trabajos',
+      'profile': 'mi_perfil'
+    };
 
+    // Para el dashboard académico, usamos el activeRole real ya que puede ser 'academico' o 'investigacion'
+    if (currentView === 'academic-dashboard') return activeRole;
+
+    return dashboardRoles[currentView] || null;
+  };
+
+  const displayRole = getDisplayRole();
 
   return (
     <div className="min-h-screen print:min-h-0 bg-gray-50 print:bg-white font-sans text-gray-800">
@@ -338,7 +447,7 @@ function SIMRAppContent() {
       <nav className="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm print:hidden">
         <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2 cursor-pointer print:hidden" onClick={() => navigate('home')}>
-            <div className="bg-blue-900 text-white font-bold p-1.5 rounded text-lg">INCN</div>
+            <img src="/icono.svg" alt="Logo" className="h-8 w-auto" />
             <span className="font-bold text-gray-900 text-lg hidden sm:block">{eventName}</span>
           </div>
 
@@ -359,13 +468,22 @@ function SIMRAppContent() {
                         : 'text-gray-700 hover:text-blue-700'
                     }
                   `}
+                  title={item.label} // Added tooltip for accessibility when text is hidden
                 >
-                  <item.icon size={16} /> {item.label}
+                  <item.icon size={20} />
+                  <span className="hidden xl:inline">{item.label}</span>
                 </button>
               );
             })}
             {!user && currentView !== 'participant-dashboard' && (
-              <button onClick={() => navigate('registration')} className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"><UserPlus size={16} /> Inscripción</button>
+              <button
+                onClick={() => navigate('registration')}
+                className="hover:text-blue-700 flex items-center gap-1 font-bold text-blue-800 border border-blue-200 px-3 py-1 rounded-lg hover:bg-blue-50 transition-all hover:shadow-sm hover:-translate-y-0.5"
+                title="Inscripción"
+              >
+                <UserPlus size={20} />
+                <span className="hidden xl:inline">Inscripción</span>
+              </button>
             )}
 
             {/* Notification Menu */}
@@ -374,15 +492,15 @@ function SIMRAppContent() {
             {/* Shopping Cart Trigger */}
             {user && <CartTrigger />}
 
-            {/* Tasks Quick Access */}
-            {user && <TasksQuickAccess user={user} />}
+            {/* User Dashboard Widget (Command Center) */}
+            {user && <UserDashboardWidget user={user} />}
 
             {user ? (
               <div className="flex items-center gap-4 ml-4 pl-4 border-l border-gray-200 relative" ref={roleMenuRef}>
                 <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
                   <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
-                    {ROLE_LABELS[activeRole] || activeRole}
-                    {user.modules && user.modules.filter(m => m !== 'perfil_basico').length > 1 && <ChevronDown size={10} />}
+                    {ROLE_LABELS[displayRole] || (displayRole ? displayRole : 'Inicio')}
+                    {user.modules && user.modules.filter(m => m !== 'mi_perfil').length > 1 && <ChevronDown size={14} />}
                   </div>
                   <div className="flex items-center gap-2 justify-end">
                     <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
@@ -400,7 +518,7 @@ function SIMRAppContent() {
                 {isRoleMenuOpen && (
                   <ProfileDropdown
                     user={user}
-                    activeRole={activeRole}
+                    activeRole={displayRole}
                     onRoleChange={handleRoleSwitch}
                     onProfileClick={() => navigate('profile')}
                     onLogout={handleLogout}
@@ -424,40 +542,66 @@ function SIMRAppContent() {
           <div className="md:hidden bg-white border-b border-gray-200 p-4 space-y-4">
             {currentView !== 'participant-dashboard' && (
               <>
-                <button onClick={() => navigate('home')} className={`block w-full text-left font-medium py-2 ${currentView === 'home' ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}`}>Inicio</button>
+                <button onClick={() => navigate('home')} className={`w-full text-left font-medium py-2 flex items-center gap-3 ${currentView === 'home' ? 'text-blue-700 font-bold bg-blue-50 px-3 rounded-lg' : 'text-gray-800 px-3'}`}>
+                  <Home size={20} />
+                  <span>Inicio</span>
+                </button>
 
                 {visibleNavItems.filter(item => item.id !== 'home').map(item => (
                   <button
                     key={item.id}
                     onClick={() => navigate(item.id)}
-                    className={`block w-full text-left font-medium py-2 
-                      ${currentView === item.id ? 'text-blue-700 font-bold bg-blue-50 px-2 rounded' : 'text-gray-800'}
+                    className={`w-full text-left font-medium py-2 flex items-center gap-3
+                      ${currentView === item.id ? 'text-blue-700 font-bold bg-blue-50 px-3 rounded-lg' : 'text-gray-800 px-3'}
                       ${item.isBadge ? 'text-blue-700 font-bold' : ''}
                     `}
                   >
-                    {item.label}
+                    <item.icon size={20} />
+                    <span>{item.label}</span>
                   </button>
                 ))}
 
-                <button onClick={() => navigate('rbac_demo')} className="block w-full text-left font-medium py-2 text-blue-700 font-bold">Demo RBAC</button>
                 {!user && (
-                  <button onClick={() => navigate('registration')} className={`block w-full text-left font-medium py-2 ${currentView === 'registration' ? 'text-blue-700 font-bold' : 'text-blue-700'}`}>Inscripción</button>
+                  <button onClick={() => navigate('registration')} className={`w-full text-left font-medium py-2 flex items-center gap-3 ${currentView === 'registration' ? 'text-blue-700 font-bold px-3' : 'text-blue-700 px-3'}`}>
+                    <UserPlus size={20} />
+                    <span>Inscripción</span>
+                  </button>
                 )}
               </>
             )}
             {user ? (
               <>
-                <div className="border-t border-gray-100 pt-2 mt-2">
-                  <div className="text-xs text-gray-500 uppercase mb-2">Cambiar Perfil ({ROLE_LABELS[activeRole]})</div>
-                  {user.modules && user.modules.filter(m => m !== 'perfil_basico' && m !== 'mi_perfil').map(module => (
+                <div className="border-t border-gray-100 pt-4 mt-2">
+                  <div className="text-[10px] text-gray-400 uppercase font-black tracking-widest mb-3 px-3">Módulos</div>
+                  <div className="flex flex-wrap gap-2 px-2">
+                    {user.modules && user.modules.filter(m => m !== 'mi_perfil' && m !== 'ponente' && m !== 'organizador' && m !== 'asistente' && m !== 'participante').map(module => {
+                      const Icon = ROLE_ICONS[module] || User;
+                      const isActive = activeRole === module;
+                      return (
+                        <button
+                          key={module}
+                          onClick={() => handleRoleSwitch(module)}
+                          title={ROLE_LABELS[module]}
+                          className={`p-3 rounded-xl transition-all ${isActive
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-200 scale-110 z-10'
+                            : 'bg-gray-50 text-gray-500 hover:bg-gray-100'
+                            }`}
+                        >
+                          <Icon size={20} />
+                        </button>
+                      );
+                    })}
                     <button
-                      key={module}
-                      onClick={() => handleRoleSwitch(module)}
-                      className={`block w-full text-left py-2 text-sm ${activeRole === module ? 'font-bold text-blue-700' : 'text-gray-600'}`}
+                      onClick={() => navigate('profile')}
+                      title="Mi Perfil"
+                      className={`p-3 rounded-xl transition-all ${activeRole === 'mi_perfil'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'bg-gray-50 text-gray-500'
+                        }`}
                     >
-                      {ROLE_LABELS[module]}
+                      <User size={20} />
                     </button>
-                  ))}
+                  </div>
                 </div>
                 <button onClick={handleLogout} className="block w-full text-left font-medium py-2 text-red-600 mt-2 border-t border-gray-100 pt-2">Cerrar Sesión</button>
               </>
@@ -471,12 +615,12 @@ function SIMRAppContent() {
       {/* Main Content Area */}
       <main className={`${['home', 'login', 'registration'].includes(currentView) ? 'py-0' : currentView === 'participant-dashboard' ? '' : 'py-8'} ${currentView === 'participant-dashboard' ? 'h-[calc(100vh-4rem)] overflow-hidden' : 'max-w-7xl mx-auto px-4 md:px-8'}`}>
         {currentView === 'home' && <HomeView navigate={navigate} user={user} />}
-        {currentView === 'roadmap' && (isSectionDevelopment('roadmap') ? <DevelopmentView title="Roadmap en Desarrollo" /> : <RoadmapView />)}
-        {currentView === 'bases' && (isSectionDevelopment('bases') ? <DevelopmentView title="Bases en Desarrollo" /> : <BasesView activeTab={basesTab} />)}
-        {currentView === 'program' && (isSectionDevelopment('program') ? <DevelopmentView title="Programa en Desarrollo" /> : <ProgramView />)}
-        {currentView === 'committee' && (isSectionDevelopment('committee') ? <DevelopmentView title="Comité en Desarrollo" /> : <CommitteeView />)}
-        {currentView === 'gallery' && (isSectionDevelopment('gallery') ? <DevelopmentView title="Galería en Desarrollo" /> : <GalleryView />)}
-        {currentView === 'posters' && (isSectionDevelopment('posters') ? <DevelopmentView title="E-Posters en Desarrollo" /> : <PostersView />)}
+        {currentView === 'roadmap' && isSectionVisible('roadmap') && (isSectionDevelopment('roadmap') ? <DevelopmentView title="Roadmap en Desarrollo" /> : <RoadmapView navigate={navigate} />)}
+        {currentView === 'bases' && isSectionVisible('bases') && (isSectionDevelopment('bases') ? <DevelopmentView title="Bases en Desarrollo" /> : <BasesView activeTab={basesTab} />)}
+        {currentView === 'program' && isSectionVisible('program') && (isSectionDevelopment('program') ? <DevelopmentView title="Programa en Desarrollo" /> : <ProgramView />)}
+        {currentView === 'committee' && isSectionVisible('committee') && (isSectionDevelopment('committee') ? <DevelopmentView title="Comité en Desarrollo" /> : <CommitteeView />)}
+        {currentView === 'gallery' && isSectionVisible('gallery') && (isSectionDevelopment('gallery') ? <DevelopmentView title="Galería en Desarrollo" /> : <GalleryView />)}
+        {currentView === 'posters' && isSectionVisible('posters') && (isSectionDevelopment('posters') ? <DevelopmentView title="E-Posters en Desarrollo" /> : <PostersView />)}
         {currentView === 'registration' && <SmartRegistrationForm />}
 
         {currentView === 'resident-dashboard' && (
@@ -517,9 +661,15 @@ function SIMRAppContent() {
           </PermissionGate>
         )}
 
+        {currentView === 'research-dashboard' && (
+          <PermissionGate scopes={['research:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Investigación." navigate={navigate} />}>
+            <ResearchDashboard />
+          </PermissionGate>
+        )}
+
         {currentView === 'academic-dashboard' && (
-          <PermissionGate scopes={['academic:read', 'research:read']} requireAll={false} fallback={<AccessDeniedFallback message="Acceso Denegado: Académico/Investigación." navigate={navigate} />}>
-            <AcademicDashboard role={activeRole} />
+          <PermissionGate scopes={['academic:read']} fallback={<AccessDeniedFallback message="Acceso Denegado: Académico." navigate={navigate} />}>
+            <AcademicDashboard />
           </PermissionGate>
         )}
 
@@ -573,6 +723,13 @@ function SIMRAppContent() {
           </div>
         </footer>
       )}
+
+      {/* Real-Time Signaling Layers */}
+      <MeetingWSProvider meetingId={activeMeetingId}>
+        <FloatingPollModal />
+      </MeetingWSProvider>
+
+      <Toaster position="top-right" />
     </div>
   );
 }

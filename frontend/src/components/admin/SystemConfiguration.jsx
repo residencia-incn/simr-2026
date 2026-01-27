@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket, ArrowUp, ArrowDown, UserCog, Shield, Briefcase } from 'lucide-react';
+import { Save, RefreshCw, Palette, Calendar, Settings, AlertTriangle, X, Plus, DollarSign, Clock, Layout, List, Printer, HardDrive, Ticket, ArrowUp, ArrowDown, UserCog, Shield, Briefcase, Building, GraduationCap, Search } from 'lucide-react';
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import CarouselManager from './CarouselManager';
 import PrintSettingsManager from './PrintSettingsManager';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import RoleAccessConfiguration from './RoleAccessConfiguration';
+import RolesTab from './RolesTab';
 import { api } from '../../services/api';
+import OccupationsManager from './OccupationsManager';
+import { configService } from '../../services/configService';
 import { showSuccess, showError } from '../../utils/alerts';
 
 const SystemConfiguration = () => {
@@ -40,50 +43,107 @@ const SystemConfiguration = () => {
     const [newParticipantSpecialty, setNewParticipantSpecialty] = useState("");
     const [newResidencyYear, setNewResidencyYear] = useState("");
     const [newRole, setNewRole] = useState("");
+    const [newInstitution, setNewInstitution] = useState("");
+    const [newUniversity, setNewUniversity] = useState("");
+
+    // Search filters for large lists
+    const [searchSpecialty, setSearchSpecialty] = useState("");
+    const [searchOccupation, setSearchOccupation] = useState("");
+    const [searchParticipantSpecialty, setSearchParticipantSpecialty] = useState("");
+    const [searchResidencyYear, setSearchResidencyYear] = useState("");
+    const [searchInstitution, setSearchInstitution] = useState("");
+    const [searchUniversity, setSearchUniversity] = useState("");
 
     useEffect(() => {
         const loadConfig = async () => {
-            const [data, pricing] = await Promise.all([
-                api.content.getConfig(),
-                api.treasury.getPricing()
-            ]);
+            try {
+                // [MOD] Consolidated loading: api.content.getConfig() already returns 
+                // modalities and workshops, no need for 3 parallel redundant calls.
+                // Increased timeout to 15s to be more resilient.
+                const timeoutPromise = new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error("Timeout loading config")), 15000)
+                );
 
-            setPricingConfig(pricing);
+                const dbConfig = await Promise.race([
+                    api.content.getConfig(),
+                    timeoutPromise
+                ]);
 
-            setConfig({
-                eventName: data.eventName || "Simposio Internacional de Medicina y Residencia",
-                eventYear: data.eventYear || "2026",
-                startDate: data.startDate,
-                theme: "blue", // This is local UI state for now, or could be in config
-                showHeroCountdown: data.showHeroCountdown,
-                specialties: data.specialties || [],
-                occupations: data.occupations || ["Médico Especialista", "Médico General", "Médico Residente", "Estudiante de Medicina", "Otro"],
-                roles: data.roles || ["Participante", "Ponente", "Comité Organizador", "Asistente", "Jurado", "Residente"],
-                participantSpecialties: data.participantSpecialties || ["Neurología", "Neurocirugía", "Psiquiatría", "Medicina Interna", "Pediatría", "Medicina Intensiva", "Otro"],
-                residencyYears: data.residencyYears || ["R1", "R2", "R3", "R4"],
-                prices: data.prices || {
-                    incn: 50,
-                    external_resident: 80,
-                    specialist: 120,
-                    student: 30,
-                    certification: 50
-                },
-                duration: data.duration || 3,
-                schedule: Array.isArray(data.schedule) ? data.schedule : [
-                    { day: 1, open: "08:00", close: "18:00" },
-                    { day: 2, open: "09:00", close: "18:00" },
-                    { day: 3, open: "09:00", close: "13:00" }
-                ],
-                publicSections: data.publicSections || [
-                    { id: 'bases', label: 'Bases', isVisible: true, isDevelopment: false },
-                    { id: 'roadmap', label: 'Roadmap', isVisible: true, isDevelopment: false },
-                    { id: 'program', label: 'Programa', isVisible: true, isDevelopment: false },
-                    { id: 'committee', label: 'Comité', isVisible: true, isDevelopment: false },
-                    { id: 'gallery', label: 'Galería', isVisible: true, isDevelopment: false },
-                    { id: 'posters', label: 'E-Posters', isVisible: true, isDevelopment: false }
-                ]
-            });
-            setLoading(false);
+                // Map database modalities and workshops from the consolidated response
+                setPricingConfig({
+                    ticketTypes: dbConfig.registration_modalities || [],
+                    workshops: dbConfig.workshops || []
+                });
+
+                // Sync schedule with duration just in case they are out of sync in DB
+                let loadedSchedule = dbConfig.event_schedule || [];
+                const targetDuration = dbConfig.event_duration || 3;
+
+                if (loadedSchedule.length < targetDuration) {
+                    const daysToAdd = targetDuration - loadedSchedule.length;
+                    for (let i = 0; i < daysToAdd; i++) {
+                        loadedSchedule.push({
+                            day: loadedSchedule.length + 1,
+                            open: "08:00",
+                            close: "18:00"
+                        });
+                    }
+                } else if (loadedSchedule.length > targetDuration) {
+                    loadedSchedule = loadedSchedule.slice(0, targetDuration);
+                }
+
+                setConfig({
+                    ...dbConfig,
+                    eventName: dbConfig.event_name,
+                    eventYear: dbConfig.event_year,
+                    startDate: dbConfig.start_date,
+                    duration: dbConfig.event_duration,
+                    showHeroCountdown: dbConfig.show_countdown,
+                    schedule: loadedSchedule,
+
+                    // Extra fields for frontend UI
+                    theme: dbConfig.theme || "blue",
+                    roles: dbConfig.allowed_roles || [],
+                    specialties: dbConfig.allowed_specialties || [],
+                    occupations: dbConfig.allowed_occupations || [],
+                    residencyYears: dbConfig.residency_years || [],
+                    participantSpecialties: dbConfig.participant_specialties || [],
+                    institutions: dbConfig.allowed_institutions || [],
+                    universities: dbConfig.allowed_universities || [],
+                    publicSections: dbConfig.public_sections || [
+                        { id: 'bases', label: 'Bases', isVisible: true, isDevelopment: false },
+                        { id: 'roadmap', label: 'Roadmap', isVisible: true, isDevelopment: false },
+                        { id: 'program', label: 'Programa', isVisible: true, isDevelopment: false },
+                        { id: 'committee', label: 'Comité', isVisible: true, isDevelopment: false },
+                        { id: 'gallery', label: 'Galería', isVisible: true, isDevelopment: false },
+                        { id: 'posters', label: 'E-Posters', isVisible: true, isDevelopment: false }
+                    ]
+                });
+            } catch (err) {
+                console.error("Error loading config:", err);
+                const fallbackConfig = {
+                    eventName: "Simposio Internacional de Medicina y Residencia",
+                    eventYear: "2026",
+                    showHeroCountdown: true,
+                    duration: 3,
+                    startDate: "2026-06-22",
+                    schedule: [],
+                    publicSections: [],
+                    roles: [],
+                    specialties: [],
+                    occupations: [],
+                    residencyYears: [],
+                    participantSpecialties: [],
+                    institutions: [],
+                    universities: [],
+                    registration_modalities: [],
+                    workshops: []
+                };
+                setConfig(fallbackConfig);
+                showError("No se pudo cargar la configuración completa oportunamente. Se ha cargado una versión básica por seguridad.", "Aviso del Sistema");
+            } finally {
+                setLoading(false);
+            }
         };
         loadConfig();
     }, []);
@@ -103,40 +163,54 @@ const SystemConfiguration = () => {
     const handleSave = async () => {
         setIsSaving(true);
         try {
-            // Generate program days synchronized with duration and startDate
-            const newDays = [];
-            if (config.startDate) {
-                const start = new Date(config.startDate + 'T00:00:00');
-                // const daysOfWeek = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+            // Map frontend camelCase to backend snake_case payload
+            const payload = {
+                event_name: config.eventName,
+                event_year: config.eventYear,
+                start_date: config.startDate,
+                event_duration: config.duration,
+                event_schedule: config.schedule,
+                show_countdown: config.showHeroCountdown,
 
-                const duration = parseInt(config.duration) || 5;
-                for (let i = 0; i < duration; i++) {
-                    const current = new Date(start);
-                    current.setDate(start.getDate() + i);
+                // Lists & Objects
+                allowed_roles: config.roles,
+                allowed_specialties: config.specialties,
+                allowed_occupations: config.occupations,
+                residency_years: config.residencyYears,
+                participant_specialties: config.participantSpecialties,
+                allowed_institutions: config.institutions,
+                allowed_universities: config.universities,
 
-                    // Store as YYYY-MM-DD so formatters can handle locale/format later
-                    const year = current.getFullYear();
-                    const month = String(current.getMonth() + 1).padStart(2, '0');
-                    const day = String(current.getDate()).padStart(2, '0');
-                    const isoDate = `${year}-${month}-${day}`;
+                public_sections: config.publicSections,
+                registration_modalities: pricingConfig.ticketTypes,
+                workshops: pricingConfig.workshops
+            };
 
-                    newDays.push({
-                        id: `day${i + 1}`,
-                        label: `Día ${i + 1}`,
-                        date: isoDate // Changed from formatted string to ISO
-                    });
-                }
-            }
+            await api.content.saveConfig(payload);
 
-            await Promise.all([
-                api.content.saveConfig({ ...config }),
-                api.treasury.updatePricing(pricingConfig),
-                newDays.length > 0 ? api.program.saveDays(newDays) : Promise.resolve()
-            ]);
+            // Notificar al resto de la app
+            window.dispatchEvent(new CustomEvent('config-updated'));
+
             showSuccess('Los cambios han sido aplicados correctamente.', 'Configuración guardada');
         } catch (err) {
             console.error(err);
-            showError('Hubo un problema al guardar la configuración. Por favor intenta nuevamente.', 'Error al guardar');
+            let msg = 'Hubo un problema al guardar la configuración.';
+
+            if (err.response?.status === 401 || err.response?.data?.detail === 'Not authenticated') {
+                msg = 'Sesión caducada o inicie sesión nuevamente.';
+            } else if (err.response?.data?.detail) {
+                const detail = err.response.data.detail;
+                if (Array.isArray(detail)) {
+                    // Pydantic validation error
+                    msg = detail.map(e => `${e.loc.join('.')}: ${e.msg}`).join('\n');
+                } else {
+                    msg = detail;
+                }
+            } else if (err.message) {
+                msg = err.message;
+            }
+
+            showError(msg, 'Error al guardar');
         } finally {
             setIsSaving(false);
         }
@@ -174,47 +248,69 @@ const SystemConfiguration = () => {
     };
 
     const handleAddOccupation = () => {
-        if (newOccupation.trim() && !config.occupations.includes(newOccupation.trim())) {
-            setConfig({ ...config, occupations: [...config.occupations, newOccupation.trim()] });
+        if (newOccupation.trim() && !(config.occupations || []).includes(newOccupation.trim())) {
+            setConfig({ ...config, occupations: [...(config.occupations || []), newOccupation.trim()] });
             setNewOccupation("");
         }
     };
 
     const handleRemoveOccupation = (occ) => {
-        setConfig({ ...config, occupations: config.occupations.filter(o => o !== occ) });
+        setConfig({ ...config, occupations: (config.occupations || []).filter(o => o !== occ) });
     };
 
     const handleAddParticipantSpecialty = () => {
-        if (newParticipantSpecialty.trim() && !config.participantSpecialties.includes(newParticipantSpecialty.trim())) {
-            setConfig({ ...config, participantSpecialties: [...config.participantSpecialties, newParticipantSpecialty.trim()] });
+        if (newParticipantSpecialty.trim() && !(config.participantSpecialties || []).includes(newParticipantSpecialty.trim())) {
+            setConfig({ ...config, participantSpecialties: [...(config.participantSpecialties || []), newParticipantSpecialty.trim()] });
             setNewParticipantSpecialty("");
         }
     };
 
     const handleRemoveParticipantSpecialty = (spec) => {
-        setConfig({ ...config, participantSpecialties: config.participantSpecialties.filter(s => s !== spec) });
+        setConfig({ ...config, participantSpecialties: (config.participantSpecialties || []).filter(s => s !== spec) });
     };
 
     const handleAddResidencyYear = () => {
-        if (newResidencyYear.trim() && !config.residencyYears.includes(newResidencyYear.trim())) {
-            setConfig({ ...config, residencyYears: [...config.residencyYears, newResidencyYear.trim()] });
+        if (newResidencyYear.trim() && !(config.residencyYears || []).includes(newResidencyYear.trim())) {
+            setConfig({ ...config, residencyYears: [...(config.residencyYears || []), newResidencyYear.trim()] });
             setNewResidencyYear("");
         }
     };
 
     const handleRemoveResidencyYear = (year) => {
-        setConfig({ ...config, residencyYears: config.residencyYears.filter(y => y !== year) });
+        setConfig({ ...config, residencyYears: (config.residencyYears || []).filter(y => y !== year) });
     };
 
     const handleAddRole = () => {
-        if (newRole.trim() && !config.roles.includes(newRole.trim())) {
-            setConfig({ ...config, roles: [...config.roles, newRole.trim()] });
+        if (newRole.trim() && !(config.roles || []).includes(newRole.trim())) {
+            setConfig({ ...config, roles: [...(config.roles || []), newRole.trim()] });
             setNewRole("");
         }
     };
 
     const handleRemoveRole = (role) => {
-        setConfig({ ...config, roles: config.roles.filter(r => r !== role) });
+        setConfig({ ...config, roles: (config.roles || []).filter(r => r !== role) });
+    };
+
+    const handleAddInstitution = () => {
+        if (newInstitution.trim() && !(config.institutions || []).includes(newInstitution.trim())) {
+            setConfig({ ...config, institutions: [...(config.institutions || []), newInstitution.trim()] });
+            setNewInstitution("");
+        }
+    };
+
+    const handleRemoveInstitution = (inst) => {
+        setConfig({ ...config, institutions: config.institutions.filter(i => i !== inst) });
+    };
+
+    const handleAddUniversity = () => {
+        if (newUniversity.trim() && !config.universities.includes(newUniversity.trim())) {
+            setConfig({ ...config, universities: [...(config.universities || []), newUniversity.trim()] });
+            setNewUniversity("");
+        }
+    };
+
+    const handleRemoveUniversity = (univ) => {
+        setConfig({ ...config, universities: config.universities.filter(u => u !== univ) });
     };
 
     const handleDurationChange = (e) => {
@@ -551,39 +647,51 @@ const SystemConfiguration = () => {
                 {activeTab === 'roles_modules' && (
                     <div className="animate-fadeIn">
                         <Card className="p-0 overflow-hidden">
-                            <RoleAccessConfiguration />
+                            <RolesTab modalities={pricingConfig.ticketTypes} workshops={pricingConfig.workshops} definedRoles={config.roles || []} />
                         </Card>
                     </div>
                 )}
 
                 {activeTab === 'lists' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-                        {/* Roles Management (New) */}
-                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-purple-500 shadow-lg">
+                        {/* 1. Roles */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-purple-500 shadow-lg">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
                                 <div className="p-2 bg-purple-100 rounded-lg text-purple-600">
                                     <Shield size={20} />
                                 </div>
-                                Gestión de Roles
+                                Roles
                             </h4>
-                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define los roles disponibles para asignar a los usuarios (Ej. Ponente, Jurado).</p>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Roles para asignar a usuarios (Ej. Ponente, Jurado).</p>
 
-                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent transition-all">
-                                <input
-                                    type="text"
-                                    value={newRole}
-                                    onChange={(e) => setNewRole(e.target.value)}
-                                    placeholder="Nuevo rol..."
-                                    className="flex-1 p-3 text-sm outline-none border-none"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
-                                />
-                                <button
-                                    onClick={handleAddRole}
-                                    disabled={!newRole.trim()}
-                                    className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar rol..."
+                                        value={searchResidencyYear} /* Using searchRole or similar if I added it, wait I used specific search states */
+                                        onChange={(e) => setSearchResidencyYear(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-purple-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newRole}
+                                        onChange={(e) => setNewRole(e.target.value)}
+                                        placeholder="Nuevo rol..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddRole()}
+                                    />
+                                    <button
+                                        onClick={handleAddRole}
+                                        disabled={!newRole.trim()}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
@@ -598,36 +706,48 @@ const SystemConfiguration = () => {
                             </div>
                         </Card>
 
-                        {/* Subspecialties */}
-                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-blue-500 shadow-lg">
+                        {/* 2. Subespecialidades */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-blue-500 shadow-lg">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
                                 <div className="p-2 bg-blue-100 rounded-lg text-blue-600">
                                     <List size={20} />
                                 </div>
-                                Gestión de Subespecialidades
+                                Subespecialidades
                             </h4>
-                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define las subespecialidades disponibles para la clasificación de trabajos de investigación.</p>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Clasificación de trabajos de investigación.</p>
 
-                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
-                                <input
-                                    type="text"
-                                    value={newSpecialty}
-                                    onChange={(e) => setNewSpecialty(e.target.value)}
-                                    placeholder="Nueva subespecialidad..."
-                                    className="flex-1 p-3 text-sm outline-none border-none"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddSpecialty()}
-                                />
-                                <button
-                                    onClick={handleAddSpecialty}
-                                    disabled={!newSpecialty.trim()}
-                                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar subespecialidad..."
+                                        value={searchSpecialty}
+                                        onChange={(e) => setSearchSpecialty(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newSpecialty}
+                                        onChange={(e) => setNewSpecialty(e.target.value)}
+                                        placeholder="Nueva subespecialidad..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddSpecialty()}
+                                    />
+                                    <button
+                                        onClick={handleAddSpecialty}
+                                        disabled={!newSpecialty.trim()}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
-                                {config.specialties?.map((spec, idx) => (
+                                {config.specialties?.filter(s => s.toLowerCase().includes(searchSpecialty.toLowerCase())).map((spec, idx) => (
                                     <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-blue-200 hover:shadow-md transition-all">
                                         {spec}
                                         <button onClick={() => handleRemoveSpecialty(spec)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
@@ -635,84 +755,68 @@ const SystemConfiguration = () => {
                                         </button>
                                     </span>
                                 ))}
-                                {(!config.specialties || config.specialties.length === 0) && (
-                                    <div className="w-full h-full flex items-center justify-center text-gray-400 text-sm italic border-2 border-dashed border-gray-100 rounded-lg">
-                                        No hay subespecialidades definidas
-                                    </div>
-                                )}
                             </div>
                         </Card>
 
-                        {/* Occupations */}
-                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-green-500 shadow-lg">
+                        {/* 3. Ocupaciones */}
+                        <Card className="p-6 h-[500px] flex flex-col border-t-4 border-t-green-500 shadow-lg">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
                                 <div className="p-2 bg-green-100 rounded-lg text-green-600">
                                     <Briefcase size={20} />
                                 </div>
-                                Gestión de Ocupaciones
+                                Ocupaciones
                             </h4>
-                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Define las opciones para el campo Ocupación en la inscripción.</p>
 
-                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-green-500 focus-within:border-transparent transition-all">
-                                <input
-                                    type="text"
-                                    value={newOccupation}
-                                    onChange={(e) => setNewOccupation(e.target.value)}
-                                    placeholder="Nueva ocupación..."
-                                    className="flex-1 p-3 text-sm outline-none border-none"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddOccupation()}
+                            <div className="pl-2 flex-1 overflow-y-auto custom-scrollbar">
+                                <OccupationsManager
+                                    occupations={config.occupations || []}
+                                    onUpdate={(list) => setConfig({ ...config, occupations: list })}
                                 />
-                                <button
-                                    onClick={handleAddOccupation}
-                                    disabled={!newOccupation.trim()}
-                                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
-                            </div>
-
-                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
-                                {config.occupations?.map((occ, idx) => (
-                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-green-200 hover:shadow-md transition-all">
-                                        {occ}
-                                        <button onClick={() => handleRemoveOccupation(occ)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
-                                            <X size={14} />
-                                        </button>
-                                    </span>
-                                ))}
                             </div>
                         </Card>
 
-                        {/* Residency Years */}
-                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-orange-500 shadow-lg">
+                        {/* 4. Año de Residencia */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-orange-500 shadow-lg">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
                                 <div className="p-2 bg-orange-100 rounded-lg text-orange-600">
                                     <Clock size={20} />
                                 </div>
-                                Años de Residencia
+                                Año de Residencia
                             </h4>
-                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Opciones desplegables para el año de residencia.</p>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Opciones desplegables para residentes.</p>
 
-                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
-                                <input
-                                    type="text"
-                                    value={newResidencyYear}
-                                    onChange={(e) => setNewResidencyYear(e.target.value)}
-                                    placeholder="Nuevo año (ej. R5)..."
-                                    className="flex-1 p-3 text-sm outline-none border-none"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddResidencyYear()}
-                                />
-                                <button
-                                    onClick={handleAddResidencyYear}
-                                    disabled={!newResidencyYear.trim()}
-                                    className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar..."
+                                        value={searchResidencyYear}
+                                        onChange={(e) => setSearchResidencyYear(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-orange-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-orange-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newResidencyYear}
+                                        onChange={(e) => setNewResidencyYear(e.target.value)}
+                                        placeholder="Nuevo año (ej. R5)..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddResidencyYear()}
+                                    />
+                                    <button
+                                        onClick={handleAddResidencyYear}
+                                        disabled={!newResidencyYear.trim()}
+                                        className="bg-orange-600 hover:bg-orange-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
-                                {config.residencyYears?.map((year, idx) => (
+                                {config.residencyYears?.filter(y => y.toLowerCase().includes(searchResidencyYear.toLowerCase())).map((year, idx) => (
                                     <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-orange-200 hover:shadow-md transition-all">
                                         {year}
                                         <button onClick={() => handleRemoveResidencyYear(year)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
@@ -723,39 +827,155 @@ const SystemConfiguration = () => {
                             </div>
                         </Card>
 
-                        {/* Participant Specialties */}
-                        <Card className="p-6 h-[340px] flex flex-col border-t-4 border-t-cyan-500 shadow-lg">
+                        {/* 5. Especialidades */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-cyan-500 shadow-lg">
                             <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
                                 <div className="p-2 bg-cyan-100 rounded-lg text-cyan-600">
                                     <UserCog size={20} />
                                 </div>
-                                Gestión de Especialidades (Participantes)
+                                Especialidades
                             </h4>
-                            <p className="text-sm text-gray-500 mb-6 shrink-0 pl-11">Opciones de especialidad para Médicos Especialistas.</p>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Opciones para Médicos Especialistas.</p>
 
-                            <div className="flex gap-0 mb-4 shrink-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-cyan-500 focus-within:border-transparent transition-all">
-                                <input
-                                    type="text"
-                                    value={newParticipantSpecialty}
-                                    onChange={(e) => setNewParticipantSpecialty(e.target.value)}
-                                    placeholder="Nueva especialidad..."
-                                    className="flex-1 p-3 text-sm outline-none border-none"
-                                    onKeyDown={(e) => e.key === 'Enter' && handleAddParticipantSpecialty()}
-                                />
-                                <button
-                                    onClick={handleAddParticipantSpecialty}
-                                    disabled={!newParticipantSpecialty.trim()}
-                                    className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                    <Plus size={18} />
-                                </button>
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar especialidad..."
+                                        value={searchParticipantSpecialty}
+                                        onChange={(e) => setSearchParticipantSpecialty(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-cyan-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-cyan-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newParticipantSpecialty}
+                                        onChange={(e) => setNewParticipantSpecialty(e.target.value)}
+                                        placeholder="Nueva especialidad..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddParticipantSpecialty()}
+                                    />
+                                    <button
+                                        onClick={handleAddParticipantSpecialty}
+                                        disabled={!newParticipantSpecialty.trim()}
+                                        className="bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
                             </div>
 
                             <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
-                                {config.participantSpecialties?.map((spec, idx) => (
+                                {config.participantSpecialties?.filter(s => s.toLowerCase().includes(searchParticipantSpecialty.toLowerCase())).map((spec, idx) => (
                                     <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-cyan-200 hover:shadow-md transition-all">
                                         {spec}
                                         <button onClick={() => handleRemoveParticipantSpecialty(spec)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </Card>
+
+                        {/* 6. Instituciones (Hospitales) */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-indigo-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-indigo-100 rounded-lg text-indigo-600">
+                                    <Building size={20} />
+                                </div>
+                                Instituciones
+                            </h4>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Lista de Hospitales e Instituciones de salud.</p>
+
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar hospital..."
+                                        value={searchInstitution}
+                                        onChange={(e) => setSearchInstitution(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newInstitution}
+                                        onChange={(e) => setNewInstitution(e.target.value)}
+                                        placeholder="Nueva institución..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddInstitution()}
+                                    />
+                                    <button
+                                        onClick={handleAddInstitution}
+                                        disabled={!newInstitution.trim()}
+                                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
+                                {config.institutions?.filter(i => i.toLowerCase().includes(searchInstitution.toLowerCase())).map((inst, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-indigo-200 hover:shadow-md transition-all">
+                                        {inst}
+                                        <button onClick={() => handleRemoveInstitution(inst)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
+                                            <X size={14} />
+                                        </button>
+                                    </span>
+                                ))}
+                            </div>
+                        </Card>
+
+                        {/* 7. Universidades */}
+                        <Card className="p-6 h-[400px] flex flex-col border-t-4 border-t-amber-500 shadow-lg">
+                            <h4 className="flex items-center gap-2 font-bold text-gray-800 mb-2 shrink-0">
+                                <div className="p-2 bg-amber-100 rounded-lg text-amber-600">
+                                    <GraduationCap size={20} />
+                                </div>
+                                Universidades
+                            </h4>
+                            <p className="text-sm text-gray-500 mb-4 shrink-0 pl-11">Lista de Universidades nacionales e internacionales.</p>
+
+                            <div className="space-y-3 pl-11 mb-4 shrink-0">
+                                <div className="relative">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                    <input
+                                        type="text"
+                                        placeholder="Buscar universidad..."
+                                        value={searchUniversity}
+                                        onChange={(e) => setSearchUniversity(e.target.value)}
+                                        className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500"
+                                    />
+                                </div>
+                                <div className="flex gap-0 shadow-sm rounded-lg overflow-hidden border border-gray-200 focus-within:ring-2 focus-within:ring-amber-500 focus-within:border-transparent transition-all">
+                                    <input
+                                        type="text"
+                                        value={newUniversity}
+                                        onChange={(e) => setNewUniversity(e.target.value)}
+                                        placeholder="Nueva universidad..."
+                                        className="flex-1 p-3 text-sm outline-none border-none"
+                                        onKeyDown={(e) => e.key === 'Enter' && handleAddUniversity()}
+                                    />
+                                    <button
+                                        onClick={handleAddUniversity}
+                                        disabled={!newUniversity.trim()}
+                                        className="bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 font-medium disabled:opacity-50 transition-colors"
+                                    >
+                                        <Plus size={18} />
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="flex flex-wrap gap-2 flex-1 overflow-y-auto content-start pr-1 custom-scrollbar">
+                                {config.universities?.filter(u => u.toLowerCase().includes(searchUniversity.toLowerCase())).map((univ, idx) => (
+                                    <span key={idx} className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-white text-gray-700 text-sm font-medium border border-gray-200 shadow-sm group hover:border-amber-200 hover:shadow-md transition-all">
+                                        {univ}
+                                        <button onClick={() => handleRemoveUniversity(univ)} className="text-gray-400 hover:text-red-500 transition-colors p-0.5 rounded-full hover:bg-red-50">
                                             <X size={14} />
                                         </button>
                                     </span>

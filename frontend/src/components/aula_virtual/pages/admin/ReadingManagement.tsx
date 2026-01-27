@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ViewState } from '../../types';
-import { mockReadings } from '../../../../data/mockAulaVirtualData';
+import { useAulaVirtual } from '../../context/AulaVirtualContext';
 
 interface ReadingManagementProps {
     onEdit: (id: number | null) => void;
@@ -8,10 +8,11 @@ interface ReadingManagementProps {
 
 // Local mock removed in favor of imported mockReadings
 const ReadingManagement: React.FC<ReadingManagementProps> = ({ onEdit }) => {
+    const { materials } = useAulaVirtual();
     const [searchTerm, setSearchTerm] = useState('');
     const [filterType, setFilterType] = useState('all'); // all, pdf, link, text
 
-    const filteredReadings = mockReadings.filter(reading => {
+    const filteredReadings = materials.filter((reading: any) => {
         const matchesSearch = reading.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
             reading.module.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterType === 'all' || reading.type === filterType;
@@ -110,7 +111,7 @@ const ReadingManagement: React.FC<ReadingManagementProps> = ({ onEdit }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {filteredReadings.map((reading) => (
+                            {filteredReadings.map((reading: any) => (
                                 <tr key={reading.id} className="hover:bg-slate-50/80 transition-colors group">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
@@ -146,7 +147,7 @@ const ReadingManagement: React.FC<ReadingManagementProps> = ({ onEdit }) => {
                                                 <span className="material-symbols-outlined text-[18px]">visibility</span>
                                             </button>
                                             <button
-                                                onClick={() => onEdit(reading.id)}
+                                                onClick={() => onEdit(reading.id as any)}
                                                 className="p-2 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
                                                 title="Editar"
                                             >

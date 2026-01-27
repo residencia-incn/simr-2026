@@ -6,8 +6,24 @@ import { api } from '../services/api';
 const LoginModal = ({ setCurrentView, handleLogin }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [rememberMe, setRememberMe] = useState(false);
     const [error, setError] = useState(null);
     const [loading, setLoading] = useState(false);
+
+    const handleEmailChange = (e) => {
+        const value = e.target.value;
+        // Search for a valid email within the text (handles "📧 test@email.com" or "Email: test@email.com")
+        const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/;
+        const match = value.match(emailRegex);
+
+        if (match) {
+            // If a full email is found, extract just the email
+            setEmail(match[0]);
+        } else {
+            // While typing, strictly remove all whitespace (emails never have spaces)
+            setEmail(value.replace(/\s/g, ''));
+        }
+    };
 
     const onSubmit = async (e) => {
         e.preventDefault();
@@ -15,11 +31,16 @@ const LoginModal = ({ setCurrentView, handleLogin }) => {
         setLoading(true);
 
         try {
-            const user = await api.auth.login(email, password);
+            const user = await api.auth.login({ email, password });
             // handleLogin now expects the full user object, not just a role string
             handleLogin(user);
         } catch (err) {
-            setError(err.message || 'Error al iniciar sesión');
+            // Personalizar mensaje para error 401 (No autorizado)
+            if (err.response?.status === 401) {
+                setError('Usuario o contraseña incorrectos');
+            } else {
+                setError(err.response?.data?.detail || err.message || 'Error al iniciar sesión');
+            }
             setLoading(false);
         }
     };
@@ -49,9 +70,9 @@ const LoginModal = ({ setCurrentView, handleLogin }) => {
                         <div className="relative">
                             <FormField
                                 type="text"
-                                placeholder="admin"
+                                placeholder="usuario@email.com"
                                 value={email}
-                                onChange={(e) => setEmail(e.target.value)}
+                                onChange={handleEmailChange}
                                 className="pl-10"
                                 required
                             />
@@ -74,14 +95,26 @@ const LoginModal = ({ setCurrentView, handleLogin }) => {
                         </div>
                     </div>
 
+                    <div className="flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            id="rememberMe"
+                            checked={rememberMe}
+                            onChange={(e) => setRememberMe(e.target.checked)}
+                            className="w-4 h-4 text-blue-900 border-gray-300 rounded focus:ring-blue-900 cursor-pointer"
+                        />
+                        <label htmlFor="rememberMe" className="text-sm text-gray-700 cursor-pointer select-none">
+                            Mantener sesión iniciada (30 días)
+                        </label>
+                    </div>
+
                     <Button type="submit" className="w-full justify-center bg-blue-900 hover:bg-blue-800" disabled={loading}>
                         {loading ? 'Ingresando...' : 'Ingresar'}
                     </Button>
                 </form>
 
                 <div className="mt-6 text-center text-sm text-gray-500">
-                    <p>Credenciales de prueba:</p>
-                    <p className="font-mono mt-1">Usuario: admin / Pass: admin</p>
+                    <p>Usa tus credenciales registradas para ingresar.</p>
                 </div>
             </div>
         </div>

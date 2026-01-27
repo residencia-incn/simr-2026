@@ -13,19 +13,25 @@
     "deploy": "gh-pages -d dist -r https://github.com/residencia-incn/simr-2026.git"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "@yudiel/react-qr-scanner": "^2.4.1",
+    "axios": "^1.13.2",
     "date-fns": "^4.1.0",
+    "firebase": "^12.8.0",
     "html2pdf.js": "^0.12.1",
     "lucide-react": "^0.555.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.0",
     "react-datepicker": "^9.1.0",
     "react-dom": "^19.2.0",
+    "react-hook-form": "^7.71.1",
     "react-hot-toast": "^2.6.0",
     "react-qr-code": "^2.0.18",
     "react-to-print": "^3.2.0",
     "recharts": "^3.5.1",
-    "sweetalert2": "^11.26.11"
+    "sweetalert2": "^11.26.17"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

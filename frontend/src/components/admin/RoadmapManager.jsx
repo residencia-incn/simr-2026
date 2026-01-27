@@ -1,90 +1,91 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { api } from '../../services/api';
-import { Plus, Edit2, Trash2, Calendar, Rocket, BookOpen, UserPlus, Clock, CheckCircle } from 'lucide-react';
+import { Plus, Trash2, Edit2, Calendar, Link as LinkIcon, Save, X, Search } from 'lucide-react';
+import * as Icons from 'lucide-react';
 import Button from '../ui/Button';
-import Card from '../ui/Card';
+import { showDeleteConfirm } from '../../utils/alerts';
 
 const RoadmapManager = () => {
-    const [events, setEvents] = useState([]);
+    const [items, setItems] = useState([]);
+    const [loading, setLoading] = useState(true);
     const [isModalOpen, setIsModalOpen] = useState(false);
-    const [currentEvent, setCurrentEvent] = useState(null);
+    const [editingItem, setEditingItem] = useState(null);
 
-    // Form State
-    const [formData, setFormData] = useState({
+    const initialForm = {
         title: '',
-        date: '',
+        date_display: '',
         description: '',
-        year: new Date().getFullYear().toString(),
-        icon: 'Calendar',
-        completed: false
-    });
-
-    const AVAILABLE_ICONS = [
-        { id: 'Rocket', label: 'Lanzamiento', icon: Rocket },
-        { id: 'BookOpen', label: 'Curso/Académico', icon: BookOpen },
-        { id: 'UserPlus', label: 'Inscripciones', icon: UserPlus },
-        { id: 'Clock', label: 'Plazos', icon: Clock },
-        { id: 'Calendar', label: 'Evento', icon: Calendar },
-        { id: 'CheckCircle', label: 'Hito', icon: CheckCircle }
-    ];
-
-    useEffect(() => {
-        loadEvents();
-    }, []);
-
-    const loadEvents = async () => {
-        const data = await api.roadmap.getAll();
-        const sorted = data.sort((a, b) => new Date(a.date) - new Date(b.date));
-        setEvents(sorted);
+        icon_name: 'Calendar',
+        cta_text: '',
+        cta_link: '',
+        sort_date: '',
+        order: 0
     };
+    const [form, setForm] = useState(initialForm);
 
-    const handleOpenModal = (event = null) => {
-        if (event) {
-            setCurrentEvent(event);
-            setFormData({
-                title: event.title,
-                date: event.date,
-                description: event.description,
-                year: event.year,
-                icon: event.icon,
-                completed: event.completed
-            });
-        } else {
-            setCurrentEvent(null);
-            setFormData({
-                title: '',
-                date: new Date().toISOString().split('T')[0],
-                description: '',
-                year: new Date().getFullYear().toString(),
-                icon: 'Calendar',
-                completed: false
-            });
+    const iconOptions = ["Calendar", "FileText", "Users", "Mic", "Award", "BookOpen", "CreditCard", "CheckCircle", "Rocket", "Clock", "UserPlus"];
+
+    useEffect(() => { loadData(); }, []);
+
+    const loadData = async () => {
+        try {
+            setLoading(true);
+            const data = await api.roadmap.getAll();
+            setItems(data);
+        } catch (e) {
+            console.error(e);
+            alert("Error al cargar los datos del Roadmap. Por favor, verifica la conexión o refresca la página.");
+        } finally {
+            setLoading(false);
         }
-        setIsModalOpen(true);
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
-            if (currentEvent) {
-                await api.roadmap.update({ ...currentEvent, ...formData });
+            const payload = {
+                ...form,
+                sort_date: form.sort_date ? `${form.sort_date}T00:00:00` : null
+            };
+
+            if (editingItem) {
+                await api.roadmap.update({ ...editingItem, ...payload });
             } else {
-                await api.roadmap.add(formData);
+                await api.roadmap.add(payload);
             }
             setIsModalOpen(false);
-            loadEvents();
+            setEditingItem(null);
+            setForm(initialForm);
+            loadData();
         } catch (error) {
-            console.error("Error saving event", error);
+            console.error("Error saving", error);
+            alert("Error al guardar");
         }
     };
 
+    const handleEdit = (item) => {
+        setEditingItem(item);
+        setForm({
+            title: item.title || '',
+            date_display: item.date_display || '',
+            description: item.description || '',
+            icon_name: item.icon_name || 'Calendar',
+            cta_text: item.cta_text || '',
+            cta_link: item.cta_link || '',
+            sort_date: item.sort_date ? item.sort_date.split('T')[0] : '',
+            order: item.order || 0
+        });
+        setIsModalOpen(true);
+    };
+
     const handleDelete = async (id) => {
-        if (confirm('¿Estás seguro de eliminar este evento?')) {
+        const confirmed = await showDeleteConfirm('¿Estás seguro de eliminar este hito?', 'Eliminar Hito');
+        if (confirmed) {
             try {
                 await api.roadmap.delete(id);
-                loadEvents();
+                loadData();
             } catch (error) {
-                console.error("Error deleting event", error);
+                console.error("Error deleting", error);
             }
         }
     };
@@ -93,136 +94,162 @@ const RoadmapManager = () => {
         <div className="space-y-6">
             <div className="flex justify-between items-center">
                 <div>
-                    <h3 className="text-lg font-bold text-gray-900">Gestión del Roadmap</h3>
-                    <p className="text-sm text-gray-500">Administra los hitos y eventos del cronograma.</p>
+                    <h1 className="text-2xl font-bold text-slate-800 font-serif">Gestión del Roadmap</h1>
+                    <p className="text-sm text-slate-500">Diseña la ruta clínica del residente SIMR 2026.</p>
                 </div>
-                <Button onClick={() => handleOpenModal()} className="flex items-center gap-2">
-                    <Plus size={16} /> Nuevo Evento
+                <Button onClick={() => { setEditingItem(null); setForm(initialForm); setIsModalOpen(true); }}
+                    className="flex items-center gap-2">
+                    <Plus size={18} /> Nuevo Evento
                 </Button>
             </div>
 
-            <div className="grid gap-4">
-                {events.map((event) => {
-                    const Icon = AVAILABLE_ICONS.find(i => i.id === event.icon)?.icon || Calendar;
-                    return (
-                        <Card key={event.id} className="p-4 flex items-center justify-between hover:shadow-md transition-shadow">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-blue-50 text-blue-600 rounded-lg">
-                                    <Icon size={20} />
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-bold">
+                        <tr>
+                            <th className="px-6 py-4">Orden</th>
+                            <th className="px-6 py-4">Hito / Evento</th>
+                            <th className="px-6 py-4">Fecha Visible</th>
+                            <th className="px-6 py-4">Estado Temporal</th>
+                            <th className="px-6 py-4">Acción (CTA)</th>
+                            <th className="px-6 py-4 text-center">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {loading ? (
+                            <tr><td colSpan="6" className="py-10 text-center text-slate-400">Cargando eventos...</td></tr>
+                        ) : items.map((item) => {
+                            const now = new Date();
+                            const itemDate = item.sort_date ? new Date(item.sort_date) : null;
+                            const isPast = itemDate && itemDate < now;
+
+                            return (
+                                <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                                    <td className="px-6 py-4 font-mono text-slate-400 font-bold">{item.order}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-2 rounded-lg ${isPast ? 'bg-slate-100 text-slate-400' : 'bg-blue-50 text-blue-600'}`}>
+                                                {React.createElement(Icons[item.icon_name] || Icons.Calendar, { size: 18 })}
+                                            </div>
+                                            <span className="font-bold text-slate-800">{item.title}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-slate-600 font-medium">{item.date_display}</td>
+                                    <td className="px-6 py-4">
+                                        {itemDate ? (
+                                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase
+                            ${isPast ? 'bg-gray-100 text-gray-500' : 'bg-blue-100 text-blue-700'}`}>
+                                                {isPast ? 'Pasado' : 'Próximo'}
+                                            </span>
+                                        ) : <span className="text-slate-300">N/A</span>}
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        {item.cta_text ? (
+                                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100 uppercase">
+                                                <LinkIcon size={12} /> {item.cta_text}
+                                            </span>
+                                        ) : <span className="text-slate-300 text-xs">-</span>}
+                                    </td>
+                                    <td className="px-6 py-4 text-center">
+                                        <div className="flex justify-center gap-2">
+                                            <button onClick={() => handleEdit(item)} className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all"><Edit2 size={18} /></button>
+                                            <button onClick={() => handleDelete(item.id)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all"><Trash2 size={18} /></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            );
+                        })}
+                        {!loading && items.length === 0 && (
+                            <tr><td colSpan="6" className="py-20 text-center text-slate-400"><Calendar className="mx-auto mb-2 opacity-20" size={48} /> No hay hitos configurados</td></tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+
+            {isModalOpen && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[70] backdrop-blur-sm p-4">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in duration-200">
+                        <div className="bg-slate-50 px-6 py-4 border-b border-slate-200 flex justify-between items-center">
+                            <div>
+                                <h3 className="font-bold text-slate-800">{editingItem ? 'Editar Hito Clínico' : 'Nuevo Hito para el Roadmap'}</h3>
+                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Configuración del Sistema Nervioso del Evento</p>
+                            </div>
+                            <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2"><X size={24} /></button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 max-h-[80vh] overflow-y-auto">
+
+                            <div className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Título del Hito</label>
+                                    <input required type="text" className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} placeholder="Ej: Envío de Abstracts" />
                                 </div>
                                 <div>
-                                    <h4 className="font-bold text-gray-900">{event.title}</h4>
-                                    <div className="flex items-center gap-3 text-sm text-gray-500">
-                                        <span className="flex items-center gap-1"><Calendar size={12} /> {event.date}</span>
-                                        <span className="px-2 py-0.5 bg-gray-100 rounded text-xs">Año: {event.year}</span>
-                                        {event.completed && <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs font-bold">Completado</span>}
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Descripción / Detalles</label>
+                                    <textarea className="w-full border border-slate-200 rounded-lg p-3 text-sm h-32 resize-none focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Instrucciones breves para el residente..." />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha Visible (Label)</label>
+                                        <input required type="text" className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={form.date_display} onChange={e => setForm({ ...form, date_display: e.target.value })} placeholder="Ej: Marzo 2026" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Orden (Prioridad)</label>
+                                        <input type="number" className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                            value={form.order} onChange={e => setForm({ ...form, order: parseInt(e.target.value) })} />
                                     </div>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2">
-                                <button onClick={() => handleOpenModal(event)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
-                                    <Edit2 size={16} />
-                                </button>
-                                <button onClick={() => handleDelete(event.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
-                                    <Trash2 size={16} />
-                                </button>
-                            </div>
-                        </Card>
-                    );
-                })}
 
-                {events.length === 0 && (
-                    <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
-                        <Calendar className="mx-auto text-gray-300 mb-2" size={32} />
-                        <p className="text-gray-500">No hay eventos programados</p>
-                    </div>
-                )}
-            </div>
+                            <div className="space-y-4 bg-slate-50 p-5 rounded-xl border border-slate-100">
+                                <h4 className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-4">Personalización Avanzada</h4>
 
-            {/* Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
-                    <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden animate-fadeIn">
-                        <div className="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-                            <h3 className="font-bold text-gray-900">{currentEvent ? 'Editar Evento' : 'Nuevo Evento'}</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">×</button>
-                        </div>
-
-                        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Título</label>
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    value={formData.title}
-                                    onChange={e => setFormData({ ...formData, title: e.target.value })}
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                                    <input
-                                        type="date"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                        value={formData.date}
-                                        onChange={e => setFormData({ ...formData, date: e.target.value })}
-                                    />
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-2">Icono Representativo</label>
+                                    <div className="grid grid-cols-5 gap-2">
+                                        {iconOptions.map(icon => (
+                                            <button key={icon} type="button"
+                                                onClick={() => setForm({ ...form, icon_name: icon })}
+                                                className={`p-2 rounded-lg border transition-all flex items-center justify-center ${form.icon_name === icon ? 'bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200' : 'bg-white border-slate-200 hover:border-blue-300 text-slate-400'}`}
+                                            >
+                                                {React.createElement(Icons[icon], { size: 20 })}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Año Visual</label>
-                                    <input
-                                        type="text"
-                                        required
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                        value={formData.year}
-                                        onChange={e => setFormData({ ...formData, year: e.target.value })}
-                                    />
+
+                                <div className="pt-4 border-t border-slate-200">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Fecha Real de Control</label>
+                                    <input type="date" className="w-full border border-slate-200 rounded-lg p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                                        value={form.sort_date} onChange={e => setForm({ ...form, sort_date: e.target.value })} />
+                                    <p className="text-[10px] text-slate-400 mt-2 italic">Importante: Determina si el evento aparece como "Completado" o "Activo".</p>
+                                </div>
+
+                                <div className="pt-4 border-t border-slate-200 space-y-3">
+                                    <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Interactividad (Botón Acción)</label>
+                                    <div className="space-y-2">
+                                        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3">
+                                            <Icons.Type size={16} className="text-slate-400" />
+                                            <input type="text" className="w-full py-2 text-sm outline-none"
+                                                value={form.cta_text} onChange={e => setForm({ ...form, cta_text: e.target.value })} placeholder="Texto (Inscribirse)" />
+                                        </div>
+                                        <div className="flex items-center gap-2 bg-white border border-slate-200 rounded-lg px-3">
+                                            <Icons.LinkIcon size={16} className="text-slate-400" />
+                                            <input type="text" className="w-full py-2 text-sm outline-none"
+                                                value={form.cta_link} onChange={e => setForm({ ...form, cta_link: e.target.value })} placeholder="Link (/register)" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Icono</label>
-                                <div className="grid grid-cols-3 gap-2">
-                                    {AVAILABLE_ICONS.map(({ id, icon: Icon }) => (
-                                        <button
-                                            key={id}
-                                            type="button"
-                                            onClick={() => setFormData({ ...formData, icon: id })}
-                                            className={`p-2 flex flex-col items-center gap-1 rounded-lg border transition-all ${formData.icon === id ? 'bg-blue-50 border-blue-500 text-blue-700' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                                        >
-                                            <Icon size={20} />
-                                            <span className="text-[10px]">{id}</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Descripción</label>
-                                <textarea
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all h-24 resize-none"
-                                    value={formData.description}
-                                    onChange={e => setFormData({ ...formData, description: e.target.value })}
-                                ></textarea>
-                            </div>
-
-                            <div className="flex items-center gap-2 pt-2">
-                                <input
-                                    type="checkbox"
-                                    id="completed"
-                                    className="rounded text-blue-600 focus:ring-blue-500"
-                                    checked={formData.completed}
-                                    onChange={e => setFormData({ ...formData, completed: e.target.checked })}
-                                />
-                                <label htmlFor="completed" className="text-sm text-gray-700">Marcar como completado</label>
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-4">
-                                <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
-                                <Button type="submit">Guardar Evento</Button>
+                            <div className="col-span-1 md:col-span-2 flex gap-3 pt-6 border-t border-slate-100">
+                                <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="flex-1">Cancelar</Button>
+                                <Button type="submit" className="flex-1 flex justify-center items-center gap-2 py-3">
+                                    <Save size={18} /> Guardar Hito en Roadmap
+                                </Button>
                             </div>
                         </form>
                     </div>

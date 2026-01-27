@@ -1,261 +1,305 @@
-import React from 'react';
-import { Search, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor } from 'lucide-react';
-import AttendeeDetailsModal from './AttendeeDetailsModal';
+import React, { useState } from 'react';
+import {
+    Search, Filter, Download, Plus,
+    MoreVertical, Shield, Eye, FileText, Printer,
+    MapPin, Wifi, Monitor, Brain, Stethoscope
+} from 'lucide-react';
+import UserDetailModal from '../organization/UserDetailModal';
+import UsersPrintView from '../organization/UsersPrintView';
 import PhotocheckModal from './PhotocheckModal';
-import { useSearch, useSortableData, useModal } from '../../hooks';
-import { Button, Table, FormField, Badge } from '../ui';
+import { useSearch, useSortableData, useModal, useApi } from '../../hooks';
+import { Button, StatusBadge } from '../ui';
+import { api } from '../../services/api';
 
 const AttendeeList = ({ attendees }) => {
-    // Use custom hooks for search/filter
+    // --- ESTADOS Y HOOKS ---
     const {
         searchTerm,
         setSearchTerm,
         filterValue: filterRole,
         setFilterValue: setFilterRole,
-        filteredItems: filteredAttendees
+        filteredItems: searchFilteredAttendees
     } = useSearch(attendees, {
         searchFields: ['name', 'specialty', 'dni', 'email'],
         filterField: 'eventRoles'
     });
 
-    // Use custom hook for sorting
+    // Fetch dynamic options
+    const { data: rolesData } = useApi(api.system.getRoles);
+    const { data: modalitiesData } = useApi(api.system.getModalities);
+
+    // Prepare options for selects
+    const roleOptions = React.useMemo(() => {
+        if (!rolesData) return [
+            { value: "All", label: "Todos los Roles" },
+            { value: "participante", label: "Participantes" },
+            { value: "ponente", label: "Ponentes" },
+            { value: "jurado", label: "Jurados" },
+            { value: "organizador", label: "Organizadores" }
+        ];
+
+        const dynamicRoles = rolesData.map(r => ({
+            value: r.slug || r.name.toLowerCase(), // Ensure fallback matches typical slug format
+            label: r.name
+        }));
+
+        return [{ value: "All", label: "Todos los Roles" }, ...dynamicRoles];
+    }, [rolesData]);
+
+    const modalityOptions = React.useMemo(() => {
+        if (!modalitiesData) return [
+            { value: "All", label: "Todas" },
+            { value: "Presencial", label: "Presencial" },
+            { value: "Virtual", label: "Virtual" },
+            { value: "Híbrido", label: "Híbrido" }
+        ];
+
+        // Ensure we handle potential "title" vs "name" API variations
+        const dynamicModalities = modalitiesData.map(m => ({
+            value: m.title || m.name,
+            label: m.title || m.name
+        }));
+
+        return [{ value: "All", label: "Todas" }, ...dynamicModalities];
+    }, [modalitiesData]);
+
+    const [filterModality, setFilterModality] = useState('All');
+
+    // Sub-filtro de Modalidad
+    const filteredAttendees = React.useMemo(() => {
+        if (filterModality === 'All') return searchFilteredAttendees;
+        return searchFilteredAttendees.filter(user =>
+            (user.modalityName || 'Presencial') === filterModality
+        );
+    }, [searchFilteredAttendees, filterModality]);
+
     const {
         items: sortedAttendees,
         requestSort,
         sortConfig
     } = useSortableData(filteredAttendees);
 
-    // Modal for Photocheck
-    const {
-        isOpen: isPhotocheckOpen,
-        data: photocheckAttendee,
-        open: openPhotocheck,
-        close: closePhotocheck
-    } = useModal();
-
-    // Modal for Details
-    const {
-        isOpen: isDetailsOpen,
-        data: detailsAttendee,
-        open: openDetails,
-        close: closeDetails
-    } = useModal();
-
-    // Pagination State
-    const [currentPage, setCurrentPage] = React.useState(1);
+    const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
 
-    // Reset pagination when search or filter changes
+    // Reset paginación
     React.useEffect(() => {
         setCurrentPage(1);
-    }, [searchTerm, filterRole]);
+    }, [searchTerm, filterRole, filterModality]);
 
-    // Pagination Logic
+    // Paginación
     const indexOfLastItem = currentPage * itemsPerPage;
     const indexOfFirstItem = indexOfLastItem - itemsPerPage;
     const currentItems = sortedAttendees.slice(indexOfFirstItem, indexOfLastItem);
-    const totalPages = Math.ceil(sortedAttendees.length / itemsPerPage);
+    const totalPages = Math.ceil(filteredAttendees.length / itemsPerPage);
 
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-    const columns = [
-        { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || item.name.split(' ').slice(0, 2).join(' ') },
-        { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || item.name.split(' ').slice(2).join(' ') },
-        { header: 'DNI', key: 'dni', sortable: true },
-        { header: 'Ocupación', key: 'occupation' },
-        {
-            header: 'Rol',
-            key: 'eventRoles',
-            sortable: true,
-            render: (item) => {
-                // Support for array eventRoles or legacy single role
-                const roles = item.eventRoles || (item.role ? [item.role] : ['asistente']);
+    // Modales
+    const { isOpen: isDetailOpen, data: selectedUserId, open: openDetail, close: closeDetail } = useModal();
+    const { isOpen: isPhotocheckOpen, data: printUser, open: openPhotocheck, close: closePhotocheck } = useModal();
 
-                return (
-                    <div className="flex flex-wrap gap-1">
-                        {roles.map((role, idx) => {
-                            let variant = 'gray'; // default 'asistente'
-                            let label = role;
-
-                            // Normalize for display and color
-                            const lowerRole = String(role).toLowerCase();
-
-                            if (lowerRole.includes('organizador') || lowerRole.includes('comité')) {
-                                variant = 'purple';
-                                label = 'Comité';
-                            } else if (lowerRole.includes('ponente')) {
-                                variant = 'amber';
-                                label = 'Ponente';
-                            } else if (lowerRole.includes('jurado')) {
-                                variant = 'cyan';
-                                label = 'Jurado';
-                            } else if (lowerRole.includes('asistente')) {
-                                variant = 'gray';
-                                label = 'Asistente';
-                            }
-
-                            return <Badge key={idx} variant={variant}>{label}</Badge>;
-                        })}
-                    </div>
-                );
-            }
-        },
-        {
-            header: 'Especialidad',
-            key: 'specialty',
-            sortable: true,
-            className: 'text-center w-16',
-            render: (item) => {
-                const spec = item.specialty || '';
-                let Icon = Stethoscope;
-                let color = 'text-gray-400';
-
-                if (spec.toLowerCase().includes('neurología')) { Icon = Brain; color = 'text-purple-600'; }
-                else if (spec.toLowerCase().includes('pediatría')) { Icon = Baby; color = 'text-pink-500'; }
-                else if (spec.toLowerCase().includes('cirugía')) { Icon = Activity; color = 'text-red-500'; }
-                else if (spec.toLowerCase().includes('medicina')) { Icon = Stethoscope; color = 'text-blue-500'; }
-
-                return (
-                    <div className="flex justify-center group relative cursor-help">
-                        <Icon size={20} className={color} strokeWidth={1.5} />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
-                            {spec}
-                        </span>
-                    </div>
-                );
-            }
-        },
-        {
-            header: 'Modalidad',
-            key: 'modality',
-            className: 'text-center w-16',
-            render: (item) => {
-                const mod = item.modality || 'Presencial';
-                let Icon = MapPin;
-                let color = 'text-green-600';
-
-                if (mod === 'Virtual') { Icon = Wifi; color = 'text-blue-500'; }
-                else if (mod === 'Híbrido') { Icon = Monitor; color = 'text-purple-600'; }
-
-                return (
-                    <div className="flex justify-center group relative cursor-help">
-                        <Icon size={18} className={color} strokeWidth={2} />
-                        <span className="absolute bottom-full left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-10 mb-2">
-                            {mod}
-                        </span>
-                    </div>
-                );
-            }
-        },
-        { header: 'Fecha Reg.', key: 'registrationDate', sortable: true, render: (item) => item.registrationDate || item.date }
-    ];
+    // --- ACCIONES DE IMPRESIÓN ---
+    // La impresión ahora se maneja vía CSS (@media print) y el componente oculto UsersPrintView
+    const handlePrintList = () => {
+        window.print();
+    };
 
     return (
-        <div className="space-y-4">
-            {/* Filters and Actions */}
-            <div className="flex flex-col md:flex-row justify-between gap-4 bg-white p-4 rounded-xl border border-gray-200 shadow-sm items-end">
-                <div className="relative flex-grow max-w-md w-full">
-                    <FormField
-                        placeholder="Buscar por nombre, especialidad, DNI o correo..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="mb-0"
-                    />
-                    <Search className="absolute right-3 top-3 text-gray-400 pointer-events-none" size={18} />
-                </div>
-                <div className="flex gap-2 w-full md:w-auto">
-                    <FormField
-                        type="select"
-                        value={filterRole}
-                        onChange={(e) => setFilterRole(e.target.value)}
-                        options={[
-                            { value: "All", label: "Todos los Roles" },
-                            { value: "asistente", label: "Asistentes" },
-                            { value: "ponente", label: "Ponentes" },
-                            { value: "jurado", label: "Jurados" },
-                            { value: "organizador", label: "Comité" }
-                        ]}
-                        className="mb-0 min-w-[180px]"
-                    />
-                    <Button variant="outline" className="flex items-center gap-2 h-[42px]"><Download size={16} /> Exportar</Button>
-                </div>
-            </div>
+        <div className="space-y-6">
+            {/* 1. COMPONENTE DE IMPRESIÓN (Visible solo al imprimir) */}
+            <UsersPrintView users={filteredAttendees} totalCount={filteredAttendees.length} />
 
-            {/* Table */}
-            <Table
-                columns={columns}
-                data={currentItems}
-                onSort={requestSort}
-                sortConfig={{ key: sortedAttendees.sortKey, direction: sortedAttendees.sortDirection }}
-                emptyMessage="No se encontraron asistentes."
-                onRowClick={openDetails} // Open details modal on row click
-                actions={(item) => (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation(); // Prevent opening the details modal
-                            openPhotocheck(item);
-                        }}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Imprimir Fotocheck"
-                    >
-                        <Printer size={18} />
-                    </button>
-                )}
-            />
+            {/* 2. INTERFAZ NORMAL (Oculta al imprimir) */}
+            <div className="no-print space-y-6">
 
-            {/* Pagination Controls */}
-            <div className="flex items-center justify-between border-t border-gray-100 pt-4">
-                <div className="text-sm text-gray-500">
-                    Mostrando {filteredAttendees.length > 0 ? indexOfFirstItem + 1 : 0}-{Math.min(indexOfLastItem, filteredAttendees.length)} de {filteredAttendees.length} asistentes
-                </div>
-                {totalPages > 1 && (
-                    <div className="flex gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => paginate(currentPage - 1)}
-                            disabled={currentPage === 1}
-                            className="h-8 w-8 p-0 flex items-center justify-center"
-                        >
-                            &lt;
-                        </Button>
-                        {[...Array(totalPages)].map((_, i) => (
-                            <button
-                                key={i}
-                                onClick={() => paginate(i + 1)}
-                                className={`h-8 w-8 rounded-lg text-sm font-medium transition-colors ${currentPage === i + 1
-                                    ? 'bg-blue-600 text-white shadow-sm'
-                                    : 'text-gray-600 hover:bg-gray-100'
-                                    }`}
-                            >
-                                {i + 1}
-                            </button>
-                        ))}
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => paginate(currentPage + 1)}
-                            disabled={currentPage === totalPages}
-                            className="h-8 w-8 p-0 flex items-center justify-center"
-                        >
-                            &gt;
-                        </Button>
+                {/* === BLOQUE 1: BARRA DE FILTROS (Card Design) === */}
+                <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+
+                    {/* Buscador (Más espacio) */}
+                    <div className="md:col-span-4 xl:col-span-5 relative">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                            <Search size={18} className="text-slate-400" />
+                        </div>
+                        <input
+                            type="text"
+                            placeholder="Buscar por nombre, especialidad, DNI o correo..."
+                            className="pl-10 w-full h-10 rounded-lg border-slate-300 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all text-sm"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
                     </div>
+
+                    {/* Filtro: Rol */}
+                    <div className="md:col-span-3 xl:col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 ml-1 tracking-wider">Filtrar por Rol</label>
+                        <div className="relative">
+                            <select
+                                className="w-full h-10 pl-3 pr-8 rounded-lg border-slate-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer appearance-none bg-slate-50 hover:bg-white transition-colors"
+                                value={filterRole}
+                                onChange={(e) => setFilterRole(e.target.value)}
+                            >
+                                {roleOptions.map((opt, i) => (
+                                    <option key={i} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                            <Filter className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
+                        </div>
+                    </div>
+
+                    {/* Filtro: Modalidad */}
+                    <div className="md:col-span-3 xl:col-span-2">
+                        <label className="block text-[10px] uppercase font-bold text-slate-400 mb-1 ml-1 tracking-wider">Por Modalidad</label>
+                        <div className="relative">
+                            <select
+                                className="w-full h-10 pl-3 pr-8 rounded-lg border-slate-300 text-sm focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer appearance-none bg-slate-50 hover:bg-white transition-colors"
+                                value={filterModality}
+                                onChange={(e) => setFilterModality(e.target.value)}
+                            >
+                                {modalityOptions.map((opt, i) => (
+                                    <option key={i} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                            <Filter className="absolute right-3 top-2.5 text-slate-400 pointer-events-none" size={16} />
+                        </div>
+                    </div>
+
+                    {/* Botones de Acción */}
+                    <div className="md:col-span-2 xl:col-span-3 flex justify-end gap-2">
+                        <button
+                            onClick={handlePrintList}
+                            className="h-10 px-4 bg-slate-800 text-white rounded-lg text-sm font-medium hover:bg-slate-900 transition-colors shadow-sm flex items-center gap-2"
+                        >
+                            <Printer size={16} /> <span className="hidden xl:inline">Imprimir</span>
+                        </button>
+                        <button className="h-10 px-4 border border-slate-300 bg-white text-slate-700 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors shadow-sm flex items-center gap-2">
+                            <Download size={16} /> <span className="hidden xl:inline">Exportar</span>
+                        </button>
+                    </div>
+                </div>
+
+                {/* === BLOQUE 2: LA TABLA (Diseño Clean) === */}
+                <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="bg-slate-50 border-b border-slate-200 text-xs uppercase text-slate-500 font-semibold tracking-wider">
+                                    <th className="px-6 py-4 cursor-pointer hover:text-slate-700" onClick={() => requestSort('lastName')}>Apellidos</th>
+                                    <th className="px-6 py-4 cursor-pointer hover:text-slate-700" onClick={() => requestSort('firstName')}>Nombres</th>
+                                    <th className="px-6 py-4">DNI</th>
+                                    <th className="px-6 py-4">Ocupación</th>
+                                    <th className="px-6 py-4">Rol</th>
+                                    <th className="px-6 py-4">Especialidad</th>
+                                    <th className="px-6 py-4">Modalidad</th>
+                                    <th className="px-6 py-4 text-center">Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {currentItems.map((item, idx) => (
+                                    <tr
+                                        key={idx}
+                                        className="hover:bg-slate-50/80 transition-colors group cursor-pointer"
+                                        onClick={() => openDetail(item.id)}
+                                    >
+                                        <td className="px-6 py-4 font-medium text-slate-900">{item.lastName || item.name?.split(' ').slice(0, 2).join(' ')}</td>
+                                        <td className="px-6 py-4 text-slate-600">{item.firstName || item.name?.split(' ').slice(2).join(' ')}</td>
+                                        <td className="px-6 py-4 font-mono text-xs text-slate-500">{item.dni}</td>
+                                        <td className="px-6 py-4 text-sm text-slate-600 truncate max-w-[150px]">{item.occupation}</td>
+                                        <td className="px-6 py-4">
+                                            {(item.eventRoles || ['Asistente']).map((role, i) => {
+                                                // Normalización Visual: Participante -> Asistente
+                                                const displayInfo = role.toLowerCase() === 'participante'
+                                                    ? { type: 'asistente', text: 'Asistente' }
+                                                    : { type: role, text: role.charAt(0).toUpperCase() + role.slice(1) };
+
+                                                return <StatusBadge key={i} type={displayInfo.type} text={displayInfo.text} />;
+                                            })}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            {item.specialty === 'Neurología' ? <Brain size={16} className="text-purple-500" /> : <Stethoscope size={16} className="text-slate-400" />}
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <StatusBadge type={item.modalityName || 'presencial'} text={item.modalityName || 'Presencial'} />
+                                        </td>
+                                        <td className="px-6 py-4">
+                                            <div className="flex justify-center items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                                <button
+                                                    onClick={() => openDetail(item.id)}
+                                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                                    title="Ver Detalles"
+                                                >
+                                                    <Eye size={18} />
+                                                </button>
+                                                <button
+                                                    onClick={() => openPhotocheck(item)}
+                                                    className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
+                                                    title="Imprimir Credencial"
+                                                >
+                                                    <Printer size={18} />
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {/* Footer de Paginación */}
+                    <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex flex-col sm:flex-row items-center justify-between text-sm text-slate-500 gap-4">
+                        <span>
+                            Mostrando <span className="font-medium text-slate-900">{filteredAttendees.length > 0 ? indexOfFirstItem + 1 : 0}</span> a <span className="font-medium text-slate-900">{Math.min(indexOfLastItem, filteredAttendees.length)}</span> de <span className="font-medium text-slate-900">{filteredAttendees.length}</span> inscritos
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => paginate(currentPage - 1)}
+                                disabled={currentPage === 1}
+                                className="px-3 py-1.5 border border-slate-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                            >
+                                Anterior
+                            </button>
+                            <div className="hidden sm:flex items-center gap-1">
+                                {[...Array(totalPages)].map((_, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => paginate(i + 1)}
+                                        className={`w-8 h-8 rounded-lg flex items-center justify-center text-xs font-medium transition-colors ${currentPage === i + 1
+                                            ? 'bg-slate-900 text-white shadow-sm'
+                                            : 'hover:bg-slate-200 text-slate-600'
+                                            }`}
+                                    >
+                                        {i + 1}
+                                    </button>
+                                ))}
+                            </div>
+                            <button
+                                onClick={() => paginate(currentPage + 1)}
+                                disabled={currentPage === totalPages}
+                                className="px-3 py-1.5 border border-slate-300 rounded-lg hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+                            >
+                                Siguiente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Modals */}
+                {isDetailOpen && (
+                    <UserDetailModal
+                        isOpen={isDetailOpen}
+                        onClose={closeDetail}
+                        userId={selectedUserId}
+                    />
+                )}
+
+                {isPhotocheckOpen && (
+                    <PhotocheckModal
+                        isOpen={isPhotocheckOpen}
+                        onClose={closePhotocheck}
+                        user={printUser}
+                    />
                 )}
             </div>
-
-            {/* Modals */}
-            <PhotocheckModal
-                isOpen={isPhotocheckOpen}
-                onClose={closePhotocheck}
-                attendee={photocheckAttendee}
-            />
-
-            <AttendeeDetailsModal
-                isOpen={isDetailsOpen}
-                onClose={closeDetails}
-                attendee={detailsAttendee}
-            />
         </div>
     );
 };

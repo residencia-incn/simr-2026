@@ -42,6 +42,7 @@ interface AuthContextType {
     hasModule: (module: string) => boolean;
     updateUserPermissions: (permissions: string[]) => void;
     updateUser: (updates: Partial<User>) => Promise<void>;
+    refreshProfile: () => Promise<void>;
 }
 
 // MODULE PERMISSIONS MAPPING
@@ -119,30 +120,47 @@ const deriveModulesAndPermissions = (userData: User): { modules: string[], permi
     if (hasExplicitModules) {
         // User has explicitly assigned modules - use them directly
         userData.modules.forEach(m => modules.add(m));
-    } else {
-        // No explicit modules - derive from eventRole (legacy/fallback behavior)
-        if (userData.eventRole) {
-            const roleMapping = ROLE_MODULE_MAPPING[userData.eventRole];
 
-            if (roleMapping) {
-                // Add base modules
-                roleMapping.base?.forEach((m: string) => modules.add(m));
+        // Add explicit permissions if they exist
+        if (userData.permissions) {
+            userData.permissions.forEach(p => permissions.add(p));
+        }
 
-                // Add conditional modules (for asistente)
-                if (userData.eventRole === 'asistente' && userData.hasPaid) {
-                    roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
-                }
+        // Convert modules to permissions
+        Array.from(modules).forEach(module => {
+            const modulePerms = MODULE_PERMISSIONS[module] || [];
+            modulePerms.forEach(p => permissions.add(p));
+        });
 
-                // Add function-specific modules (for organizador)
-                if (userData.eventRole === 'organizador' && userData.organizerFunction) {
-                    const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
-                    funcModules?.forEach((m: string) => modules.add(m));
-                }
+        return {
+            modules: Array.from(modules),
+            permissions: Array.from(permissions)
+        };
+    }
+
+    // No explicit modules - derive from eventRole (legacy/fallback behavior)
+    if (userData.eventRole) {
+        const roleKey = userData.eventRole.toLowerCase();
+        const roleMapping = ROLE_MODULE_MAPPING[roleKey];
+
+        if (roleMapping) {
+            // Add base modules
+            roleMapping.base?.forEach((m: string) => modules.add(m));
+
+            // Add conditional modules (for asistente)
+            if (userData.eventRole === 'asistente' && userData.hasPaid) {
+                roleMapping.conditional?.hasPaid?.forEach((m: string) => modules.add(m));
+            }
+
+            // Add function-specific modules (for organizador)
+            if (userData.eventRole === 'organizador' && userData.organizerFunction) {
+                const funcModules = roleMapping.byFunction?.[userData.organizerFunction];
+                funcModules?.forEach((m: string) => modules.add(m));
             }
         }
     }
 
-    // Add explicit permissions if they exist
+    // Add extra permissions for legacy flows
     if (userData.permissions) {
         userData.permissions.forEach(p => permissions.add(p));
     }
@@ -157,31 +175,24 @@ const deriveModulesAndPermissions = (userData: User): { modules: string[], permi
     }
 
     if (userData.roles && Array.isArray(userData.roles)) {
-        userData.roles.forEach(role => {
-            // Add role as module (e.g. 'jurado', 'ponente'), but skip 'participant' 
-            // to avoid ghost menu items if they only have the role legacy but not the module
-            if (role !== 'participant') {
+        userData.roles.forEach(r => {
+            const role = r.toLowerCase();
+            if (role !== 'participant' && role !== 'organizador') {
                 modules.add(role);
             }
-
             const perms = LEGACY_ROLE_PERMISSIONS[role] || [];
             perms.forEach(p => permissions.add(p));
         });
     }
 
     if (userData.role) {
-        // Add legacy role as a module if it makes sense (or map it)
-        // Most legacy roles map directly to module names (e.g., 'contabilidad', 'organizacion')
-        // Special case for 'admin' -> 'organizacion'
         if (userData.role === 'admin') {
             modules.add('organizacion');
         } else {
-            // Skip 'participant' to avoid it appearing as a module (ghost menu)
-            if (userData.role !== 'participant') {
+            if (userData.role !== 'participant' && userData.role !== 'organizador') {
                 modules.add(userData.role);
             }
         }
-
         const perms = LEGACY_ROLE_PERMISSIONS[userData.role] || [];
         perms.forEach(p => permissions.add(p));
     }
@@ -205,15 +216,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const storedUser = storage.get('simr_user');
         if (storedUser) {
-            // Hydrate modules and permissions if missing
-            if (!storedUser.modules || !storedUser.permissions) {
-                const { modules, permissions } = deriveModulesAndPermissions(storedUser);
-                const hydratedUser = { ...storedUser, modules, permissions };
-                setUser(hydratedUser);
-            } else {
-                setUser(storedUser);
+            // 1. ALWAYS re-derive derived fields to fix stale/corrupt local state
+            // This fixes cases where 'modules' in storage is out of sync with 'eventRole'
+            const { modules, permissions } = deriveModulesAndPermissions(storedUser);
+            const hydratedUser = { ...storedUser, modules, permissions };
+
+            setUser(hydratedUser);
+            storage.set('simr_user', hydratedUser); // Up-date storage immediately
+
+            // 2. Background refresh from Server to ensure total sync
+            if (hydratedUser.id) {
+                api.users.getById(hydratedUser.id)
+                    .then(freshUser => {
+                        const { modules: freshModules, permissions: freshPerms } = deriveModulesAndPermissions(freshUser);
+                        const fullUser = { ...freshUser, modules: freshModules, permissions: freshPerms };
+
+                        // Only update if something changed to avoid unnecessary renders
+                        if (JSON.stringify(fullUser) !== JSON.stringify(hydratedUser)) {
+                            console.log('[Auth] Profile refreshed from server. Updating state.');
+                            setUser(fullUser);
+                            storage.set('simr_user', fullUser);
+                        }
+                    })
+                    .catch(err => console.error('[Auth] Failed to refresh profile on mount:', err));
             }
         }
+
+        // Listen for global logout events (triggered by 401s in client.js)
+        const handleForceLogout = () => {
+            logout();
+        };
+        window.addEventListener('auth:logout', handleForceLogout);
+
+        return () => {
+            window.removeEventListener('auth:logout', handleForceLogout);
+        };
     }, []);
 
     const login = (userData: User) => {
@@ -287,6 +324,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return user.modules.includes(module);
     };
 
+    const refreshProfile = async () => {
+        if (!user || (!user.id && user.id !== 0)) return;
+        try {
+            // Fetch fresh data from backend
+            const freshUser = await api.users.getById(user.id);
+
+            // Re-calculate derived permissions logic
+            const { modules, permissions } = deriveModulesAndPermissions(freshUser);
+            const fullUser = { ...freshUser, modules, permissions };
+
+            setUser(fullUser);
+            storage.set('simr_user', fullUser);
+            console.log("Profile refreshed successfully", fullUser.modules);
+        } catch (error) {
+            console.error('Failed to refresh user profile:', error);
+        }
+    };
+
     return (
         <AuthContext.Provider value={{
             user,
@@ -297,7 +352,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             hasAnyPermission,
             hasModule,
             updateUserPermissions,
-            updateUser
+            updateUser,
+            refreshProfile
         }}>
             {children}
         </AuthContext.Provider>

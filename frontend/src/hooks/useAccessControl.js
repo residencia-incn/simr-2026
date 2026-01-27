@@ -14,12 +14,11 @@ export const useAccessControl = () => {
         const items = new Set([
             ...(user.purchasedItems || []),
             ...(user.workshops || []),
-            ...(user.modality ? [user.modality.toLowerCase()] : []),
             ...(user.ticketType ? [user.ticketType] : [])
         ]);
 
         // Add implicit entitlements based on roles
-        if (user.roles?.includes('aula_virtual') || user.profiles?.includes('aula_virtual')) {
+        if (user.roles?.includes('aula_virtual') || user.modules?.includes('aula_virtual')) {
             items.add('virtual');
             items.add('virtual_nocert');
             items.add('virtual_cert');

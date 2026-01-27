@@ -3,7 +3,6 @@ import { ViewState, Course, Module, Lesson } from '../../types';
 import { useAulaVirtual } from '../../context/AulaVirtualContext';
 import CourseContentPreview from '../admin/CourseContentPreview';
 import UnifiedVideoPlayer from '../../components/UnifiedVideoPlayer';
-import { CourseNotes } from './CourseNotes';
 
 interface CoursePlayerProps {
   setView: (view: ViewState) => void;
@@ -14,18 +13,16 @@ interface CoursePlayerProps {
 const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialVideoId }) => {
   const {
     getCourseById, getModulesByCourseId, getLessonsByModuleId, getInstructorById,
-    videos, updateLessonProgress, getLessonProgress, getVideoProgress, userProgress
+    videos, updateLessonProgress, getLessonProgress, getVideoProgress, userProgress, markLessonsAsUnlocked, markLessonsAsLocked, lessons, exams
   } = useAulaVirtual();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [modules, setModules] = useState<Module[]>([]);
   const [currentVideoId, setCurrentVideoId] = useState<number | null>(initialVideoId);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'content' | 'notes'>('content');
 
-  // Notes Feature States
-  const [currentPlaybackTime, setCurrentPlaybackTime] = useState(0); // Track live time for Notes
-  const [seekTarget, setSeekTarget] = useState<number | null>(null); // State to trigger seeking
+
+  // Throttle progress updates
 
   // Throttle progress updates
   const lastProgressUpdate = useRef<number>(0);
@@ -49,7 +46,7 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
     if (!currentVideoId && modules.length > 0) {
       let foundVideoId: number | null = null;
       for (const module of modules) {
-        const items = module.items || getLessonsByModuleId(module.id);
+        const items = module.items || getLessonsByModuleId(Number(module.id));
         const video = items.find((item: any) => item.type === 'video' || item.type === 'VIDEO');
         if (video) {
           foundVideoId = video.id;
@@ -68,7 +65,7 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
 
     let lessonItem: any = null;
     for (const module of modules) {
-      const items = module.items || getLessonsByModuleId(module.id);
+      const items = module.items || getLessonsByModuleId(Number(module.id));
       const found = items.find((item: any) => item.id === currentVideoId);
       if (found) {
         lessonItem = found;
@@ -100,32 +97,24 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
   // Calculate Resume Time synchronously via useMemo
   // This ensures initialTime is correct on first render of UnifiedVideoPlayer
   const resumeTime = useMemo(() => {
-    console.log("DEBUG: Calculating Resume Time. VideoID:", currentVideoId);
     if (currentVideo) {
       const prog = getLessonProgress(currentVideo.id);
-      console.log("DEBUG: LessonProgress found:", prog);
       if (prog && prog.data && prog.data.lastPosition) {
-        console.log("DEBUG: Returning LessonProgress time:", prog.data.lastPosition);
         return prog.data.lastPosition;
       }
       if ((currentVideo as any).videoId) {
         const videoProg = getVideoProgress((currentVideo as any).videoId);
-        console.log("DEBUG: VideoProgress found:", videoProg);
         if (videoProg && videoProg.data && videoProg.data.lastPosition) {
-          console.log("DEBUG: Returning VideoProgress time:", videoProg.data.lastPosition);
           return videoProg.data.lastPosition;
         }
       }
     }
-    console.log("DEBUG: No progress found. Returning 0.");
     return 0;
   }, [currentVideoId, getLessonProgress, getVideoProgress, currentVideo]); // Depend on ID mostly, currentVideo dependency is safe if memoized
 
   // Handle Video Progress - Memoized to prevent re-creation on every render
   const handleVideoProgress = useCallback((time: number, duration: number, percentage: number) => {
     if (currentVideo) {
-      setCurrentPlaybackTime(time);
-
       const vidId = (currentVideo as any).videoId;
       currentVideoStatsRef.current = { time, duration, videoId: vidId };
 
@@ -152,17 +141,14 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
     }
   }, [currentVideo, updateLessonProgress]);
 
-  // Handle Seek - Memoized to prevent CourseNotes re-renders
-  const handleSeek = useCallback((time: number) => {
-    setSeekTarget(time);
-  }, []);
+
 
   // Save progress on unmount or video change
   useEffect(() => {
     return () => {
       const stats = currentVideoStatsRef.current;
       if (currentVideoId && stats.time > 0) {
-        console.log("Saving final progress on unmount/change for video:", currentVideoId, "Time:", stats.time);
+        // console.log("Saving final progress on unmount/change for video:", currentVideoId, "Time:", stats.time);
         // Using function from closure, assuming stability or benign staleness (context functions usually stable)
         updateLessonProgress(currentVideoId, { playedSeconds: stats.time, totalSeconds: stats.duration }, false, stats.videoId);
       }
@@ -172,39 +158,86 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
   // Compute Unlocked Lessons (Sequential Logic)
   const unlockedLessons = useMemo(() => {
     const unlocked = new Set<number>();
-    let previousCompleted = true; // First lesson is always unlocked
+    let globalSequenceBroken = false; // Tracks if the strictly sequential chain is broken
 
     // Sort modules by order (assuming they might not be sorted)
     const sortedModules = [...modules].sort((a, b) => a.order - b.order);
 
     for (const module of sortedModules) {
-      const items = module.items || getLessonsByModuleId(module.id);
+      const items = module.items || getLessonsByModuleId(Number(module.id));
       // Sort items by order
       const sortedItems = [...items].sort((a: any, b: any) => a.order - b.order);
 
+      // Determine if this module is accessible (i.e., everything BEFORE it is completed)
+      const isModuleAccessible = !globalSequenceBroken;
+
+      // Check if this specific module enforces sequential progress
+      // Default to true if undefined to maintain backward compatibility/tightest security
+      const isModuleSequential = module.isSequential !== false;
+
       for (const item of sortedItems) {
-        if (previousCompleted) {
+        // Logic Update: Non-sequential modules should be accessible regardless of previous module status
+        if (!isModuleSequential) {
+          unlocked.add(item.id);
+        } else if (isModuleAccessible && !globalSequenceBroken) {
           unlocked.add(item.id);
         }
 
-        // Check if THIS item is completed to unlock the NEXT one
+        // Check if THIS item is completed to update the global chain state
         const prog = getLessonProgress(item.id);
         const isCompleted = prog?.completed || item.status === 'COMPLETADO';
 
         if (!isCompleted) {
-          previousCompleted = false;
+          globalSequenceBroken = true;
         }
       }
     }
     return unlocked;
   }, [modules, getLessonProgress, userProgress]); // Re-calculate when progress updates
 
+  // Sync Unlocked State to Persistence (Fix for "0" vs "1" status)
+  // If the logic determines a lesson is unlocked (e.g. non-sequential module), ensure DB reflects it.
+  // Sync Unlocked/Locked State to Persistence
+  useEffect(() => {
+    // 1. Identify lessons that are visually UNLOCKED but NOT persisted as unlocked
+    const lessonsToSyncUnlock = Array.from(unlockedLessons).filter(id => {
+      const prog = getLessonProgress(id);
+      return !prog || !prog.isUnlocked;
+    });
+
+    if (lessonsToSyncUnlock.length > 0) {
+      markLessonsAsUnlocked(lessonsToSyncUnlock);
+    }
+
+    // 2. Identify lessons that are visually LOCKED but persisted as UNLOCKED (Re-locking case)
+    const lessonsToSyncLock: number[] = [];
+
+    modules.forEach(m => {
+      const items = m.items || getLessonsByModuleId(Number(m.id));
+      items.forEach((item: any) => {
+        const itemId = Number(item.id);
+        // If it is NOT in the unlocked set (Visual = Locked)
+        if (!unlockedLessons.has(itemId)) {
+          const prog = getLessonProgress(itemId);
+          // But specifically holds an "isUnlocked: true" state in DB
+          if (prog && prog.isUnlocked) {
+            lessonsToSyncLock.push(itemId);
+          }
+        }
+      });
+    });
+
+    if (lessonsToSyncLock.length > 0) {
+      markLessonsAsLocked(lessonsToSyncLock);
+    }
+  }, [unlockedLessons, getLessonProgress, markLessonsAsUnlocked, markLessonsAsLocked, modules, getLessonsByModuleId]);
+
   const instructor = course ? getInstructorById(String(course.instructorId)) : null;
 
   if (!course) return <div className="p-8 text-center">Cargando curso...</div>;
 
-  const totalLessons = modules.reduce((acc, m) => acc + (m.items || getLessonsByModuleId(m.id)).length, 0);
-  const completedLessonsCount = userProgress.filter(p => p.completed && modules.some(m => (m.items || getLessonsByModuleId(m.id)).some(l => l.id === p.lessonId))).length;
+  const totalLessons = modules.reduce((acc, m) => acc + (m.items || getLessonsByModuleId(Number(m.id))).length, 0);
+  const completedLessonsCount = userProgress.filter(p => p.completed && modules.some(m => (m.items || getLessonsByModuleId(Number(m.id))).some(l => l.id === p.lessonId))).length;
   const courseCompletionPercentage = totalLessons > 0 ? Math.round((completedLessonsCount / totalLessons) * 100) : 0;
 
   return (
@@ -257,7 +290,6 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
                 durationStr={String(currentVideo.duration)}
                 autoPlay={true}
                 initialTime={resumeTime}
-                seekTo={seekTarget}
                 onProgress={handleVideoProgress}
                 onComplete={handleVideoComplete}
               />
@@ -306,7 +338,6 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
               <div className="border-b border-slate-200">
                 <div className="flex gap-8 overflow-x-auto">
                   <button className="pb-4 border-b-2 border-primary text-primary font-semibold text-sm whitespace-nowrap">Descripción</button>
-                  <button className="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors whitespace-nowrap">Apuntes</button>
                   <button className="pb-4 border-b-2 border-transparent text-slate-500 hover:text-slate-700 font-medium text-sm transition-colors whitespace-nowrap">Recursos</button>
                 </div>
               </div>
@@ -323,131 +354,188 @@ const CoursePlayer: React.FC<CoursePlayerProps> = ({ setView, courseId, initialV
              ${isSidebarOpen ? 'w-[400px] translate-x-0 opacity-100' : 'w-0 translate-x-[20px] opacity-0 overflow-hidden border-none pointer-events-none'}`}
         >
           <div className="flex border-b border-slate-200">
-            <button
-              onClick={() => setSidebarTab('content')}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${sidebarTab === 'content' ? 'text-primary' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-            >
+            <div className="flex-1 py-3 text-sm font-semibold text-primary relative text-center">
               Contenido
-              {sidebarTab === 'content' && <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary"></div>}
-            </button>
-            <button
-              onClick={() => setSidebarTab('notes')}
-              className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${sidebarTab === 'notes' ? 'text-primary' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-            >
-              <div className="flex items-center justify-center gap-2">
-                Mis Apuntes
-                {sidebarTab === 'notes' && <span className="bg-green-100 text-green-700 text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wide border border-green-200">Guardado</span>}
-              </div>
-              {sidebarTab === 'notes' && <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary"></div>}
-            </button>
+              <div className="absolute bottom-0 inset-x-0 h-0.5 bg-primary"></div>
+            </div>
           </div>
 
-          {sidebarTab === 'content' ? (
-            <>
-              <div className="p-4 border-b border-slate-100 bg-slate-50">
-                <h3 className="font-bold text-slate-800 text-sm">Progreso del Curso</h3>
-                <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                  <span>{courseCompletionPercentage}% Completado</span>
-                  <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-500" style={{ width: `${courseCompletionPercentage}%` }}></div>
-                  </div>
+          <div className="flex-col flex h-full overflow-hidden">
+            <div className="p-4 border-b border-slate-100 bg-slate-50">
+              <h3 className="font-bold text-slate-800 text-sm">Progreso del Curso</h3>
+              <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
+                <span>{courseCompletionPercentage}% Completado</span>
+                <div className="flex-1 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                  <div className="h-full bg-green-500" style={{ width: `${courseCompletionPercentage}%` }}></div>
                 </div>
               </div>
+            </div>
 
-              <div className="flex-1 overflow-y-auto">
-                <div className="divide-y divide-slate-100">
-                  {modules.filter((m: any) => m.status === 'PUBLICADO').map((module, modIdx, allModules) => {
-                    const moduleItems = module.items || getLessonsByModuleId(module.id);
-                    return (
-                      <div key={module.id}>
-                        <div className="px-4 py-3 bg-slate-50/50 font-bold text-sm text-slate-800 flex justify-between items-center sticky top-0 backdrop-blur-sm z-10 border-b border-slate-100">
-                          {module.name}
-                          <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-normal">{moduleItems.length || 0}</span>
-                        </div>
-                        <div>
-                          {moduleItems.map((item: any) => {
-                            const isActive = currentVideoId === item.id;
-                            const progress = getLessonProgress(item.id);
-                            const isCompleted = progress?.completed || item.status === 'COMPLETADO';
-                            const isLocked = !unlockedLessons.has(item.id);
+            <div className="flex-1 overflow-y-auto">
+              <div className="divide-y divide-slate-100">
+                {modules.filter((m: any) => m.status === 'PUBLICADO').map((module, modIdx, allModules) => {
+                  const moduleItems = module.items || getLessonsByModuleId(module.id);
+                  return (
+                    <div key={module.id}>
+                      <div className="px-4 py-3 bg-slate-50/50 font-bold text-sm text-slate-800 flex justify-between items-center sticky top-0 backdrop-blur-sm z-10 border-b border-slate-100">
+                        {module.name}
+                        <span className="text-[10px] bg-slate-200 px-1.5 py-0.5 rounded text-slate-600 font-normal">{moduleItems.length || 0}</span>
+                      </div>
+                      <div>
+                        {moduleItems.map((item: any) => {
+                          const isActive = currentVideoId === item.id;
+                          const progress = getLessonProgress(item.id);
+                          const isCompleted = progress?.completed || item.status === 'COMPLETADO';
+                          const isLocked = !unlockedLessons.has(item.id);
 
-                            let progressPercentage = 0;
-                            if (progress && progress.data && progress.data.totalSeconds > 0) {
-                              progressPercentage = Math.round((progress.data.playedSeconds / progress.data.totalSeconds) * 100);
-                            }
+                          let progressPercentage = 0;
+                          if (progress && progress.data && progress.data.totalSeconds > 0) {
+                            progressPercentage = Math.round((progress.data.playedSeconds / progress.data.totalSeconds) * 100);
+                          }
 
-                            return (
-                              <div
-                                key={item.id}
-                                onClick={() => !isLocked && setCurrentVideoId(item.id)}
-                                className={`px-4 py-3 flex gap-3 transition-colors border-l-4 
+                          return (
+                            <div
+                              key={item.id}
+                              onClick={() => !isLocked && setCurrentVideoId(item.id)}
+                              className={`px-4 py-3 flex gap-3 transition-colors border-l-4 
                                   ${isActive ? 'bg-blue-50 border-primary' : isLocked ? 'bg-slate-50 border-transparent opacity-60 cursor-not-allowed' : 'hover:bg-slate-50 border-transparent cursor-pointer'}
                                   relative overflow-hidden`}
-                              >
-                                <div className={`mt-0.5 min-w-[20px] z-10`}>
-                                  {isActive ? (
-                                    <span className="material-symbols-outlined text-primary text-[20px] animate-pulse">play_circle</span>
-                                  ) : isCompleted ? (
-                                    <span className="material-symbols-outlined text-green-500 text-[20px]">check_circle</span>
-                                  ) : isLocked ? (
-                                    <span className="material-symbols-outlined text-slate-400 text-[20px]">lock</span>
-                                  ) : (
-                                    <span className="material-symbols-outlined text-slate-400 text-[20px]">radio_button_unchecked</span>
+                            >
+                              <div className={`mt-0.5 min-w-[20px] z-10`}>
+                                {isActive ? (
+                                  <span className="material-symbols-outlined text-primary text-[20px] animate-pulse">play_circle</span>
+                                ) : isCompleted ? (
+                                  <span className="material-symbols-outlined text-green-500 text-[20px]">check_circle</span>
+                                ) : isLocked ? (
+                                  <span className="material-symbols-outlined text-slate-400 text-[20px]">lock</span>
+                                ) : (
+                                  <span className="material-symbols-outlined text-slate-400 text-[20px]">radio_button_unchecked</span>
+                                )}
+                              </div>
+                              <div className="flex-1 min-w-0 z-10">
+                                <div className="flex justify-between items-start">
+                                  <p className={`text-sm font-medium truncate ${isActive ? 'text-primary' : isLocked ? 'text-slate-500' : 'text-slate-700'}`}>{item.title}</p>
+                                  {progressPercentage > 0 && progressPercentage < 100 && !isCompleted && !isLocked && (
+                                    <div className="flex items-center gap-2 ml-2 min-w-[60px]">
+                                      <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                        <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
+                                      </div>
+                                      <span className="text-[10px] text-slate-500 font-bold">{progressPercentage}%</span>
+                                    </div>
                                   )}
                                 </div>
-                                <div className="flex-1 min-w-0 z-10">
-                                  <div className="flex justify-between items-start">
-                                    <p className={`text-sm font-medium truncate ${isActive ? 'text-primary' : isLocked ? 'text-slate-500' : 'text-slate-700'}`}>{item.title}</p>
-                                    {progressPercentage > 0 && progressPercentage < 100 && !isCompleted && !isLocked && (
-                                      <div className="flex items-center gap-2 ml-2 min-w-[60px]">
-                                        <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                                          <div className="h-full bg-blue-500 rounded-full" style={{ width: `${progressPercentage}%` }}></div>
-                                        </div>
-                                        <span className="text-[10px] text-slate-500 font-bold">{progressPercentage}%</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <span className={`text-[10px] px-1.5 rounded flex items-center gap-1 ${isLocked ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
-                                      <span className="material-symbols-outlined text-[10px]">schedule</span>
-                                      {item.duration}
-                                    </span>
-                                  </div>
+                                <div className="flex items-center gap-2 mt-1">
+                                  <span className={`text-[10px] px-1.5 rounded flex items-center gap-1 ${isLocked ? 'bg-slate-100 text-slate-400' : 'bg-slate-100 text-slate-500'}`}>
+                                    <span className="material-symbols-outlined text-[10px]">schedule</span>
+                                    {item.duration}
+                                  </span>
+                                  {/* DB Lock Status Debug */}
+                                  <span className={`text-[10px] px-1.5 rounded font-mono font-bold ${progress?.isUnlocked ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                    {progress?.isUnlocked ? '1' : '0'}
+                                  </span>
                                 </div>
                               </div>
-                            );
-                          })}
-                        </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    )
-                  })}
-                </div>
+                    </div>
+                  )
+                })}
               </div>
-            </>
-          ) : (
-            <div className="p-8 text-center text-slate-500 text-sm">
-              <span className="material-symbols-outlined text-4xl mb-2 text-slate-300">sticky_note_2</span>
-              <p>La función de apuntes está deshabilitada temporalmente para mantenimiento.</p>
-            </div>
-            /* 
-            currentVideo && course ? (
-              <CourseNotes
-                courseId={course.id}
-                moduleId={modules.find(m => m.items?.some((i: any) => i.id === currentVideoId) || getLessonsByModuleId(m.id).some(l => l.id === currentVideoId))?.id || 0}
-                lessonId={currentVideo.id}
-                videoId={(currentVideo as any).videoId}
-                currentTime={currentPlaybackTime}
-                onSeek={handleSeek}
-              />
-            ) : (
-              <div className="p-8 text-center text-slate-500 text-sm">
-                Selecciona un video para tomar notas.
-              </div>
-            )
-            */
-          )}
-        </div>
 
+              {/* Final Exam Section */}
+              {course.finalExamId && (
+                <div className="mx-4 mt-6 mb-8">
+                  <div className="border-2 border-dashed border-slate-200 rounded-xl p-4 bg-slate-50/50">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-white rounded-lg border border-slate-200 text-slate-400">
+                        <span className="material-symbols-outlined">school</span>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="font-bold text-slate-800 text-sm mb-1">Examen Final y Certificación</h4>
+                        {(() => {
+                          // Find logic to determine lock status
+                          let finalExamLesson = null;
+                          // Use global lessons list instead of module traversal for robustness
+                          finalExamLesson = lessons.find((l: any) => l.content && l.content.toString() === course.finalExamId?.toString());
+
+                          // Fallback to Exam object if lesson wrapper not found
+                          const examData = finalExamLesson || exams.find(e => e.id.toString() === course.finalExamId?.toString());
+
+                          const feProgress = finalExamLesson ? getLessonProgress(finalExamLesson.id) : null;
+                          let isUnlocked = feProgress?.isUnlocked === true;
+
+                          // --- SYNC LOGIC: Match StudentExamDashboard Fallback ---
+                          const effectiveCondition = course.finalExamCondition || (course.finalExamDate ? 'date' : 'content');
+
+                          if (!isUnlocked) {
+                            // A. Check Date Condition
+                            if (effectiveCondition === 'date' && course.finalExamDate) {
+                              const openDate = new Date(course.finalExamDate);
+                              const now = new Date();
+                              if (!isNaN(openDate.getTime()) && now >= openDate) {
+                                isUnlocked = true;
+                              }
+                            }
+                            // B. Check Content Condition
+                            else if (effectiveCondition === 'content') {
+                              const allLessons = modules.flatMap(m => m.items || getLessonsByModuleId(m.id));
+                              const requiredLessons = allLessons.filter(l => l.isRequired && l.id !== finalExamLesson?.id);
+                              const targetLessons = requiredLessons.length > 0 ? requiredLessons : allLessons.filter(l => l.id !== finalExamLesson?.id);
+
+                              const allPrereqsCompleted = targetLessons.every(lesson => {
+                                const progress = getLessonProgress(lesson.id);
+                                return progress?.completed;
+                              });
+
+                              if (allPrereqsCompleted && targetLessons.length > 0) {
+                                isUnlocked = true;
+                              }
+                            }
+                          }
+
+                          // Determine date text
+                          let dateText = "Completar módulos";
+                          if (course.finalExamCondition === 'date' && course.finalExamDate) {
+                            // Format date if needed, or just show raw for now
+                            const date = new Date(course.finalExamDate);
+                            dateText = `Disponible el ${date.toLocaleDateString('es-ES', { day: 'numeric', month: 'long', year: 'numeric' })}`;
+                          }
+
+                          return (
+                            <div className="flex flex-col gap-2">
+                              {examData && (
+                                <div className="mb-1 border-b border-slate-200 pb-2">
+                                  <p className="text-xs font-bold text-slate-700">{('title' in examData) ? examData.title : 'Examen Final'}</p>
+                                  <p className="text-[10px] text-slate-400 font-mono">ID: {course.finalExamId}</p>
+                                </div>
+                              )}
+                              <p className="text-xs text-slate-500">{dateText}</p>
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold uppercase flex items-center gap-1 ${isUnlocked ? 'bg-green-100 text-green-700' : 'bg-slate-200 text-slate-500'}`}>
+                                  <span className="material-symbols-outlined text-[10px]">{isUnlocked ? 'lock_open' : 'lock'}</span>
+                                  {isUnlocked ? 'Desbloqueado' : 'Bloqueado'}
+                                </span>
+                                {/* DB Lock Status Debug */}
+                                <span className={`text-[10px] px-1.5 rounded font-mono font-bold ${isUnlocked ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {isUnlocked ? '1' : '0'}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+
+          </div>
+        </div>
       </main>
     </div>
   );

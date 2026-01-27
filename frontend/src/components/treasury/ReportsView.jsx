@@ -2,8 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Filter, Download, TrendingUp, TrendingDown, TriangleAlert, CheckCircle, Printer, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button, Card, FormField, Table } from '../ui';
 import PaymentPunctualityReport from './PaymentPunctualityReport';
+import UserStatementReport from './UserStatementReport';
 
-const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers, config }) => {
+const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers, config, categories: legacyCategories, allUsers = [] }) => {
     const [activeTab, setActiveTab] = useState('cashflow');
     const [filters, setFilters] = useState({
         startDate: '',
@@ -22,6 +23,17 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
         return tx.fecha || tx.date || new Date().toISOString();
     };
 
+    // Helper para mapear categorías del sistema
+    const getCategoryLabel = (category) => {
+        if (!category) return 'Sin categoría';
+        const lower = category.toLowerCase();
+        if (lower.includes('inscri') || lower === 'modality') return 'Inscripciones';
+        if (lower.includes('aporte')) return 'Aporte Mensual';
+        if (lower.includes('penalidades') || lower.includes('multas')) return 'Penalidades';
+        if (lower.includes('taller') || lower === 'workshop') return 'Talleres';
+        return category;
+    };
+
     // 1. Filter Transactions (Keep unsorted for now to calculate running balance correctly)
     const filteredRawTransactions = useMemo(() => {
         if (!transactions) return [];
@@ -33,7 +45,9 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
             if (filters.startDate && txDate < filters.startDate) return false;
             if (filters.endDate && txDate > filters.endDate) return false;
             if (filters.accountId && tx.cuenta_id !== filters.accountId) return false;
-            if (filters.categoria && tx.categoria !== filters.categoria) return false;
+            // Map category for filtering
+            const txCatLabel = getCategoryLabel(tx.categoria);
+            if (filters.categoria && txCatLabel !== filters.categoria) return false;
             return true;
         });
     }, [transactions, filters]);
@@ -147,12 +161,26 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
         return sortConfig.direction === 'asc' ? <ChevronUp size={14} className="inline ml-1" /> : <ChevronDown size={14} className="inline ml-1" />;
     };
 
-    // Obtener categorías únicas
-    const categories = useMemo(() => {
-        if (!transactions) return [];
-        const cats = new Set(transactions.map(tx => tx.categoria));
-        return Array.from(cats).sort();
-    }, [transactions]);
+    // Obtener categorías únicas (Del sistema + existentes)
+    const availableCategories = useMemo(() => {
+        // Flatten system categories
+        let systemCats = [];
+        if (legacyCategories) {
+            const income = legacyCategories.income || [];
+            const expense = legacyCategories.expense || [];
+            // Handle object vs string format
+            const flatIncome = income.map(c => typeof c === 'object' ? c.name : c);
+            const flatExpense = expense.map(c => typeof c === 'object' ? c.name : c);
+            systemCats = [...flatIncome, ...flatExpense];
+        }
+
+        // Also include categories currently in transactions (in case of historical data)
+        const txCats = transactions ? transactions.map(tx => tx.categoria) : [];
+
+        // Remove duplicates and sort
+        const allCats = new Set([...systemCats, ...txCats].map(c => getCategoryLabel(c)));
+        return Array.from(allCats).filter(Boolean).sort();
+    }, [transactions, legacyCategories]);
 
     const handlePrint = () => {
         window.print();
@@ -260,6 +288,16 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
                     >
                         Puntualidad de Pagos
                     </button>
+
+                    <button
+                        onClick={() => setActiveTab('statements')}
+                        className={`pb-3 px-1 border-b-2 font-medium text-sm transition-colors ${activeTab === 'statements'
+                            ? 'border-blue-600 text-blue-600'
+                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                    >
+                        Estados de Cuenta
+                    </button>
                 </nav>
             </div>
 
@@ -326,7 +364,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
                                 onChange={(e) => setFilters({ ...filters, categoria: e.target.value })}
                                 options={[
                                     { value: '', label: 'Todas las categorías' },
-                                    ...categories.map(cat => ({ value: cat, label: cat }))
+                                    ...availableCategories.map(cat => ({ value: cat, label: cat }))
                                 ]}
                             />
                         </div>
@@ -352,7 +390,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
 
                     {/* Transactions Table */}
                     <Card className="overflow-x-auto print:shadow-none print:border-none">
-                        <table className="w-full">
+                        <table className="w-full print:hidden">
                             <thead className="bg-gray-50 border-b border-gray-200">
                                 <tr>
                                     <th
@@ -395,16 +433,16 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
                                         <td className="px-4 py-3 text-sm text-gray-900">{tx.descripcion}</td>
                                         <td className="px-4 py-3 text-sm">
                                             <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                                {tx.categoria}
+                                                {getCategoryLabel(tx.categoria)}
                                             </span>
                                         </td>
                                         <td className="px-4 py-3 text-sm text-gray-600">
                                             {accounts.find(a => a.id === tx.cuenta_id)?.nombre || '-'}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-right">
-                                            <span className={`font-bold flex items-center justify-end gap-1 ${tx.monto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                {tx.monto >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                                S/ {Math.abs(tx.monto || 0).toFixed(2)}
+                                            <span className={`font-bold flex items-center justify-end gap-1 ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                                {tx.type === 'income' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                {tx.type === 'income' ? '+' : '-'} S/ {Math.abs(tx.monto || 0).toFixed(2)}
                                             </span>
                                         </td>
                                     </tr>
@@ -413,7 +451,7 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
                         </table>
 
                         {processedTransactions.length === 0 && (
-                            <div className="p-12 text-center text-gray-500">
+                            <div className="p-12 text-center text-gray-500 print:hidden">
                                 No hay transacciones que coincidan con los filtros
                             </div>
                         )}
@@ -475,16 +513,16 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
                                             <td className="px-4 py-3 text-sm text-gray-900">{tx.descripcion}</td>
                                             <td className="px-4 py-3 text-sm">
                                                 <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
-                                                    {tx.categoria}
+                                                    {getCategoryLabel(tx.categoria)}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-sm text-gray-600">
                                                 {accounts.find(a => a.id === tx.cuenta_id)?.nombre || '-'}
                                             </td>
                                             <td className="px-4 py-3 text-sm text-right">
-                                                <span className={`font-bold flex items-center justify-end gap-1 ${tx.monto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                                    {tx.monto >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                                                    S/ {Math.abs(tx.monto || 0).toFixed(2)}
+                                                <span className={`font-bold flex items-center justify-end gap-1 ${tx.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                                                    {tx.type === 'income' ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                                                    {tx.type === 'income' ? '+' : '-'} S/ {Math.abs(tx.monto || 0).toFixed(2)}
                                                 </span>
                                             </td>
                                         </tr>
@@ -501,6 +539,16 @@ const ReportsView = ({ transactions, accounts, budgetExecution, user, organizers
             {/* Punctuality Tab */}
             {activeTab === 'punctuality' && (
                 <PaymentPunctualityReport organizers={organizers} config={config} />
+            )}
+
+            {/* User Statements Tab */}
+            {activeTab === 'statements' && (
+                <UserStatementReport
+                    allUsers={allUsers}
+                    transactions={transactions}
+                    organizers={organizers}
+                    config={config}
+                />
             )}
         </div>
     );

@@ -1,6 +1,6 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check, Cake, CreditCard } from 'lucide-react';
+import { X, User, Mail, Phone, MapPin, Building, Calendar, Brain, Activity, Clock, Printer, CheckCircle, AlertCircle, FileText, Download, Copy, Check, Cake, CreditCard, Shield, GraduationCap, ClipboardList, MessageCircle, RefreshCcw } from 'lucide-react';
 import { Button, Card, Badge } from '../ui';
 import CustomQRCode from '../ui/CustomQRCode';
 import { api } from '../../services/api';
@@ -18,13 +18,13 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
     }, [isOpen, onClose]);
 
 
-
     const handlePrint = () => {
         window.print();
     };
 
     // State for resolved workshop names
     const [workshopNames, setWorkshopNames] = useState({});
+    const [activeTab, setActiveTab] = useState('general');
 
     React.useEffect(() => {
         const loadPricing = async () => {
@@ -49,8 +49,16 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
         loadPricing();
     }, []);
 
+    // Derived State
+    const attendancePercent = useMemo(() => {
+        return parseInt(attendee?.attendancePercent || 0);
+    }, [attendee?.attendancePercent]);
+
+    const isApproved = attendancePercent >= 60;
+
     // Derived/Mock Data
     if (!isOpen || !attendee) return null;
+
     const fullName = `${attendee.lastName || ''} ${attendee.firstName || ''}`.trim() || attendee.name;
     // Map usage of purchasedItems if workshops is just IDs
     const rawWorkshops = attendee.workshops || attendee.purchasedItems || [];
@@ -58,12 +66,253 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
 
     // Resolve Role Display (ignoring generic 'user' role)
     const rawRole = attendee.eventRole || (attendee.eventRoles && attendee.eventRoles[0]) || 'Asistente';
-    // Capitalize
     const displayRole = rawRole.charAt(0).toUpperCase() + rawRole.slice(1);
 
-    // We will render mapped names later
-    const attendancePercent = parseInt(attendee.attendancePercent || Math.floor(Math.random() * 40) + 60); // Mock
-    const isApproved = attendancePercent >= 60;
+    const badgeName = attendee.badgeName || fullName.split(' ').slice(0, 2).join(' '); // Default short name
+
+    // Tab Content Component Helpers
+    const renderGeneralTab = () => (
+        <div className="space-y-6">
+            <div className="flex flex-col md:flex-row gap-8 items-start">
+                {/* Profile Photo & QR */}
+                <div className="flex flex-col gap-4 items-center w-full md:w-auto flex-shrink-0">
+                    <div className="w-32 h-32 rounded-full bg-gray-100 border-4 border-white shadow-xl overflow-hidden relative">
+                        {attendee.image ? (
+                            <img src={attendee.image} alt="Profile" className="w-full h-full object-cover" />
+                        ) : (
+                            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-600">
+                                <User size={64} />
+                            </div>
+                        )}
+                    </div>
+                    <div className="bg-white p-3 rounded-xl border-2 border-dashed border-gray-200 shadow-sm">
+                        <CustomQRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={120} level="H" />
+                    </div>
+                    <span className="text-xs text-gray-400 font-mono tracking-wider">{attendee.dni || 'NO DNI'}</span>
+                </div>
+
+                {/* Basic Info */}
+                <div className="flex-grow space-y-4 w-full">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 mb-2">{fullName}</h1>
+                            <div className="flex flex-wrap gap-2 mb-4">
+                                <Badge variant={attendee.modality === 'Virtual' ? 'purple' : 'green'} className="text-sm py-1 px-3">
+                                    {workshopNames[attendee.ticketType] || attendee.modality || attendee.participationModality || 'Presencial'}
+                                </Badge>
+                                <Badge variant="blue" className="text-sm py-1 px-3">
+                                    {displayRole}
+                                </Badge>
+                                {attendee.isActive && <Badge variant="green" className="text-sm">Activo</Badge>}
+                            </div>
+                        </div>
+                        {/* Emergency Actions */}
+                        <div className="flex gap-2">
+                            {attendee.phone && (
+                                <a
+                                    href={`https://wa.me/51${attendee.phone.replace(/\D/g, '')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                                    title="WhatsApp Directo"
+                                >
+                                    <MessageCircle size={20} />
+                                </a>
+                            )}
+                            <button className="p-2 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors" title="Reenviar Credenciales">
+                                <Mail size={20} />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm bg-gray-50 p-4 rounded-xl border border-gray-100">
+                        <InfoItem icon={CreditCard} label="DNI" value={attendee.dni || '-'} />
+                        <InfoItem icon={Cake} label="Fecha Nacimiento" value={attendee.birthDate ? attendee.birthDate.split('-').reverse().join('/') : '-'} />
+                        <InfoItem icon={Mail} label="Email" value={attendee.email || '-'} copyable />
+                        <InfoItem icon={Phone} label="Teléfono" value={attendee.phone || '-'} />
+                        <InfoItem icon={Building} label="Institución" value={attendee.institution || '-'} />
+                        <InfoItem icon={Calendar} label="Fecha Registro" value={attendee.registrationDate ? new Date(attendee.registrationDate).toLocaleDateString() : '-'} />
+                    </div>
+                </div>
+            </div>
+
+            {/* Badge Preview Section */}
+            <div>
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <CreditCard size={20} className="text-indigo-600" /> Vista Previa de Credencial
+                </h3>
+                <div className="bg-gray-100 p-6 rounded-xl flex justify-center">
+                    {/* Mock Badge Visual */}
+                    <div className="w-[350px] bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden flex flex-col items-center pb-6">
+                        <div className="w-full h-4 bg-indigo-600"></div>
+                        <div className="w-full h-16 bg-gray-50 flex items-center justify-center border-b border-gray-100 mb-4">
+                            <img src="/logo-simr.png" alt="SIMR 2026" className="h-20 object-contain mix-blend-multiply opacity-80 mt-[-10px]" onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'block'; }} />
+                            <span className="font-bold text-gray-400 text-lg uppercase tracking-widest hidden">SIMR 2026</span>
+                        </div>
+                        <div className="w-24 h-24 rounded-full bg-gray-200 border-4 border-white shadow mb-3 overflow-hidden">
+                            {attendee.image ? <img src={attendee.image} className="w-full h-full object-cover" /> : <User size={48} className="text-gray-400 m-auto mt-4" />}
+                        </div>
+                        <h2 className="text-xl font-bold text-center px-4 leading-tight mb-1">{badgeName}</h2>
+                        <p className="text-indigo-600 font-medium text-sm uppercase mb-4">{displayRole}</p>
+                        <CustomQRCode value={`SIMR:${attendee.id}`} size={80} />
+                    </div>
+                </div>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+                <div>
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><BriefcaseIcon /> Información Profesional</h3>
+                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 space-y-3">
+                        <DetailRow label="Ocupación" value={attendee.occupation || '-'} />
+                        <DetailRow label="Especialidad" value={attendee.specialty || '-'} />
+                        <DetailRow label="CMP" value={attendee.cmp_number || attendee.cmp || '-'} />
+                        <DetailRow label="RNE" value={attendee.rne_number || attendee.rne || '-'} />
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderAcademicTab = () => (
+        <div className="space-y-8">
+            <div className="grid md:grid-cols-2 gap-8">
+                {/* Workshops */}
+                <div>
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <Brain size={20} className="text-purple-600" /> Talleres Inscritos
+                    </h3>
+                    <div className="space-y-3">
+                        {workshops.map((workshop, idx) => (
+                            <div key={idx} className="p-3 border border-gray-200 rounded-lg flex items-center gap-3 bg-white hover:shadow-md transition-shadow">
+                                <CheckCircle size={16} className="text-green-500 flex-shrink-0" />
+                                <span className="text-sm font-medium text-gray-700">{workshop}</span>
+                            </div>
+                        ))}
+                        {workshops.length === 0 && <p className="text-gray-500 text-sm italic p-4 bg-gray-50 rounded-lg border border-dashed border-gray-200">No registrado en talleres adicionales.</p>}
+                    </div>
+                </div>
+
+                {/* Progress */}
+                <div>
+                    <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Activity size={20} className="text-blue-600" /> Progreso de Asistencia</h3>
+                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="font-medium text-gray-700">Asistencia General</span>
+                            <span className="font-bold text-blue-600">{attendancePercent}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                            <div className={`h-2.5 rounded-full ${isApproved ? 'bg-green-500' : 'bg-blue-600'}`} style={{ width: `${attendancePercent}%` }}></div>
+                        </div>
+                        <p className="text-xs text-gray-500">{isApproved ? 'El usuario cumple con el requisito de asistencia para certificación.' : 'El usuario aún no alcanza el mínimo requerido (60%).'}</p>
+                    </div>
+                </div>
+            </div>
+
+            {/* Submitted Abstracts */}
+            <div>
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <FileText size={20} className="text-orange-600" /> Trabajos de Investigación
+                </h3>
+                {attendee.submittedAbstracts && attendee.submittedAbstracts.length > 0 ? (
+                    <div className="space-y-2">
+                        {attendee.submittedAbstracts.map((abs, idx) => (
+                            <div key={idx} className="flex justify-between items-center p-3 bg-white border border-gray-200 rounded-lg">
+                                <span className="font-medium text-gray-800 text-sm">[{abs.id}] {abs.title}</span>
+                                <Badge variant={abs.status === 'Aprobado' ? 'green' : 'yellow'} className="text-xs">{abs.status}</Badge>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="text-center p-6 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                        <p className="text-gray-400 text-sm">No ha enviado trabajos de investigación.</p>
+                    </div>
+                )}
+            </div>
+
+            {/* Certificates */}
+            <div>
+                <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2">
+                    <GraduationCap size={20} className="text-yellow-600" /> Certificados
+                </h3>
+                <div className="bg-yellow-50 p-4 rounded-xl border border-yellow-100 flex justify-between items-center">
+                    <div>
+                        <p className="text-yellow-800 font-bold text-sm">Certificado de Asistencia</p>
+                        <p className="text-yellow-600 text-xs">{isApproved ? 'Disponible para descarga' : 'Bloqueado por inasistencia'}</p>
+                    </div>
+                    <Button variant="outline" size="sm" disabled={!isApproved} className="bg-white border-yellow-200 text-yellow-700 hover:bg-yellow-100">
+                        <Download size={14} className="mr-2" /> Previsualizar
+                    </Button>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderPermissionsTab = () => (
+        <div className="space-y-6">
+            <div className="bg-red-50 p-6 rounded-xl border border-red-100">
+                <h3 className="font-bold text-red-900 mb-4 flex items-center gap-2">
+                    <Shield size={20} /> Seguridad
+                </h3>
+                <div className="space-y-4">
+                    <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-red-100">
+                        <div>
+                            <p className="font-medium text-gray-800 text-sm">Resetear Contraseña</p>
+                            <p className="text-xs text-gray-500">Cambia la contraseña a un valor predeterminado (123456).</p>
+                        </div>
+                        <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50">
+                            <RefreshCcw size={14} className="mr-2" /> Resetear
+                        </Button>
+                    </div>
+                    <div className="flex justify-between items-center bg-white p-3 rounded-lg border border-red-100">
+                        <div>
+                            <p className="font-medium text-gray-800 text-sm">Permisos de Módulo</p>
+                            <div className="flex gap-1 mt-1 flex-wrap">
+                                {attendee.modules && attendee.modules.map(m => (
+                                    <Badge key={m} variant="gray" className="text-[10px]">{m}</Badge>
+                                ))}
+                            </div>
+                        </div>
+                        <Button variant="outline" size="sm">
+                            Gestionar
+                        </Button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    const renderAuditTab = () => (
+        <div className="space-y-6">
+            <div className="bg-gray-50 rounded-xl overflow-hidden border border-gray-200">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-gray-100 text-gray-700 font-semibold border-b border-gray-200">
+                        <tr>
+                            <th className="p-3">Fecha</th>
+                            <th className="p-3">Acción</th>
+                            <th className="p-3">Usuario Admin</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 bg-white">
+                        {attendee.auditLog && attendee.auditLog.length > 0 ? (
+                            attendee.auditLog.map((log, idx) => (
+                                <tr key={idx}>
+                                    <td className="p-3 text-gray-500 font-mono text-xs">{log.date}</td>
+                                    <td className="p-3 font-medium text-gray-900">{log.action}</td>
+                                    <td className="p-3">
+                                        <Badge variant="blue" className="text-xs">{log.adminUser}</Badge>
+                                    </td>
+                                </tr>
+                            ))
+                        ) : (
+                            <tr>
+                                <td colSpan="3" className="p-6 text-center text-gray-400 italic">No hay registros de auditoría disponibles.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    );
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:relative print:inset-auto print:h-auto">
@@ -90,122 +339,20 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                     </div>
                 </div>
 
-                {/* Screen Content */}
-                <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar">
-                    {/* Header Section */}
-                    <div className="flex flex-col md:flex-row gap-8 items-start">
-                        <div className="flex flex-col gap-4 items-center w-full md:w-auto flex-shrink-0">
-                            <div className="w-32 h-32 rounded-full bg-gray-100 border-4 border-white shadow-xl overflow-hidden relative">
-                                {attendee.image ? (
-                                    <img src={attendee.image} alt="Profile" className="w-full h-full object-cover" />
-                                ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-blue-100 to-indigo-100 text-blue-600">
-                                        <User size={64} />
-                                    </div>
-                                )}
-                            </div>
-                            <div className="bg-white p-3 rounded-xl border-2 border-dashed border-gray-200 shadow-sm">
-                                <CustomQRCode value={JSON.stringify({ id: attendee.id, dni: attendee.dni, name: fullName })} size={120} level="H" />
-                            </div>
-                            <span className="text-xs text-gray-400 font-mono tracking-wider">{attendee.dni || 'NO DNI'}</span>
-                        </div>
+                {/* Tabs Navigation */}
+                <div className="flex border-b border-gray-200 px-6 bg-gray-50/50">
+                    <TabButton active={activeTab === 'general'} onClick={() => setActiveTab('general')} label="Perfil General" icon={User} />
+                    <TabButton active={activeTab === 'academic'} onClick={() => setActiveTab('academic')} label="Académico" icon={GraduationCap} />
+                    <TabButton active={activeTab === 'permissions'} onClick={() => setActiveTab('permissions')} label="Permisos & Seguridad" icon={Shield} />
+                    <TabButton active={activeTab === 'audit'} onClick={() => setActiveTab('audit')} label="Auditoría" icon={ClipboardList} />
+                </div>
 
-                        <div className="flex-grow space-y-4 w-full">
-                            <div>
-                                <h1 className="text-3xl font-bold text-gray-900 mb-2">{fullName}</h1>
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                    <Badge variant={attendee.modality === 'Virtual' ? 'purple' : 'green'} className="text-sm py-1 px-3">
-                                        {workshopNames[attendee.ticketType] || attendee.modality || 'Presencial'}
-                                    </Badge>
-                                    <Badge variant="blue" className="text-sm py-1 px-3">
-                                        {displayRole}
-                                    </Badge>
-                                </div>
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                <InfoItem icon={CreditCard} label="DNI" value={attendee.dni || '-'} />
-                                <InfoItem icon={Cake} label="Fecha Nacimiento" value={attendee.birthDate ? attendee.birthDate.split('-').reverse().join('/') : '-'} />
-                                <InfoItem icon={Mail} label="Email" value={attendee.email || '-'} copyable />
-                                <InfoItem icon={Phone} label="Teléfono" value={attendee.phone || '-'} />
-                                <InfoItem icon={Building} label="Institución" value={attendee.institution || '-'} />
-                                <InfoItem icon={Calendar} label="Fecha Registro" value={attendee.registrationDate || attendee.date || '-'} />
-                            </div>
-                        </div>
-                    </div>
-
-                    <hr className="border-gray-100" />
-
-                    <div className="grid md:grid-cols-2 gap-8">
-                        <div>
-                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><BriefcaseIcon /> Información Profesional</h3>
-                            <div className="bg-gray-50 p-5 rounded-xl border border-gray-100 space-y-3">
-                                <DetailRow label="Ocupación" value={attendee.occupation || '-'} />
-                                <DetailRow label="Especialidad" value={attendee.specialty || '-'} />
-                                <DetailRow label="CMP" value={attendee.cmp || '-'} />
-                                <DetailRow label="RNE" value={attendee.rne || '-'} />
-                            </div>
-                        </div>
-                        <div>
-                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Activity size={20} className="text-blue-600" /> Progreso de Asistencia</h3>
-                            <div className="bg-gray-50 p-5 rounded-xl border border-gray-100">
-                                <div className="flex items-center justify-between mb-2">
-                                    <span className="font-medium text-gray-700">Asistencia General</span>
-                                    <span className="font-bold text-blue-600">{attendancePercent}%</span>
-                                </div>
-                                <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
-                                    <div className={`h-2.5 rounded-full ${isApproved ? 'bg-green-500' : 'bg-blue-600'}`} style={{ width: `${attendancePercent}%` }}></div>
-                                </div>
-                                <p className="text-xs text-gray-500">{isApproved ? 'El usuario cumple con el requisito de asistencia para certificación.' : 'El usuario aún no alcanza el mínimo requerido (60%).'}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Brain size={20} className="text-purple-600" /> Talleres Inscritos</h3>
-                        <div className="grid md:grid-cols-2 gap-3">
-                            {workshops.map((workshop, idx) => (
-                                <div key={idx} className="p-3 border border-gray-200 rounded-lg flex items-center gap-3 bg-white">
-                                    <CheckCircle size={16} className="text-green-500" />
-                                    <span className="text-sm font-medium text-gray-700">{workshop}</span>
-                                </div>
-                            ))}
-                            {workshops.length === 0 && <p className="text-gray-500 text-sm italic col-span-2">No registrado en talleres adicionales.</p>}
-                        </div>
-                    </div>
-
-                    {/* Modality History Section */}
-                    {attendee.modalityHistory && attendee.modalityHistory.length > 0 && (
-                        <div>
-                            <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2"><Clock size={20} className="text-orange-500" /> Historial de Modalidades</h3>
-                            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
-                                <table className="w-full text-sm text-left">
-                                    <thead className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
-                                        <tr>
-                                            <th className="p-3">Fecha</th>
-                                            <th className="p-3">Acción</th>
-                                            <th className="p-3">Cambio</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody className="divide-y divide-gray-100">
-                                        {attendee.modalityHistory.map((entry, idx) => (
-                                            <tr key={idx}>
-                                                <td className="p-3 text-gray-600">{new Date(entry.timestamp).toLocaleDateString()} {new Date(entry.timestamp).toLocaleTimeString()}</td>
-                                                <td className="p-3">
-                                                    <Badge variant="blue" className="text-xs">{entry.action === 'swap_free' ? 'Cambio' : 'Upgrade'}</Badge>
-                                                </td>
-                                                <td className="p-3">
-                                                    <div className="flex flex-col">
-                                                        <span className="text-gray-900 font-medium">{workshopNames[entry.to] || entry.to}</span>
-                                                        <span className="text-xs text-gray-400">Desde: {workshopNames[entry.from] || entry.from || 'Inicio'}</span>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
+                {/* Content Area */}
+                <div className="p-8 space-y-8 overflow-y-auto flex-1 custom-scrollbar bg-white">
+                    {activeTab === 'general' && renderGeneralTab()}
+                    {activeTab === 'academic' && renderAcademicTab()}
+                    {activeTab === 'permissions' && renderPermissionsTab()}
+                    {activeTab === 'audit' && renderAuditTab()}
                 </div>
             </div>
 
@@ -275,8 +422,8 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
                                 <div className="space-y-2 text-sm">
                                     <div className="flex justify-between"><span className="text-gray-600">Ocupación:</span> <span className="font-semibold text-black">{attendee.occupation || '-'}</span></div>
                                     <div className="flex justify-between"><span className="text-gray-600">Especialidad:</span> <span className="font-semibold text-black">{attendee.specialty || '-'}</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-600">CMP:</span> <span className="font-semibold text-black">{attendee.cmp || '-'}</span></div>
-                                    <div className="flex justify-between"><span className="text-gray-600">RNE:</span> <span className="font-semibold text-black">{attendee.rne || '-'}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">CMP:</span> <span className="font-semibold text-black">{attendee.cmp_number || attendee.cmp || '-'}</span></div>
+                                    <div className="flex justify-between"><span className="text-gray-600">RNE:</span> <span className="font-semibold text-black">{attendee.rne_number || attendee.rne || '-'}</span></div>
                                 </div>
                             </div>
                         </div>
@@ -350,6 +497,19 @@ const AttendeeDetailsModal = ({ isOpen, onClose, attendee }) => {
 };
 
 // Helper Components
+const TabButton = ({ active, onClick, label, icon: Icon }) => (
+    <button
+        onClick={onClick}
+        className={`flex items-center gap-2 px-6 py-4 text-sm font-medium transition-colors border-b-2 ${active
+                ? 'border-blue-600 text-blue-600 bg-blue-50/50'
+                : 'border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+            }`}
+    >
+        <Icon size={18} />
+        {label}
+    </button>
+);
+
 const InfoItem = ({ icon: Icon, label, value, copyable }) => {
     const [copied, setCopied] = useState(false);
 

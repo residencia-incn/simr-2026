@@ -8,7 +8,7 @@
  */
 
 // Current database version - increment this to trigger a reset
-const DB_VERSION = 2; // Changed from 1 to 2 to trigger reset
+const DB_VERSION = 3; // Incremented to 3 to force a full reset for SQL connection
 const VERSION_KEY = 'simr_db_version';
 
 /**

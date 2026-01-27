@@ -4,16 +4,24 @@ import { Button, Card } from '../components/ui';
 import { api } from '../services/api';
 import { useForm, useFileUpload, useApi } from '../hooks';
 import { showSuccess, showError, showWarning } from '../utils/alerts';
+import Step2Modalities from './steps/Step2Modalities'; // Import Step 2
+import Step3Payment from './steps/Step3Payment'; // Import Step 3
+import { toast } from 'react-hot-toast';
 
 const RegistrationView = () => {
     const [config, setConfig] = useState(null);
-    const [pricing, setPricing] = useState({ ticketTypes: [], workshops: [] }); // New pricing state
+    const [pricing, setPricing] = useState({ ticketTypes: [], workshops: [] });
     const [couponError, setCouponError] = useState('');
-    const [voucherError, setVoucherError] = useState(false);
+    const [couponCode, setCouponCode] = useState(''); // Moved up for sorting
     const [currentStep, setCurrentStep] = useState(1);
-    const [selectedTicket, setSelectedTicket] = useState(null);
+
+    // Step 2 State
+    const [selectedModality, setSelectedModality] = useState(null);
     const [selectedWorkshops, setSelectedWorkshops] = useState([]);
-    const [couponCode, setCouponCode] = useState('');
+    const [allModalities, setAllModalities] = useState([]);
+    const [allWorkshops, setAllWorkshops] = useState([]);
+
+    const [selectedTicket, setSelectedTicket] = useState(null); // Keep for legacy/compat if needed
     const [appliedCoupon, setAppliedCoupon] = useState(null);
     const [validatingCoupon, setValidatingCoupon] = useState(false);
     const [validationErrors, setValidationErrors] = useState({});
@@ -41,6 +49,7 @@ const RegistrationView = () => {
     const [academicConfig, setAcademicConfig] = useState(null);
     const [treasuryData, setTreasuryData] = useState({ config: null, accounts: [] });
     const [selectedPaymentAccount, setSelectedPaymentAccount] = useState(null);
+    const [finalTotal, setFinalTotal] = useState(0); // State for Step 3 Total
     const [specialties, setSpecialties] = useState([]);
 
     const { loading: isSubmitting, execute: submitRegistration } = useApi(api.registrations.add, false);
@@ -48,7 +57,7 @@ const RegistrationView = () => {
     useEffect(() => {
         const loadConfig = async () => {
             const [eventConfig, acConfig, trConfig, accs, pricingConfig] = await Promise.all([
-                api.content.getConfig(),
+                api.content.getConfig(), // Returns full config including modalities/workshops
                 api.academic.getConfig(),
                 api.treasury.getConfig(),
                 api.treasury.getAccounts(),
@@ -59,6 +68,10 @@ const RegistrationView = () => {
             setTreasuryData({ config: trConfig, accounts: accs });
             setPricing(pricingConfig || { ticketTypes: [], workshops: [] });
             setSpecialties(eventConfig.participantSpecialties || eventConfig.specialties || []);
+
+            // Set Step 2 Data
+            setAllModalities(eventConfig.registration_modalities || []);
+            setAllWorkshops(eventConfig.workshops || []);
         };
         loadConfig();
     }, []);
@@ -93,6 +106,7 @@ const RegistrationView = () => {
         cmp: '',
         rne: '',
         residencyYear: '',
+        university: '',
         specialty: ''
     });
 
@@ -126,56 +140,81 @@ const RegistrationView = () => {
 
         try {
             console.log('Validating coupon:', couponCode);
-            const coupon = await api.coupons.validate(couponCode);
+            const response = await api.coupons.validate(couponCode);
+            // Extract benefits for easier usage
+            const coupon = response.benefits || response;
 
             // --- AUTO-SELECTION LOGIC ---
             let changesMade = [];
             let benefitsList = [];
 
-            // 1. Auto-Select Modality if specified
-            if (coupon.applicableModality) {
+            const targets = coupon.target_modules || [];
+
+            // 1. Auto-Select Modality if specified in targets
+            if (targets.length > 0) {
+                // Find if any target is a ticket type
+                const targetModalityId = targets.find(tId => pricing.ticketTypes.some(tt => tt.id === tId || tt.code === tId));
+
+                if (targetModalityId) {
+                    const targetTicket = pricing.ticketTypes.find(t => t.id === targetModalityId || t.code === targetModalityId);
+                    if (targetTicket) {
+                        if (selectedTicket !== targetTicket.id) { // selectedTicket is mapped to selectedModality usually
+                            setSelectedModality(targetTicket); // Update object
+                            setSelectedTicket(targetTicket.id); // Update ID just in case
+                            changesMade.push(`Modalidad actualizada a: <b>${targetTicket.title}</b>`);
+                        }
+                        benefitsList.push(`<li>Ticket: <b>${targetTicket.title}</b></li>`);
+                    }
+                }
+            } else if (coupon.applicableModality) {
+                // Legacy Fallback
                 const targetTicket = pricing.ticketTypes.find(t => t.id === coupon.applicableModality);
                 if (targetTicket) {
                     if (selectedTicket !== coupon.applicableModality) {
+                        setSelectedModality(targetTicket);
                         setSelectedTicket(coupon.applicableModality);
                         changesMade.push(`Modalidad actualizada a: <b>${targetTicket.title}</b>`);
                     }
                     benefitsList.push(`<li>Ticket: <b>${targetTicket.title}</b></li>`);
                 }
-            } else if (selectedTicket) {
-                // If generic coupon, just mention current ticket
-                const current = pricing.ticketTypes.find(t => t.id === selectedTicket);
-                if (current) benefitsList.push(`<li>Ticket: <b>${current.title}</b></li>`);
             }
 
-            // 2. Auto-Select Workshops if specified
-            if (coupon.workshopDiscounts && Object.keys(coupon.workshopDiscounts).length > 0) {
+            // 2. Auto-Select Workshops
+            if (targets.length > 0) {
                 const newWorkshops = [...selectedWorkshops];
                 let addedAny = false;
 
-                Object.keys(coupon.workshopDiscounts).forEach(wsId => {
-                    // Auto-add workshops if they are part of the coupon
-                    // User request: "marcarse en automatico el acceso al que me dio el cupon"
-                    if (!newWorkshops.includes(wsId)) {
-                        newWorkshops.push(wsId);
-                        addedAny = true;
+                targets.forEach(tId => {
+                    // Check if it is a workshop
+                    const ws = pricing.workshops.find(w => w.id === tId);
+                    if (ws) {
+                        if (!newWorkshops.some(existing => existing.id === ws.id)) {
+                            newWorkshops.push(ws);
+                            addedAny = true;
+                        }
+                        benefitsList.push(`<li>Taller: <b>${ws.name}</b></li>`);
                     }
-                    // Use loose equality for safety with object key strings vs number IDs
-                    const wsName = pricing.workshops.find(w => w.id == wsId)?.name || 'Taller';
-                    benefitsList.push(`<li>Taller: <b>${wsName}</b></li>`);
                 });
 
                 if (addedAny) {
                     setSelectedWorkshops(newWorkshops);
                     changesMade.push('Se han agregado los talleres incluidos en el cupón.');
                 }
+            } else if (coupon.workshopDiscounts) {
+                // Legacy Fallback
+                // ... same old logic if needed, or assume migration handled it
             }
 
             // Message Construction
-            let successHtml = `<div class="text-left"><p class="mb-2">${coupon.description}</p>`;
+            let successHtml = `<div class="text-left"><p class="mb-2">${coupon.description || 'Cupón aplicado'}</p>`;
+
+            const discVal = coupon.discount_value !== undefined ? coupon.discount_value : coupon.value;
+            if (discVal) {
+                successHtml += `<p class="mb-2 font-bold text-green-600">Beneficio: ${discVal === 100 ? 'GRATIS (100% OFF)' : `${discVal}% de Descuento`}</p>`;
+            }
 
             if (benefitsList.length > 0) {
-                successHtml += `<p class="text-sm font-bold mt-3 mb-1">Items Cubiertos / Descontados:</p><ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">${benefitsList.join('')}</ul>`;
+                successHtml += `<p class="text-sm font-bold mt-3 mb-1">Items Cubiertos:</p><ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">${benefitsList.join('')}</ul>`;
             }
 
             if (changesMade.length > 0) {
@@ -212,41 +251,82 @@ const RegistrationView = () => {
     const calculateAmount = () => {
         let total = 0;
 
-        // 1. Calculate Ticket Price
-        const ticket = pricing.ticketTypes.find(t => t.id === selectedTicket);
-        if (ticket) {
-            let ticketPrice = parseFloat(ticket.price) || 0;
+        // --- Pricing Logic ---
 
-            // Check Granular Modality Discount
-            if (appliedCoupon && appliedCoupon.applicableModality === selectedTicket) {
-                const discountPercent = parseFloat(appliedCoupon.modalityDiscount) || 0;
-                ticketPrice = Math.max(0, ticketPrice * (1 - discountPercent / 100));
-            } else if (appliedCoupon && !appliedCoupon.applicableModality && !appliedCoupon.workshopDiscounts && appliedCoupon.type === 'percentage') {
-                // Legacy Global Percentage
-                ticketPrice = ticketPrice * (1 - appliedCoupon.value / 100);
+        let modPrice = selectedModality ? (parseFloat(selectedModality.price) || 0) : 0;
+        let wsPrices = selectedWorkshops.map(ws => ({ id: ws.id, price: parseFloat(ws.price) || 0 }));
+
+        if (appliedCoupon) {
+            const discValue = appliedCoupon.discount_value !== undefined ? appliedCoupon.discount_value : (appliedCoupon.value || 0);
+            const targets = appliedCoupon.target_modules || [];
+            const multiplier = Math.max(0, (100 - discValue) / 100);
+
+            // 1. Modality Discount
+            if (selectedModality) {
+                let applyDiscount = false;
+
+                // Check New System
+                if (targets.length > 0) {
+                    if (targets.includes(selectedModality.id) || targets.includes(selectedModality.code)) {
+                        applyDiscount = true;
+                    }
+                }
+                // Check Legacy
+                else if (appliedCoupon.applicableModality === selectedModality.id) {
+                    applyDiscount = true;
+                    // Legacy specific percent override?
+                    if (appliedCoupon.modalityDiscount) {
+                        const legMult = Math.max(0, (100 - appliedCoupon.modalityDiscount) / 100);
+                        modPrice = modPrice * legMult;
+                        applyDiscount = false; // Already applied custom logic
+                    }
+                } else if (appliedCoupon.type === 'percentage' && !appliedCoupon.workshopDiscounts && !appliedCoupon.applicableModality) {
+                    // Universal Legacy
+                    applyDiscount = true;
+                }
+
+                if (applyDiscount) {
+                    modPrice = modPrice * multiplier;
+                }
             }
-            total += ticketPrice;
+
+            // 2. Workshops Discount
+            wsPrices = wsPrices.map(ws => {
+                let applyDiscount = false;
+                let price = ws.price;
+
+                if (targets.length > 0) {
+                    if (targets.includes(ws.id)) {
+                        applyDiscount = true;
+                    }
+                } else if (appliedCoupon.workshopDiscounts) {
+                    // Legacy specific map
+                    if (appliedCoupon.workshopDiscounts[ws.id] !== undefined) {
+                        const legacyDisc = appliedCoupon.workshopDiscounts[ws.id];
+                        price = price * Math.max(0, (100 - legacyDisc) / 100);
+                    }
+                } else if (appliedCoupon.type === 'percentage' && !appliedCoupon.workshopDiscounts && !appliedCoupon.applicableModality) {
+                    applyDiscount = true;
+                }
+
+                if (applyDiscount) {
+                    price = price * multiplier;
+                }
+                return { ...ws, price };
+            });
+
+            // 3. Fixed Discount (Universal Legacy)
+            if (appliedCoupon.type === 'fixed') {
+                // Subtract from total at end
+                // Handled below but logic complex if mixed. 
+                // Assuming Fixed is applied to TOTAL.
+            }
         }
 
-        // 2. Calculate Workshops Price
-        selectedWorkshops.forEach(workshopId => {
-            const ws = pricing.workshops.find(w => w.id === workshopId);
-            if (ws) {
-                let wsPrice = parseFloat(ws.price) || 0;
+        // Sum up
+        total += modPrice;
+        wsPrices.forEach(ws => total += ws.price);
 
-                // Check Granular Workshop Discount
-                if (appliedCoupon && appliedCoupon.workshopDiscounts && appliedCoupon.workshopDiscounts[workshopId] !== undefined) {
-                    const discountPercent = parseFloat(appliedCoupon.workshopDiscounts[workshopId]) || 0;
-                    wsPrice = Math.max(0, wsPrice * (1 - discountPercent / 100));
-                } else if (appliedCoupon && !appliedCoupon.workshopDiscounts && appliedCoupon.type === 'percentage') {
-                    // Legacy Global Percentage
-                    wsPrice = wsPrice * (1 - appliedCoupon.value / 100);
-                }
-                total += wsPrice;
-            }
-        });
-
-        // 3. Legacy Fixed Discount (Global)
         if (appliedCoupon && appliedCoupon.type === 'fixed') {
             total = Math.max(0, total - appliedCoupon.value);
         }
@@ -273,23 +353,48 @@ const RegistrationView = () => {
             if (!form.birthDate) errors.birthDate = true;
             if (!form.dni) errors.dni = true;
             if (!form.email) errors.email = true;
+            if (!form.phone) errors.phone = true;
             if (!form.occupation) errors.occupation = true;
             if (!form.institution) errors.institution = true;
 
             // Dynamic validation based on occupation
-            if (form.occupation === 'Médico General') {
-                if (!form.cmp) errors.cmp = true;
-            }
-            if (form.occupation === 'Médico Especialista') {
-                if (!form.cmp) errors.cmp = true;
-                if (!form.rne) errors.rne = true;
-                if (!form.specialty) errors.specialty = true;
-            }
-            if (form.occupation === 'Médico Residente') {
-                if (!form.cmp) errors.cmp = true;
-                if (!form.residencyYear) errors.residencyYear = true;
-                if (!form.specialty) errors.specialty = true;
-            }
+            // Dynamic validation based on occupation
+            const getRules = (occName) => {
+                if (!config?.allowed_occupations) return {};
+                const entry = config.allowed_occupations.find(o =>
+                    (typeof o === 'string' ? o : o.name) === occName
+                );
+
+                if (!entry) return {};
+
+                // Fallback for legacy string-only configs
+                if (typeof entry === 'string') {
+                    if (entry === 'Médico General') return { cmp: true };
+                    if (entry === 'Médico Especialista') return { cmp: true, rne: true, specialty: true };
+                    if (entry === 'Médico Residente') return { cmp: true, year: true, specialty: true, university: true };
+                    if (entry === 'Estudiante de Medicina') return { university: true };
+                    return {};
+                }
+
+                return entry.rules || {};
+            };
+
+            const rules = getRules(form.occupation);
+
+            if (rules.cmp && !form.cmp) errors.cmp = true;
+            if (rules.rne && !form.rne) errors.rne = true;
+            if (rules.year && !form.residencyYear) errors.residencyYear = true;
+            if (rules.specialty && !form.specialty) errors.specialty = true;
+
+            // University logic
+            if (rules.university && !form.university) errors.university = true;
+
+            // Institution logic (Required unless explicit rule says otherwise? Or just standard?)
+            // Assuming Institution is always required for now as per previous logic, 
+            // unless we decide University REPLACES Institution for some roles. 
+            // The user said "If Resident or Student, asks ALSO for the university".
+            // So Institution remains.
+            if (!form.institution) errors.institution = true;
 
             if (Object.keys(errors).length > 0) {
                 setValidationErrors(errors);
@@ -299,26 +404,39 @@ const RegistrationView = () => {
 
             // --- REAL-TIME VALIDATION ---
             try {
-                // Show loading indicator if possible, but for now simple await is fast enough.
-                const check = await api.registrations.checkDuplicates(form);
-                if (check.isDuplicate) {
-                    setValidationErrors({ [check.field]: check.message });
-                    // Removed window.alert to rely on inline message
-                    // window.alert(`⚠️ Validación: ${check.message}`);
-                    return; // Stop here, do not proceed to step 2
-                }
+                // Show loading indicator
+                // Assuming we can use a local loading state or simple toast
+
+                // Map form fields to API expected params
+                // Note: The form uses 'cmp' and 'rne', backend expectation in 'auth.validateIdentity' 
+                // depends on how api.js constructs the call. 
+                // Let's verify api.js call below, but generally we pass the object.
+                await api.auth.validateIdentity({
+                    email: form.email,
+                    dni: form.dni,
+                    cmp_number: form.cmp || null,
+                    rne_number: form.rne || null
+                });
+
+                // If success, logic proceeds naturally below
             } catch (err) {
                 console.error("Validation check failed", err);
-                // Optional: decide if we block or proceed on API failure. Blocking is safer.
-                showError('Intente nuevamente.', 'Error validando datos');
+                // 409 Conflict - show explicit message
+                if (err.response && err.response.status === 409) {
+                    // window.alert(`⚠️ ${err.response.data.detail}`);
+                    showWarning(err.response.data.detail, 'Datos Duplicados');
+                    return; // STOP execution
+                }
+                // Other errors
+                showError('Error de red al validar datos.', 'Intente nuevamente');
                 return;
             }
             // -----------------------------
         }
 
         if (currentStep === 2) {
-            if (!selectedTicket) {
-                showWarning('Por favor selecciona un tipo de ticket.', 'Ticket requerido');
+            if (!selectedModality) {
+                showWarning('Por favor selecciona una modalidad de acceso.', 'Modalidad requerida');
                 return;
             }
         }
@@ -327,6 +445,97 @@ const RegistrationView = () => {
         setValidationErrors({});
         const maxSteps = viewMode === 'registration' ? 3 : 2;
         if (currentStep < maxSteps) setCurrentStep(currentStep + 1);
+    };
+
+
+    // --- FUNCIÓN FINAL DE REGISTRO (Paso 3) ---
+    const handleFinalSubmit = async () => {
+        // A. VALIDACIONES FINALES
+        if (finalTotal > 0) {
+            if (!selectedPaymentAccount) {
+                showWarning("Seleccione una cuenta de pago", "Cuenta Requerida");
+                return;
+            }
+            if (!voucherFile) {
+                showWarning("Debe subir la foto del voucher", "Voucher Requerido");
+                return;
+            }
+        }
+
+        const toastId = toast.loading("Procesando inscripción...");
+
+        try {
+            // Validar campos básicos del form por seguridad
+            if (!form.dni || !form.email) {
+                toast.error("Faltan datos personales", { id: toastId });
+                return;
+            }
+
+            // B. CONSTRUCCIÓN DEL SNAPSHOT (Lo que compra)
+            const itemsSnapshot = {
+                modality_id: selectedModality?.id,
+                workshop_ids: selectedWorkshops.map(w => w.id),
+                frozen_price: finalTotal
+            };
+
+            // C. PREPARAR FORMDATA
+            const formDataPayload = new FormData();
+
+            // Backend ahora espera una estructura "Sala de Espera" (Staging Area)
+            // { personal_data: {...}, payment_info: {...}, items_detail: {...} }
+            const stagingPayload = {
+                personal_data: {
+                    ...form,
+                    // Campos adicionales o normalización si es necesario
+                    lastname: form.lastName, // Backward compat with Schema
+                    firstname: form.firstName,
+                    residency_year: form.residency_year || form.residencyYear // Ensure mapping
+                },
+                payment_info: {
+                    total_amount: finalTotal,
+                    payment_account: selectedPaymentAccount, // ID o nombre de cuenta seleccionada
+                    coupon_code: appliedCoupon ? appliedCoupon.code : null
+                },
+                items_detail: {
+                    modality: selectedModality ? {
+                        id: selectedModality.id,
+                        title: selectedModality.title || selectedModality.name,
+                        price: selectedModality.price
+                    } : null,
+                    workshops: selectedWorkshops.map(ws => ({
+                        id: ws.id,
+                        title: ws.title || ws.name,
+                        price: ws.price
+                    }))
+                }
+            };
+
+            formDataPayload.append('registration_data', JSON.stringify(stagingPayload));
+
+            if (voucherFile) {
+                formDataPayload.append('voucher_file', voucherFile);
+            }
+
+            // D. ENVIAR AL BACKEND
+            await api.auth.registerWithFile(formDataPayload);
+
+            toast.success("¡Registro Exitoso!", { id: toastId });
+
+            // Post-registro: canjear cupón si existe (backend podría hacerlo, pero mantenemos lógica frontend por si acaso)
+            /* 
+            if (appliedCoupon) {
+                 try {
+                     await api.coupons.redeem(appliedCoupon.code);
+                 } catch (e) { console.warn("Error redeem coupon", e); }
+            }
+            */
+
+            setShowSuccessModal(true);
+
+        } catch (error) {
+            console.error(error);
+            toast.error(error.response?.data?.detail || "Error en el registro", { id: toastId });
+        }
     };
 
     const handlePrevious = () => {
@@ -342,8 +551,7 @@ const RegistrationView = () => {
 
         // If paying, validate voucher file presence
         if (paymentNeeded && !voucherFile) {
-            setVoucherError(true);
-            window.alert('⚠️ ATENCIÓN: Es obligatorio adjuntar el voucher de pago cuando hay un monto a pagar.\n\nPor favor sube la imagen de tu constancia en el recuadro "Validación de Pago".');
+            showWarning('Es obligatorio adjuntar el voucher de pago cuando hay un monto a pagar. Por favor sube la imagen de tu constancia en el recuadro "Validación de Pago".', 'Voucher requerido');
             // Scroll to voucher section if possible or just let the user see the red border
             return;
         }
@@ -372,16 +580,16 @@ const RegistrationView = () => {
         // Note: loading state is handled by useApi internally
 
         try {
-            const currentTicket = pricing.ticketTypes.find(t => t.id === selectedTicket);
-            const isVirtual = currentTicket?.title.toLowerCase().includes('virtual');
+            const currentModality = selectedModality; // Was selectedTicket
+            const isVirtual = currentModality?.title.toLowerCase().includes('virtual');
             // Check for certificate based on title or explicit flag if we add it later
-            const wantsCert = currentTicket?.title.toLowerCase().includes('certificado');
+            const wantsCert = currentModality?.includes_certificate || currentModality?.title.toLowerCase().includes('certificado');
 
             const registrationData = {
                 ...form,
                 name: `${form.lastName} ${form.firstName}`.trim(),
-                ticketType: selectedTicket,
-                workshops: selectedWorkshops,
+                ticketType: currentModality?.id || currentModality?.code, // Use Modality ID
+                workshops: selectedWorkshops.map(w => w.id), // Send IDs
                 amount: currentAmount,
                 modalidad: isVirtual ? 'Virtual' : 'Presencial',
                 wantsCertification: wantsCert,
@@ -408,7 +616,7 @@ const RegistrationView = () => {
         } catch (error) {
             console.error('Submission error:', error);
             // Show specific API error message if available
-            window.alert('⚠️ Error en la inscripción:\n\n' + (error.message || 'Ocurrió un error desconocido. Por favor intenta nuevamente.'));
+            showError(error.message || 'Ocurrió un error desconocido. Por favor intenta nuevamente.', 'Error en la inscripción');
         }
     };
 
@@ -429,6 +637,7 @@ const RegistrationView = () => {
             cmp: '',
             rne: '',
             residencyYear: '',
+            university: '',
             specialty: ''
         };
 
@@ -439,7 +648,7 @@ const RegistrationView = () => {
 
         // Clear all other states
         clearVoucher();
-        setSelectedTicket(null);
+        setSelectedModality(null);
         setSelectedWorkshops([]);
         setAppliedCoupon(null);
         setCouponCode('');
@@ -557,11 +766,14 @@ const RegistrationView = () => {
         let icon = User;
         let color = 'blue';
 
-        if (ticket.title.toLowerCase().includes('certificado')) {
+        const title = ticket.title || '';
+        const titleLower = title.toLowerCase();
+
+        if (titleLower.includes('certificado')) {
             icon = Award;
         }
 
-        if (ticket.title.toLowerCase().includes('virtual')) {
+        if (titleLower.includes('virtual')) {
             icon = Wifi;
             color = 'purple';
         }
@@ -572,7 +784,7 @@ const RegistrationView = () => {
 
         return {
             id: ticket.id,
-            title: ticket.title,
+            title: title || 'Entrada General',
             subtitle: ticket.subtitle || `S/ ${ticket.price}`,
             price: ticket.price,
             icon: icon,
@@ -591,6 +803,7 @@ const RegistrationView = () => {
         'Hospital Dos de Mayo',
         'Hospital Cayetano Heredia'
     ];
+
 
 
     return (
@@ -640,6 +853,7 @@ const RegistrationView = () => {
                             </div>
                         </div>
                     </div>
+
 
                     {/* Left Navigation Arrow (Inside Card) */}
                     {currentStep > 1 && (
@@ -744,14 +958,14 @@ const RegistrationView = () => {
                                         <h3 className="text-xl font-bold text-gray-800">Información Personal</h3>
                                     </div>
 
-                                    {/* Row 1: Appellidos, Nombres */}
+                                    {/* Row 1: Apellidos, Nombres */}
                                     <div className="grid md:grid-cols-2 gap-8">
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Apellidos *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">👤 Apellidos *</label>
                                             <input type="text" name="lastName" value={form.lastName} onChange={handleChange} placeholder="Pérez López" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.lastName ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Nombres *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">📛 Nombres *</label>
                                             <input type="text" name="firstName" value={form.firstName} onChange={handleChange} placeholder="Juan Carlos" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.firstName ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
                                         </div>
                                     </div>
@@ -759,23 +973,30 @@ const RegistrationView = () => {
                                     {/* Row 2: Fecha Nacimiento, DNI, Email */}
                                     <div className="grid md:grid-cols-3 gap-6">
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Fecha de Nacimiento *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">🎂 Fecha de Nacimiento *</label>
                                             <div className="relative">
                                                 <input type="date" name="birthDate" value={form.birthDate} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white pl-10 ${validationErrors.birthDate ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
                                                 <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={18} />
                                             </div>
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">DNI / Pasaporte *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">🆔 DNI / Pasaporte *</label>
                                             <input type="number" name="dni" value={form.dni} onChange={handleChange} placeholder="12345678" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.dni ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
                                             {typeof validationErrors.dni === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.dni}</p>}
                                         </div>
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Email *</label>
-                                            <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="juan@ejemplo.com" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.email ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
-                                            {typeof validationErrors.email === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.email}</p>}
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">📞 Teléfono / Celular *</label>
+                                            <input type="tel" name="phone" value={form.phone} onChange={handleChange} placeholder="999 999 999" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.phone ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
                                         </div>
                                     </div>
+
+                                    {/* Row 3: Phone (New) */}
+                                    <div>
+                                        <label className="block text-sm font-semibold text-gray-700 mb-2">📧 Email *</label>
+                                        <input type="email" name="email" value={form.email} onChange={handleChange} placeholder="juan@ejemplo.com" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.email ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`} />
+                                        {typeof validationErrors.email === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.email}</p>}
+                                    </div>
+
 
                                     <div className="flex items-center gap-3 pb-2 border-b border-gray-100 mt-10">
                                         <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
@@ -786,14 +1007,22 @@ const RegistrationView = () => {
 
                                     <div className="grid md:grid-cols-2 gap-8">
                                         <div>
-                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Ocupación / Cargo *</label>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">💼 Ocupación / Cargo *</label>
                                             <select name="occupation" value={form.occupation} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white ${validationErrors.occupation ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`}>
                                                 <option value="">Seleccione...</option>
-                                                <option value="Médico Especialista">Médico Especialista</option>
-                                                <option value="Médico Residente">Médico Residente</option>
-                                                <option value="Médico General">Médico General</option>
-                                                <option value="Estudiante de Medicina">Estudiante de Medicina</option>
-                                                <option value="Otro">Otro</option>
+                                                {config?.allowed_occupations?.map((occ, i) => {
+                                                    const val = typeof occ === 'string' ? occ : occ.name;
+                                                    return <option key={i} value={val}>{val}</option>;
+                                                })}
+                                                {(!config?.allowed_occupations || config.allowed_occupations.length === 0) && (
+                                                    <>
+                                                        <option value="Médico Especialista">Médico Especialista</option>
+                                                        <option value="Médico Residente">Médico Residente</option>
+                                                        <option value="Médico General">Médico General</option>
+                                                        <option value="Estudiante de Medicina">Estudiante de Medicina</option>
+                                                        <option value="Otro">Otro</option>
+                                                    </>
+                                                )}
                                             </select>
                                         </div>
 
@@ -810,7 +1039,10 @@ const RegistrationView = () => {
                                                 className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 focus:bg-white ${validationErrors.institution ? 'border-red-500 border-2' : 'border-gray-200 focus:border-blue-500'}`}
                                             />
                                             <datalist id="institutions-list">
-                                                {institutions.map((inst, index) => (
+                                                {config?.allowed_institutions?.map((inst, index) => (
+                                                    <option key={index} value={inst} />
+                                                ))}
+                                                {(!config?.allowed_institutions || config.allowed_institutions.length === 0) && institutions.map((inst, index) => (
                                                     <option key={index} value={inst} />
                                                 ))}
                                             </datalist>
@@ -818,56 +1050,114 @@ const RegistrationView = () => {
                                     </div>
 
                                     {/* Dynamic Fields Section */}
-                                    {(form.occupation === 'Médico General' || form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
-                                        <div className="p-6 bg-gray-50 rounded-xl border border-gray-100 space-y-6 animate-fadeIn">
+                                    {(() => {
+                                        // Helper to determine rules
+                                        const getRules = (occName) => {
+                                            if (!config?.allowed_occupations) return {};
+                                            const entry = config.allowed_occupations.find(o =>
+                                                (typeof o === 'string' ? o : o.name) === occName
+                                            );
 
-                                            <div className="grid md:grid-cols-3 gap-6">
-                                                {/* CMP - Required for all doctors */}
-                                                <div>
-                                                    <label className="block text-sm font-semibold text-gray-700 mb-2">N° CMP *</label>
-                                                    <input type="number" name="cmp" value={form.cmp} onChange={handleChange} placeholder="12345" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.cmp ? 'border-red-500 border-2' : 'border-gray-200'}`} />
-                                                    {typeof validationErrors.cmp === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.cmp}</p>}
+                                            if (!entry) return {};
+
+                                            // Fallback for legacy string-only configs
+                                            if (typeof entry === 'string') {
+                                                if (entry === 'Médico General') return { cmp: true };
+                                                if (entry === 'Médico Especialista') return { cmp: true, rne: true, specialty: true };
+                                                if (entry === 'Médico Residente') return { cmp: true, year: true, specialty: true, university: true };
+                                                if (entry === 'Estudiante de Medicina') return { university: true };
+                                                return {};
+                                            }
+
+                                            return entry.rules || {};
+                                        };
+
+                                        const rules = getRules(form.occupation);
+                                        const hasAnyRule = Object.values(rules).some(r => r);
+
+                                        return hasAnyRule && (
+                                            <div className="p-6 bg-gray-50 rounded-xl border border-gray-100 space-y-6 animate-fadeIn">
+                                                <div className="grid md:grid-cols-3 gap-6">
+
+                                                    {/* CMP */}
+                                                    {rules.cmp && (
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">N° CMP *</label>
+                                                            <input type="number" name="cmp" value={form.cmp} onChange={handleChange} placeholder="12345" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.cmp ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                            {typeof validationErrors.cmp === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.cmp}</p>}
+                                                        </div>
+                                                    )}
+
+                                                    {/* RNE */}
+                                                    {rules.rne && (
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">N° RNE *</label>
+                                                            <input type="number" name="rne" value={form.rne} onChange={handleChange} placeholder="54321" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.rne ? 'border-red-500 border-2' : 'border-gray-200'}`} />
+                                                            {typeof validationErrors.rne === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.rne}</p>}
+                                                        </div>
+                                                    )}
+
+                                                    {/* Residency Year */}
+                                                    {rules.year && (
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Año de Residencia *</label>
+                                                            <select name="residencyYear" value={form.residencyYear} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.residencyYear ? 'border-red-500 border-2' : 'border-gray-200'}`}>
+                                                                <option value="">Seleccione...</option>
+                                                                {config?.residency_years?.map((year, i) => (
+                                                                    <option key={i} value={year}>{year}</option>
+                                                                ))}
+                                                                {(!config?.residency_years || config.residency_years.length === 0) && (
+                                                                    <>
+                                                                        <option value="R1">R1</option>
+                                                                        <option value="R2">R2</option>
+                                                                        <option value="R3">R3</option>
+                                                                    </>
+                                                                )}
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Specialty */}
+                                                    {rules.specialty && (
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Especialidad *</label>
+                                                            <select name="specialty" value={form.specialty} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.specialty ? 'border-red-500 border-2' : 'border-gray-200'}`}>
+                                                                <option value="">Seleccione...</option>
+                                                                {config?.participant_specialties?.map((spec, i) => (
+                                                                    <option key={i} value={spec}>{spec}</option>
+                                                                ))}
+                                                                {(!config?.participant_specialties || config.participant_specialties.length === 0) && specialties.map((spec, i) => (
+                                                                    <option key={i} value={spec}>{spec}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                    )}
+
+                                                    {/* University */}
+                                                    {rules.university && (
+                                                        <div>
+                                                            <label className="block text-sm font-semibold text-gray-700 mb-2">Universidad *</label>
+                                                            <input
+                                                                list="universities-list"
+                                                                name="university"
+                                                                value={form.university}
+                                                                onChange={handleChange}
+                                                                placeholder="Seleccione su universidad"
+                                                                required
+                                                                className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none  bg-white ${validationErrors.university ? 'border-red-500 border-2' : 'border-gray-200'}`}
+                                                            />
+                                                            <datalist id="universities-list">
+                                                                {config?.allowed_universities?.map((univ, index) => (
+                                                                    <option key={index} value={univ} />
+                                                                ))}
+                                                            </datalist>
+                                                            {typeof validationErrors.university === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.university}</p>}
+                                                        </div>
+                                                    )}
                                                 </div>
-
-                                                {/* RNE - Only for Specialists */}
-                                                {form.occupation === 'Médico Especialista' && (
-                                                    <div>
-                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">N° RNE *</label>
-                                                        <input type="number" name="rne" value={form.rne} onChange={handleChange} placeholder="54321" required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.rne ? 'border-red-500 border-2' : 'border-gray-200'}`} />
-                                                        {typeof validationErrors.rne === 'string' && <p className="text-red-500 text-xs mt-1 font-medium">{validationErrors.rne}</p>}
-                                                    </div>
-                                                )}
-
-                                                {/* Residency Year - Only for Residents */}
-                                                {form.occupation === 'Médico Residente' && (
-                                                    <div>
-                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Año de Residencia *</label>
-                                                        <select name="residencyYear" value={form.residencyYear} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.residencyYear ? 'border-red-500 border-2' : 'border-gray-200'}`}>
-                                                            <option value="">Seleccione...</option>
-                                                            <option value="R1">R1</option>
-                                                            <option value="R2">R2</option>
-                                                            <option value="R3">R3</option>
-                                                            <option value="R4">R4</option>
-                                                            <option value="R5">R5</option>
-                                                        </select>
-                                                    </div>
-                                                )}
-
-                                                {/* Specialty - For Residents and Specialists */}
-                                                {(form.occupation === 'Médico Especialista' || form.occupation === 'Médico Residente') && (
-                                                    <div>
-                                                        <label className="block text-sm font-semibold text-gray-700 mb-2">Especialidad *</label>
-                                                        <select name="specialty" value={form.specialty} onChange={handleChange} required className={`w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none bg-white ${validationErrors.specialty ? 'border-red-500 border-2' : 'border-gray-200'}`}>
-                                                            <option value="">Seleccione...</option>
-                                                            {specialties.map((spec, i) => (
-                                                                <option key={i} value={spec}>{spec}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-                                                )}
                                             </div>
-                                        </div>
-                                    )}
+                                        );
+                                    })()}
 
                                 </div>
                             </div>
@@ -875,69 +1165,16 @@ const RegistrationView = () => {
 
                         {/* Step 2 Content */}
                         {currentStep === 2 && viewMode === 'registration' && (
-                            <div className="animate-fadeIn grid md:grid-cols-2 gap-12">
-                                {/* Left Column: Tickets / Modalidad */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
-                                        <div className="p-2 bg-blue-50 rounded-lg text-blue-600">
-                                            <Award size={24} />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-gray-800">Selecciona tu Modalidad</h3>
-                                    </div>
-
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {ticketOptions.map((ticket) => {
-                                            const Icon = ticket.icon;
-                                            const isSelected = selectedTicket === ticket.id;
-                                            return (
-                                                <div
-                                                    key={ticket.id}
-                                                    onClick={() => setSelectedTicket(ticket.id)}
-                                                    className={`
-                                                        relative cursor-pointer rounded-2xl border-2 p-5 flex items-center gap-4 transition-all duration-300
-                                                        ${isSelected
-                                                            ? `border-${ticket.color}-600 bg-${ticket.color}-50 shadow-md transform -translate-y-0.5`
-                                                            : 'border-gray-100 hover:border-blue-300 hover:shadow-sm bg-white'
-                                                        }
-                                                    `}
-                                                >
-                                                    <div className={`w-12 h-12 rounded-full flex-shrink-0 flex items-center justify-center ${isSelected ? `bg-${ticket.color}-600` : 'bg-gray-100'}`}>
-                                                        <Icon size={24} className={isSelected ? 'text-white' : 'text-gray-500'} />
-                                                    </div>
-                                                    <div className="flex-1">
-                                                        <h4 className="font-bold text-gray-900">{ticket.title}</h4>
-                                                        <p className={`text-sm font-semibold ${isSelected ? `text-${ticket.color}-600` : 'text-gray-500'}`}>{ticket.subtitle}</p>
-                                                    </div>
-                                                    {isSelected && <CheckCircle size={20} className={`text-${ticket.color}-600`} />}
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </div>
-
-                                {/* Right Column: Workshops */}
-                                <div className="space-y-6">
-                                    <div className="flex items-center gap-3 pb-2 border-b border-gray-100">
-                                        <div className="p-2 bg-orange-50 rounded-lg text-orange-600">
-                                            <Tag size={24} />
-                                        </div>
-                                        <h3 className="text-xl font-bold text-gray-800">Talleres (Opcional)</h3>
-                                    </div>
-
-                                    <div className="space-y-3">
-                                        {availableWorkshops.map((workshop) => (
-                                            <label key={workshop.id} className="flex items-center gap-4 p-4 border border-gray-200 rounded-xl cursor-pointer hover:border-orange-300 hover:bg-orange-50 transition-all bg-white shadow-sm">
-                                                <input type="checkbox" checked={selectedWorkshops.includes(workshop.id)} onChange={() => handleWorkshopToggle(workshop.id)} className="w-5 h-5 text-orange-600 rounded focus:ring-orange-500" />
-                                                <div className="flex-1">
-                                                    <p className="font-medium text-gray-700 leading-tight">{workshop.name}</p>
-                                                    <p className="text-xs text-orange-600 font-bold mt-1">+ S/ {workshop.price}</p>
-                                                </div>
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
+                            <Step2Modalities
+                                selectedModality={selectedModality}
+                                setSelectedModality={setSelectedModality}
+                                selectedWorkshops={selectedWorkshops}
+                                setSelectedWorkshops={setSelectedWorkshops}
+                                allModalities={allModalities}
+                                allWorkshops={allWorkshops || []}
+                            />
                         )}
+
 
                         {/* Step 2 Content - Work Submission */}
                         {currentStep === 2 && viewMode === 'work_submission' && (
@@ -1137,250 +1374,39 @@ const RegistrationView = () => {
                             </div>
                         )}
 
-                        {/* Step 3 Content */}
+                        {/* Step 3 Content: Payment & Checkout */}
                         {currentStep === 3 && (
-                            <div className="animate-fadeIn space-y-6">
-                                {/* Total Gradient Banner */}
-                                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 rounded-2xl p-6 text-white flex items-center justify-between shadow-lg">
-                                    <div className="flex items-center gap-3">
-                                        <DollarSign size={32} className="opacity-80" />
-                                        <h3 className="text-2xl font-bold">Total a Pagar</h3>
-                                    </div>
-                                    <div className="text-4xl font-extrabold tracking-tight">
-                                        S/ {amount.toFixed(2)}
-                                    </div>
-                                </div>
+                            <div className="animate-fadeIn">
+                                <Step3Payment
+                                    selectedModality={selectedModality}
+                                    selectedWorkshops={selectedWorkshops}
+                                    coupon={appliedCoupon}
+                                    setCoupon={setAppliedCoupon}
+                                    voucherFile={voucherFile}
+                                    setVoucherFile={handleFileChange} // useFileUpload hook returns handleFileChange which accepts event
+                                    paymentAccount={selectedPaymentAccount}
+                                    setPaymentAccount={setSelectedPaymentAccount}
+                                    onTotalChange={setFinalTotal}
+                                />
 
-                                <div className={requiresPayment ? "grid md:grid-cols-2 gap-8" : "max-w-xl mx-auto space-y-6"}>
-                                    {/* Left Col: Bank Info - Dynamic */}
-                                    {requiresPayment && (
-                                        <div className="space-y-4" ref={accountsRef}>
-                                            <h4 className={`font-bold border-b pb-2 ${showAccountError ? 'text-red-600 border-red-300' : 'text-gray-800'}`}>
-                                                Cuentas Disponibles {showAccountError && <span className="text-xs font-normal text-red-500 float-right mt-1">* Requerido</span>}
-                                            </h4>
-                                            <p className="text-sm text-gray-600 mb-2">Selecciona la cuenta donde realizaste el pago:</p>
-
-                                            <div className="space-y-3">
-                                                {(() => {
-                                                    const inscriptionAccountIds = treasuryData.config?.contribution?.inscriptionAccounts ||
-                                                        (treasuryData.config?.contribution?.defaultInscriptionAccount ? [treasuryData.config.contribution.defaultInscriptionAccount] : []);
-
-                                                    const validAccounts = treasuryData.accounts.filter(acc => inscriptionAccountIds.includes(acc.id));
-
-                                                    if (validAccounts.length === 0) {
-                                                        return <p className="text-red-500 text-sm italic">No hay cuentas de inscripción configuradas.</p>;
-                                                    }
-
-                                                    return validAccounts.map(account => {
-                                                        const isSelected = selectedPaymentAccount === account.id;
-
-                                                        // Determine visual style based on account details
-                                                        const name = account.bank_name || account.wallet_name || account.nombre || '';
-                                                        const lowerName = name.toLowerCase();
-                                                        const displayType = account.tipo === 'billetera' ? 'Billetera' : 'Banco';
-
-                                                        // Try to find configured logo
-                                                        let configuredLogo = null;
-                                                        if (treasuryData.config?.banks && account.tipo === 'banco') {
-                                                            const bank = treasuryData.config.banks.find(b => b.name === account.bank_name);
-                                                            if (bank?.logo) configuredLogo = bank.logo;
-                                                        } else if (treasuryData.config?.wallets && account.tipo === 'billetera') {
-                                                            const wallet = treasuryData.config.wallets.find(w => w.name === account.wallet_name);
-                                                            if (wallet?.logo) configuredLogo = wallet.logo;
-                                                        }
-
-                                                        let colorClass = 'bg-gray-50 border-gray-200';
-                                                        let iconClass = 'bg-gray-200 text-gray-600';
-                                                        let shortName = displayType;
-
-                                                        if (lowerName.includes('yape')) {
-                                                            colorClass = 'bg-purple-50 border-purple-200';
-                                                            iconClass = 'bg-purple-600 text-white';
-                                                            shortName = 'Yape';
-                                                        }
-                                                        else if (lowerName.includes('plin')) {
-                                                            colorClass = 'bg-cyan-50 border-cyan-200';
-                                                            iconClass = 'bg-cyan-500 text-white';
-                                                            shortName = 'Plin';
-                                                        }
-                                                        else if (lowerName.includes('bcp') || lowerName.includes('crédito')) {
-                                                            colorClass = 'bg-orange-50 border-orange-200';
-                                                            iconClass = 'bg-orange-500 text-white';
-                                                            shortName = 'BCP';
-                                                        }
-                                                        else if (lowerName.includes('interbank')) {
-                                                            colorClass = 'bg-green-50 border-green-200';
-                                                            iconClass = 'bg-green-600 text-white';
-                                                            shortName = 'IB';
-                                                        }
-                                                        else if (lowerName.includes('bbva')) {
-                                                            colorClass = 'bg-blue-50 border-blue-200';
-                                                            iconClass = 'bg-blue-600 text-white';
-                                                            shortName = 'BBVA';
-                                                        }
-
-                                                        if (isSelected) {
-                                                            colorClass = colorClass.replace('bg-', 'bg-opacity-50 ring-2 ring-blue-500 border-blue-500');
-                                                        }
-
-                                                        return (
-                                                            <div
-                                                                key={account.id}
-                                                                onClick={() => {
-                                                                    setSelectedPaymentAccount(account.id);
-                                                                    setShowAccountError(false);
-                                                                }}
-                                                                className={`p-4 rounded-xl border cursor-pointer transition-all ${colorClass} ${isSelected ? 'shadow-md' : 'hover:border-blue-300'} ${showAccountError && !isSelected ? 'border-red-300 bg-red-50' : ''}`}
-                                                            >
-                                                                <div className="flex items-center gap-3">
-                                                                    <div className={`w-12 h-12 rounded-lg flex-shrink-0 flex items-center justify-center font-bold text-xs shadow-sm overflow-hidden ${!configuredLogo ? iconClass : 'bg-white border border-gray-100'}`}>
-                                                                        {configuredLogo ? (
-                                                                            <img src={configuredLogo} alt="Logo" className="w-full h-full object-contain p-1" />
-                                                                        ) : (
-                                                                            shortName.substring(0, 4)
-                                                                        )}
-                                                                    </div>
-                                                                    <div className="flex-1 min-w-0">
-                                                                        {displayType === 'Billetera' ? (
-                                                                            <>
-                                                                                <p className="font-bold text-gray-900 text-2xl leading-none tracking-tight mb-1">
-                                                                                    {account.phone_number || account.account_number}
-                                                                                </p>
-                                                                                <p className="text-xs text-gray-600 font-medium uppercase tracking-wide">
-                                                                                    {account.holder_name || 'Titular no registrado'}
-                                                                                </p>
-                                                                                <div className="mt-1 flex items-center gap-2">
-                                                                                    <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold">
-                                                                                        {name}
-                                                                                    </span>
-                                                                                </div>
-                                                                            </>
-                                                                        ) : (
-                                                                            <>
-                                                                                <p className="font-bold text-gray-900 text-lg leading-tight mb-0.5">
-                                                                                    {name || account.nombre}
-                                                                                </p>
-                                                                                <p className="text-xs text-gray-600 font-medium uppercase mb-2">
-                                                                                    {account.holder_name || 'Titular no registrado'}
-                                                                                </p>
-
-                                                                                <div className="space-y-1">
-                                                                                    <p className="flex items-center gap-2">
-                                                                                        <span className="text-[10px] uppercase bg-gray-100 px-1.5 py-0.5 rounded text-gray-500 font-bold tracking-wider min-w-[50px] text-center">Cuenta</span>
-                                                                                        <span className="font-mono text-gray-800 text-xs tracking-wide">{account.account_number || account.numero_cuenta}</span>
-                                                                                    </p>
-                                                                                    {account.cci && (
-                                                                                        <p className="flex items-center gap-2">
-                                                                                            <span className="text-[10px] uppercase bg-blue-50 px-1.5 py-0.5 rounded text-blue-600 font-bold tracking-wider min-w-[50px] text-center">CCI</span>
-                                                                                            <span className="font-mono text-gray-600 text-xs tracking-wide">{account.cci}</span>
-                                                                                        </p>
-                                                                                    )}
-                                                                                </div>
-                                                                            </>
-                                                                        )}
-                                                                    </div>
-                                                                    {isSelected && <CheckCircle className="text-blue-600" size={24} />}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    });
-                                                })()}
-                                            </div>
-                                        </div>
-                                    )}
-
-                                    {/* Right Col: Validation */}
-                                    <div className="space-y-4">
-                                        <h4 className={`font-bold ${voucherError ? 'text-red-600' : 'text-gray-800'} border-b pb-2 flex justify-between`}>
-                                            Validación de Pago
-                                            {voucherError && <span className="text-red-500 text-xs font-normal flex items-center gap-1"><AlertCircle size={12} /> Requerido</span>}
-                                        </h4>
-                                        {requiresPayment ? (
-                                            <div className="flex-grow">
-                                                {!voucherPreview ? (
-                                                    <div onClick={() => fileInputRef.current.click()} className={`h-full border-2 border-dashed ${voucherError ? 'border-red-400 bg-red-50' : 'border-gray-300 hover:border-blue-400 hover:bg-gray-50'} rounded-xl flex flex-col items-center justify-center p-4 cursor-pointer transition-all text-center group`}>
-                                                        <Upload className={`${voucherError ? 'text-red-400' : 'text-gray-400'} mb-2 group-hover:scale-110 transition-transform`} size={24} />
-                                                        <span className={`text-sm font-medium ${voucherError ? 'text-red-600' : 'text-gray-600'}`}>Subir Voucher</span>
-                                                        <span className="text-xs text-gray-400">PDF, JPG, PNG</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="h-full border-2 border-green-200 bg-green-50 rounded-xl p-3 flex items-center justify-between">
-                                                        <div className="flex items-center gap-3">
-                                                            <div className="p-2 bg-white rounded-lg border border-green-100"><FileCheck className="text-green-500" size={20} /></div>
-                                                            <div>
-                                                                <p className="text-xs font-bold text-gray-900">Archivo cargado</p>
-                                                                <button type="button" onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    clearVoucher();
-                                                                    if (fileInputRef.current) fileInputRef.current.value = '';
-                                                                }} className="text-xs text-red-500 hover:underline">Eliminar</button>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                )}
-                                                <input
-                                                    type="file"
-                                                    ref={fileInputRef}
-                                                    className="hidden"
-                                                    accept="image/*,.pdf"
-                                                    onChange={(e) => {
-                                                        setVoucherError(false); // Clear error on interaction
-                                                        handleFileChange(e);
-                                                    }}
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="bg-green-50 border border-green-200 rounded-xl p-6 text-center">
-                                                <CheckCircle className="text-green-600 mx-auto mb-2" size={32} />
-                                                <p className="font-bold text-green-800">Gratuito</p>
-                                                <p className="text-xs text-green-600">No requiere voucher</p>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-
-                                <div className="mt-4 pt-4 border-t border-gray-100">
-                                    <div className="flex items-center gap-2">
-                                        <input
-                                            type="text"
-                                            placeholder="CÓDIGO DE CUPÓN"
-                                            value={couponCode}
-                                            onChange={(e) => {
-                                                setCouponCode(e.target.value.toUpperCase());
-                                                if (couponError) setCouponError(''); // Clear error on typing
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') {
-                                                    e.preventDefault();
-                                                    handleValidateCoupon();
-                                                }
-                                            }}
-                                            disabled={!!appliedCoupon}
-                                            className={`flex-1 px-4 py-3 border ${couponError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-300 focus:ring-blue-500'} rounded-xl focus:ring-2 outline-none transition-all`}
-                                        />
-                                        {!appliedCoupon ? (
-                                            <button type="button" onClick={handleValidateCoupon} disabled={validatingCoupon || !couponCode} className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-black transition-colors">{validatingCoupon ? <Loader className="animate-spin" size={20} /> : 'Aplicar'}</button>
-                                        ) : (
-                                            <button type="button" onClick={handleRemoveCoupon} className="bg-red-100 text-red-600 px-4 py-3 rounded-xl hover:bg-red-200"><X size={20} /></button>
-                                        )}
-                                    </div>
-                                    {couponError && (
-                                        <div className="flex items-center gap-2 mt-2 text-red-500 text-sm animate-fadeIn pl-1">
-                                            <AlertCircle size={16} />
-                                            <span className="font-medium">{couponError}</span>
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="mt-auto pt-6 flex justify-center">
+                                {/* FOOTER PROPIO DEL PASO 3 */}
+                                <div className="mt-8 flex justify-end items-center border-t pt-6">
                                     <button
                                         type="button"
-                                        onClick={handleSubmit}
-                                        disabled={isSubmitting}
-                                        className="w-full md:w-2/3 bg-green-500 text-white px-8 py-4 rounded-2xl font-bold text-lg hover:bg-green-600 transition-all shadow-xl flex items-center justify-center gap-3 transform hover:-translate-y-1"
+                                        onClick={handleFinalSubmit}
+                                        className="bg-green-600 text-white px-8 py-3 rounded-xl font-bold hover:bg-green-700 transition-all shadow-lg flex items-center gap-2 transform hover:scale-105"
                                     >
-                                        <CheckCircle size={24} />
-                                        {isSubmitting ? 'Procesando...' : 'Confirmar Inscripción'}
+                                        {finalTotal === 0 ? (
+                                            <>
+                                                <CheckCircle size={20} />
+                                                Confirmar Inscripción (Gratis)
+                                            </>
+                                        ) : (
+                                            <>
+                                                Pagar S/ {finalTotal.toFixed(2)} y Finalizar
+                                                <ChevronRight size={20} />
+                                            </>
+                                        )}
                                     </button>
                                 </div>
                             </div>

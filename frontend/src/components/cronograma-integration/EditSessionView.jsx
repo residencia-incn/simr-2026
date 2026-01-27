@@ -1,43 +1,37 @@
 
 import React, { useState } from 'react';
 import Button from '../ui/Button';
-import { SPEAKERS } from './data/mockData';
 import ImportActivityModal from './ImportActivityModal';
 import SelectSpeakerModal from './SelectSpeakerModal';
 import ManageRoomsModal from './ManageRoomsModal';
 import { api } from '../../services/api';
 
-const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] }) => {
+const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [], date }) => {
     const [formData, setFormData] = useState(session);
     const [isImportModalOpen, setIsImportModalOpen] = useState(false);
     const [isSpeakerModalOpen, setIsSpeakerModalOpen] = useState(false);
     const [isRoomModalOpen, setIsRoomModalOpen] = useState(false);
     const [workTypes, setWorkTypes] = useState(['Conferencia Magistral', 'Trabajo Original', 'Reporte de Caso', 'Mesa Redonda']);
     const [isGeneralMode, setIsGeneralMode] = useState(
-        session.category === 'GENERAL' || (!session.category && (!session.speakers || session.speakers.length === 0))
+        session.category?.toUpperCase() === 'GENERAL' || (!session.category && (!session.speakers || session.speakers.length === 0))
     );
-    const [timeSlots, setTimeSlots] = useState([]);
-    const [availableTimeSlots, setAvailableTimeSlots] = useState([]);
+    // const [timeSlots, setTimeSlots] = useState([]); // Removed
+    // const [availableTimeSlots, setAvailableTimeSlots] = useState([]); // Removed
+    const [availableBlocks, setAvailableBlocks] = useState([]);
 
     const isLinked = !!(formData.linkedWorkId || formData.linkedTalkId);
 
+    // Initial Data Load (Config)
     React.useEffect(() => {
         const loadData = async () => {
             try {
-                const [academicConfig, programConfig] = await Promise.all([
-                    api.academic.getConfig(),
-                    api.program.getConfig()
+                const [academicConfig] = await Promise.all([
+                    api.academic.getConfig()
                 ]);
 
                 if (academicConfig && academicConfig.workTypes) {
                     const uniqueTypes = [...new Set(['Conferencia Magistral', ...academicConfig.workTypes])];
                     setWorkTypes(uniqueTypes);
-                }
-
-                if (programConfig && programConfig.timeSlots) {
-                    // Sort slots by start time
-                    const sortedSlots = programConfig.timeSlots.sort((a, b) => a.start.localeCompare(b.start));
-                    setTimeSlots(sortedSlots);
                 }
             } catch (error) {
                 console.error("Error fetching configs:", error);
@@ -46,40 +40,28 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
         loadData();
     }, []);
 
-    // Effect to filter available slots based on location and existing sessions
+    // Ensure imported category is available in options
     React.useEffect(() => {
-        if (timeSlots.length === 0) return;
-
-        // If no location set, all slots technically "available" (or none?) -> Let's show all
-        if (!formData.location) {
-            setAvailableTimeSlots(timeSlots);
-            return;
+        if (formData.category && !workTypes.includes(formData.category)) {
+            setWorkTypes(prev => [...prev, formData.category]);
         }
+    }, [formData.category, workTypes]);
 
-        const occupiedSlots = currentDaySessions.filter(s =>
-            // Check same location (normalize?)
-            s.location === formData.location &&
-            // Exclude current session being edited
-            s.id !== formData.id
-        );
+    // Fetch Blocks dependent on Date
+    React.useEffect(() => {
+        const fetchBlocks = async () => {
+            if (!date) return;
+            try {
+                const config = await api.program.getConfig();
+                const dayBlocks = config.blocks.filter(b => b.date === date);
+                setAvailableBlocks(dayBlocks);
+            } catch (error) {
+                console.error("Error loading blocks:", error);
+            }
+        };
+        fetchBlocks();
+    }, [date]);
 
-        const available = timeSlots.map(slot => {
-            const slotStart = slot.start; // "HH:MM"
-            const slotEnd = slot.end;
-
-            // Check overlap
-            const isOverlapping = occupiedSlots.some(s => {
-                // Simple string comparison for HH:MM works because padded 09:00 < 10:00
-                // Overlap condition: StartA < EndB && StartB < EndA
-                // Here A is slot, B is existing session
-                return slotStart < s.timeEnd && s.timeStart < slotEnd;
-            });
-
-            return { ...slot, disabled: isOverlapping };
-        });
-
-        setAvailableTimeSlots(available);
-    }, [timeSlots, formData.location, currentDaySessions, formData.id]);
 
     const getCategoryColor = (category) => {
         const colors = {
@@ -130,7 +112,7 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
         let workSpeakers = [];
         try {
             // Important: Use all users, not just speakers, because authors are the speakers for works
-            const allUsers = await api.users.getAllIncludingSuperAdmin();
+            const allUsers = await api.users.getAll();
             const targetAuthor = normalizeName(importedData.authorName);
 
             // 1. Try matching by ID first (most reliable)
@@ -223,8 +205,9 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
     const handleRoomConfirm = (rooms) => {
         setFormData(prev => ({
             ...prev,
-            location: rooms.physical,
-            virtualLocation: rooms.virtual
+            location: rooms.physical?.name || '',
+            locationId: rooms.physical?.id || null,
+            virtualLocation: rooms.virtual?.name || ''
         }));
     };
 
@@ -232,7 +215,9 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
         if (isGeneralMode) {
             onSave({
                 ...formData,
+                type: "general",
                 category: "GENERAL",
+                classification_label: "General",
                 categoryColor: null,
                 speakers: [],
                 description: null,
@@ -266,10 +251,10 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
                     <Button
                         variant={isGeneralMode ? "solid" : "outline"}
                         onClick={() => setIsGeneralMode(!isGeneralMode)}
-                        className={`transition-all ${isGeneralMode ? 'bg-slate-800 text-white hover:bg-slate-700' : 'border-slate-300 text-slate-600 hover:bg-slate-50'}`}
+                        className={`transition-all ${isGeneralMode ? 'ring-2 ring-slate-900 ring-offset-2' : ''}`}
                         title="Modo simplificado para breaks, almuerzos, etc."
                     >
-                        <span className="material-symbols-outlined text-[20px]">{isGeneralMode ? 'coffee' : 'coffee'}</span>
+                        <span className="material-symbols-outlined text-[20px]">{isGeneralMode ? 'toggle_on' : 'toggle_off'}</span>
                         {isGeneralMode ? 'General Activo' : 'Actividad General'}
                     </Button>
                     <div className="w-px h-8 bg-slate-200 dark:bg-slate-700 mx-1 self-center"></div>
@@ -463,61 +448,108 @@ const EditSessionView = ({ session, onSave, onCancel, currentDaySessions = [] })
                     <div className="bg-white dark:bg-card-dark rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden">
                         <div className="px-5 py-3 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/20 font-bold text-sm text-slate-900 dark:text-white uppercase tracking-wide">Horario</div>
                         <div className="p-5 flex flex-col gap-4">
-                            {timeSlots.length > 0 ? (
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Seleccionar Bloque Horario</label>
+
+                            {/* Block Selector */}
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Bloque Horario</label>
+                                {availableBlocks.length > 0 ? (
                                     <select
                                         className="block w-full rounded-lg border-0 px-4 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm dark:bg-slate-800/50 dark:ring-slate-700 dark:text-white"
-                                        value={`${formData.timeStart || ''} - ${formData.timeEnd || ''}`}
+                                        value={formData.blockId || ''}
                                         onChange={(e) => {
-                                            const [start, end] = e.target.value.split(' - ');
-                                            setFormData(prev => ({ ...prev, timeStart: start, timeEnd: end }));
+                                            const blockId = parseInt(e.target.value);
+                                            const block = availableBlocks.find(b => b.id === blockId);
+                                            if (block) {
+                                                setFormData(prev => ({
+                                                    ...prev,
+                                                    blockId: blockId,
+                                                    timeStart: block.startTime.slice(0, 5),
+                                                    timeEnd: block.endTime.slice(0, 5)
+                                                }));
+                                            }
                                         }}
                                     >
-                                        <option value="">-- Seleccionar --</option>
-                                        {availableTimeSlots.map(slot => (
-                                            <option key={slot.id} value={`${slot.start} - ${slot.end}`} disabled={slot.disabled} className={slot.disabled ? 'text-red-300 bg-red-50' : ''}>
-                                                {slot.label || `${slot.start} - ${slot.end}`}
-                                                {slot.disabled ? ' (Ocupado)' : ''}
-                                                {(() => {
-                                                    const start = new Date(`2000-01-01T${slot.start}`);
-                                                    const end = new Date(`2000-01-01T${slot.end}`);
-                                                    const diff = (end - start) / (1000 * 60);
-                                                    return diff > 0 && !slot.disabled ? ` (${diff} min)` : '';
-                                                })()}
-                                            </option>
-                                        ))}
+                                        <option value="">-- Seleccionar Bloque --</option>
+                                        {availableBlocks.map(block => {
+                                            // Enhanced Occupancy Check: Time Overlap + Location Valid
+                                            const isTaken = currentDaySessions.some(s => {
+                                                if (s.id === formData.id) return false;
+
+                                                // Location Check: Prioritize ID match, fallback to name
+                                                const sameLocation = (s.locationId && formData.locationId)
+                                                    ? s.locationId === formData.locationId
+                                                    : s.location === formData.location;
+
+                                                if (!sameLocation) return false;
+
+                                                // Check if session S overlaps with BLOCK time
+                                                // Block: [block.start, block.end]
+                                                // Session: [s.timeStart, s.timeEnd]
+
+                                                const bStart = block.startTime.slice(0, 5);
+                                                const bEnd = block.endTime.slice(0, 5);
+                                                const sStart = s.timeStart;
+                                                const sEnd = s.timeEnd;
+
+                                                return sStart < bEnd && sEnd > bStart;
+                                            });
+
+                                            return (
+                                                <option key={block.id} value={block.id} disabled={isTaken} className={isTaken ? 'text-slate-400 bg-slate-100 italic' : ''}>
+                                                    {block.name} ({block.startTime.slice(0, 5)} - {block.endTime.slice(0, 5)}) {isTaken ? '(Ocupado)' : ''}
+                                                </option>
+                                            );
+                                        })}
                                     </select>
-                                    <p className="mt-2 text-xs text-slate-500">
-                                        {availableTimeSlots.some(s => s.disabled)
-                                            ? 'Algunos horarios están deshabilitados porque la sala está ocupada.'
-                                            : 'Selecciona un horario libre.'}
+                                ) : (
+                                    <p className="text-xs text-amber-600 bg-amber-50 p-2 rounded">
+                                        No hay bloques configurados para este día. Cree bloques en "Configuración {'>'} Días del Evento".
                                     </p>
-                                </div>
-                            ) : (
-                                <>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Inicio</label>
-                                        <input
-                                            className="block w-full rounded-lg border-0 px-4 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm dark:bg-slate-800/50 dark:ring-slate-700 dark:text-white"
-                                            name="timeStart"
-                                            type="time"
-                                            value={formData.timeStart}
-                                            onChange={handleChange}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Fin</label>
-                                        <input
-                                            className="block w-full rounded-lg border-0 px-4 py-2 text-slate-900 shadow-sm ring-1 ring-inset ring-slate-300 focus:ring-2 focus:ring-inset focus:ring-primary sm:text-sm dark:bg-slate-800/50 dark:ring-slate-700 dark:text-white"
-                                            name="timeEnd"
-                                            type="time"
-                                            value={formData.timeEnd}
-                                            onChange={handleChange}
-                                        />
-                                    </div>
-                                </>
-                            )}
+                                )}
+                            </div>
+
+
+
+                            {/* Overlap Warning */}
+                            {(() => {
+                                const overlap = currentDaySessions.find(s => {
+                                    if (s.id === formData.id) return false; // Ignore self
+
+                                    // Location check (Prioritize ID)
+                                    const sameLocation = (s.locationId && formData.locationId)
+                                        ? s.locationId === formData.locationId
+                                        : s.location === formData.location;
+
+                                    if (!sameLocation) return false;
+
+                                    // Time Overlap Logic: (StartA < EndB) and (EndA > StartB)
+                                    // Normalize times to comparable strings or numbers
+                                    const startA = formData.timeStart;
+                                    const endA = formData.timeEnd;
+                                    const startB = s.timeStart;
+                                    const endB = s.timeEnd;
+
+                                    // Simple string comparison works for ISO HH:MM
+                                    return startA < endB && endA > startB;
+                                });
+
+                                if (overlap) {
+                                    return (
+                                        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-start gap-3 animate-fadeIn">
+                                            <span className="material-symbols-outlined text-red-600 dark:text-red-400 mt-0.5">warning</span>
+                                            <div>
+                                                <h4 className="text-sm font-bold text-red-800 dark:text-red-300">Conflicto de Horario Detectado</h4>
+                                                <p className="text-xs text-red-700 dark:text-red-400 mt-1">
+                                                    Ya existe una actividad en <strong>{overlap.location}</strong> que se cruza con este horario:
+                                                    <br />
+                                                    • {overlap.title} ({overlap.timeStart} - {overlap.timeEnd})
+                                                </p>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                return null;
+                            })()}
                         </div>
                     </div>
 

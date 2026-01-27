@@ -36,7 +36,7 @@ export const generateAgreementId = () => {
  */
 export const createEmptyAgreement = () => ({
     id: generateAgreementId(),
-    text: '',
+    content: '',
     children: []
 });
 
@@ -49,7 +49,7 @@ export const flattenAgreements = (agreements, level = 1, result = []) => {
         const numbering = getNumbering(level, index);
         result.push({
             numbering,
-            text: agreement.text,
+            content: agreement.content,
             level,
             id: agreement.id
         });
@@ -63,22 +63,36 @@ export const flattenAgreements = (agreements, level = 1, result = []) => {
 };
 
 /**
- * Migrate old agreement format (array of strings) to new format
+ * Migrate old agreement format (array of strings) or JSON objects without IDs to new format
  */
 export const migrateAgreements = (agreements) => {
     if (!agreements || agreements.length === 0) return [];
 
-    // Check if already in new format
-    if (typeof agreements[0] === 'object' && agreements[0].id) {
-        return agreements;
-    }
+    return agreements.map(item => {
+        // If it's already a full object with ID, just process children recursively
+        if (typeof item === 'object' && item !== null && item.id) {
+            return {
+                ...item,
+                children: migrateAgreements(item.children || [])
+            };
+        }
 
-    // Convert strings to new format
-    return agreements.map(text => ({
-        id: generateAgreementId(),
-        text: text || '',
-        children: []
-    }));
+        // If it's a JSON object without ID (e.g. from next_meeting_agenda)
+        if (typeof item === 'object' && item !== null && !item.id) {
+            return {
+                id: generateAgreementId(),
+                content: item.content || '',
+                children: migrateAgreements(item.children || [])
+            };
+        }
+
+        // If it's a plain string
+        return {
+            id: generateAgreementId(),
+            content: item || '',
+            children: []
+        };
+    });
 };
 
 /**

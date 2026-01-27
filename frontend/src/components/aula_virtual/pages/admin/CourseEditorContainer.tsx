@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import CourseEditor from './CourseEditor';
 import Swal from 'sweetalert2';
 import { useAulaVirtual } from '../../context/AulaVirtualContext';
+import { api, canUserAccessCourse } from '../../../../services/api';
 
 type ViewType = 'list' | 'edit';
 
@@ -11,9 +12,35 @@ interface CourseEditorContainerProps {
 
 const CourseEditorContainer: React.FC<CourseEditorContainerProps> = ({ onUnsavedChanges }) => {
     const [view, setView] = useState<ViewType>('list');
-    const [selectedCourseId, setSelectedCourseId] = useState<number | null>(null);
+    const [selectedCourseId, setSelectedCourseId] = useState<number | string | null>(null);
 
-    const handleEditCourse = (courseId: number) => {
+    // 💉 ESTADO NUEVO: Listas Maestras para el Modal (CourseEditor)
+    const [allModalities, setAllModalities] = useState<any[]>([]);
+    const [allWorkshops, setAllWorkshops] = useState<any[]>([]);
+    const [allRoles, setAllRoles] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadMasterData = async () => {
+            try {
+                // Fetch Data from Dedicated Endpoints for robust lists
+                const [modalitiesData, rolesData, configData] = await Promise.all([
+                    api.system.getModalities(),
+                    api.system.getRoles(),
+                    api.system.getConfig()
+                ]);
+
+                // Prioritize dedicated endpoint data, fallback to system config if needed
+                setAllModalities(modalitiesData.length > 0 ? modalitiesData : (configData as any).registration_modalities || []);
+                setAllRoles(rolesData.length > 0 ? rolesData : []);
+                setAllWorkshops((configData as any).workshops || []);
+            } catch (error) {
+                console.error("Error loading master data:", error);
+            }
+        };
+        loadMasterData();
+    }, []);
+
+    const handleEditCourse = (courseId: number | string) => {
         setSelectedCourseId(courseId);
         setView('edit');
     };
@@ -32,7 +59,16 @@ const CourseEditorContainer: React.FC<CourseEditorContainerProps> = ({ onUnsaved
     };
 
     if (view === 'edit') {
-        return <CourseEditor onBack={handleBackToList} courseId={selectedCourseId} onUnsavedChanges={onUnsavedChanges} />;
+        return (
+            <CourseEditor
+                onBack={handleBackToList}
+                courseId={selectedCourseId}
+                onUnsavedChanges={onUnsavedChanges}
+                allModalities={allModalities}
+                allWorkshops={allWorkshops}
+                allRoles={allRoles}
+            />
+        );
     }
 
     return <CourseListView onCreate={handleCreateCourse} onEdit={handleEditCourse} />;
@@ -41,26 +77,38 @@ const CourseEditorContainer: React.FC<CourseEditorContainerProps> = ({ onUnsaved
 // ========== COURSE LIST VIEW ==========
 interface CourseListViewProps {
     onCreate: () => void;
-    onEdit: (courseId: number) => void;
+    onEdit: (courseId: number | string) => void;
 }
 
 const CourseListView: React.FC<CourseListViewProps> = ({ onCreate, onEdit }) => {
     const { courses, deleteCourse, addCourse, getStats, getModulesByCourseId, getLessonsByModuleId, getMaterialsByCourseId } = useAulaVirtual();
     const [searchTerm, setSearchTerm] = useState('');
+    const [users, setUsers] = useState<any[]>([]);
+
+    React.useEffect(() => {
+        api.users.getAll().then(setUsers);
+    }, []);
+
+    const countQualifyingStudents = (course: any) => {
+        if (!users.length) return 0;
+        // Construct a safe course object if config is missing (though api handles it)
+        const safeCourse = { ...course, accessConfig: course.accessConfig || { modalities: [], workshops: [] } };
+        return users.filter(u => canUserAccessCourse(u, safeCourse)).length;
+    };
 
     // Transform courses for display
     const displayCourses = courses.map(course => ({
         id: course.id,
         title: course.title,
         created: `Creado el ${new Date(course.createdAt).toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`,
-        students: course.enrolledStudents,
+        students: countQualifyingStudents(course), // Dynamic Count
         rating: course.rating,
         status: course.status,
         gradient: course.coverGradient,
         coverImage: course.coverImage
     }));
 
-    const handleDuplicate = (courseId: number) => {
+    const handleDuplicate = (courseId: number | string) => {
         const originalCourse = courses.find(c => c.id === courseId);
         if (originalCourse) {
             // 1. Hydrate Modules (if not already embedded)
@@ -92,7 +140,7 @@ const CourseListView: React.FC<CourseListViewProps> = ({ onCreate, onEdit }) => 
 
             const newCourse = {
                 ...clonedCourse,
-                id: Math.max(...courses.map(c => c.id)) + 1,
+                id: `Cu_${Date.now()}`,
                 title: `${originalCourse.title} (Copia)`,
                 slug: `${originalCourse.slug}-copia-${Date.now()}`,
                 createdAt: new Date().toISOString(),

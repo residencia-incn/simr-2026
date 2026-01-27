@@ -1,5 +1,8 @@
 import React from 'react';
-import { LogOut, Users, FileText, BookOpen, Award, DollarSign, User, CircleUser } from 'lucide-react';
+import {
+    LogOut, Users, FileText, BookOpen, Award, DollarSign, User, CircleUser,
+    ShieldCheck, UserCheck, Microscope, GraduationCap, Gavel, FolderOpen, Presentation, QrCode
+} from 'lucide-react';
 
 export const ROLE_LABELS = {
     organizacion: 'Organización',
@@ -11,20 +14,20 @@ export const ROLE_LABELS = {
     aula_virtual: 'Aula Virtual',
     trabajos: 'Trabajos',
     academico: 'Académico',
-    perfil_basico: 'Mi Perfil'
+    mi_perfil: 'Mi Perfil'
 };
 
 export const ROLE_ICONS = {
-    organizacion: Users,
+    organizacion: ShieldCheck,
     secretaria: FileText,
-    investigacion: BookOpen,
-    asistencia: Users,
-    jurado: Award,
+    investigacion: Microscope,
+    asistencia: QrCode,
+    jurado: Gavel,
     contabilidad: DollarSign,
-    aula_virtual: Users,
-    trabajos: User,
-    academico: BookOpen,
-    perfil_basico: CircleUser
+    aula_virtual: Presentation,
+    trabajos: FolderOpen,
+    academico: GraduationCap,
+    mi_perfil: CircleUser
 };
 
 /**
@@ -82,7 +85,7 @@ const ProfileDropdown = ({
                     {(() => {
                         const uniqueLabels = new Set();
                         return user.modules
-                            .filter(m => m !== 'perfil_basico' && m !== 'mi_perfil' && m !== 'ponente')
+                            .filter(m => m !== 'mi_perfil' && m !== 'ponente' && m !== 'organizador' && m !== 'asistente' && m !== 'participante')
                             .filter(module => {
                                 const label = ROLE_LABELS[module] || module;
                                 if (uniqueLabels.has(label)) return false;

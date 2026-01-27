@@ -8,6 +8,7 @@ import {
     Calendar, Tag, BookOpen, Edit3
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { showWarning, showError } from '../../utils/alerts';
 
 const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
     // Determine if we are in 'edit' mode based on prop AND if onSave is provided
@@ -76,7 +77,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
         try {
             // Validation
             if (academicConfig?.titleWordLimit && countWords(formData.title) > academicConfig.titleWordLimit) {
-                alert(`El título excede el límite de ${academicConfig.titleWordLimit} palabras.`);
+                showWarning(`El título excede el límite de ${academicConfig.titleWordLimit} palabras.`, 'Límite Rebasado');
                 setIsSaving(false);
                 return;
             }
@@ -91,7 +92,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
             onClose();
         } catch (error) {
             console.error("Error saving work", error);
-            alert("Error al guardar cambios.");
+            showError("Error al guardar cambios.");
         } finally {
             setIsSaving(false);
         }
@@ -142,7 +143,7 @@ const WorkModal = ({ isOpen, onClose, work, mode = 'view', onSave }) => {
                     </h3>
                 )}
                 {!isEditing && (
-                    <Badge type={work.status === 'Aceptado' ? 'success' : work.status === 'Rechazado' ? 'error' : 'warning'}>
+                    <Badge type={work.status?.toLowerCase() === 'aceptado' ? 'success' : work.status?.toLowerCase() === 'rechazado' ? 'error' : 'warning'}>
                         {work.status}
                     </Badge>
                 )}

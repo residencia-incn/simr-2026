@@ -25,19 +25,58 @@ export interface NavItem {
 }
 
 export interface Question {
-  id: number;
+  id: number | string;
   text: string;
   type: 'multiple_choice' | 'true_false' | 'short_answer';
   points: number;
+  options?: { id: string; text: string; isCorrect: boolean }[];
+  correctAnswer?: boolean | string | string[]; // For true_false or short_answer
+  image?: string;
+  tags?: string[];
+  justification?: string;
+  feedback?: string; // Feedback text
+}
+
+export interface Exam {
+  id: number | string;
+  title: string;
+  courseId?: number;
+  courseName?: string;
+  description?: string;
+  status: 'BORRADOR' | 'PUBLICADO' | 'CERRADO';
+  timeLimit: number; // minutes
+  attempts: number;
+  passingScore: number; // percentage
+  minScore?: number; // Alias for passingScore compatibility
+  randomOrder: boolean;
+  showResults: boolean;
+  concentrationMode?: boolean;
+  questions: Question[];
+  createdAt: string;
+  updatedAt: string;
+  totalAttempts?: number;
+}
+
+export interface StudentExamAttempt {
+  id: string; // Unique attempt ID
+  examId: string | number;
+  userId: string;
+  courseId?: number;
+  startedAt: string;
+  completedAt?: string;
+  status: 'IN_PROGRESS' | 'COMPLETED' | 'ABANDONED';
+  score?: number; // 0-100
+  answers: Record<string | number, any>; // questionId -> answer
+  timeSpent: number; // in seconds
 }
 
 export type VideoSourceType = 'local' | 'youtube' | 'vimeo' | 'gdrive' | 'bunny' | 'cloudflare';
 
 export interface Video {
-  id: number;
+  id: number | string;
   title: string;
   description: string;
-  courseId?: number;
+  courseId?: number | string;
   courseName: string;
   associatedCourses?: string[];
   category: string;
@@ -85,6 +124,7 @@ export interface Lesson {
   content?: string | null;
   downloadUrl?: string;
   completedBy?: string[];
+  startDate?: string; // Optional start date for scheduled lessons (e.g. Quizzes)
 
   // Video Player Props
   videoId?: number; // Link to central video repository
@@ -110,16 +150,17 @@ export interface UserLessonProgress {
     lastPosition?: number;
   };
   completed: boolean;
+  isUnlocked?: boolean; // 0 (false/undefined) = Locked, 1 (true) = Unlocked
   updatedAt: string;
 }
 
 export interface VideoNote {
   id: string;
   userId: string;
-  courseId: number;
-  moduleId: number;
-  lessonId: number;
-  videoId?: number;
+  courseId: number | string;
+  moduleId: number | string;
+  lessonId: number | string;
+  videoId?: number | string;
   content: string; // HTML content
   timestamp: number; // Video time in seconds
   formattedTimestamp: string; // "03:45"
@@ -128,8 +169,8 @@ export interface VideoNote {
 }
 
 export interface Module {
-  id: number;
-  courseId: number;
+  id: number | string;
+  courseId: number | string;
   title: string;
   name?: string; // Helper for compatibility
   description?: string;
@@ -143,7 +184,7 @@ export interface Module {
 }
 
 export interface Course {
-  id: number;
+  id: number | string;
   title: string;
   slug?: string;
   description: string;
@@ -190,8 +231,8 @@ export interface Course {
 }
 
 export interface Enrollment {
-  id: number;
-  courseId: number;
+  id: number | string;
+  courseId: number | string;
   userId: string;
   userName: string;
   userEmail: string;
@@ -204,9 +245,9 @@ export interface Enrollment {
 }
 
 export interface CourseMaterial {
-  id: number;
-  courseId: number;
-  moduleId: number;
+  id: number | string;
+  courseId: number | string;
+  moduleId: number | string;
   name: string;
   type: string;
   size: string;
@@ -235,7 +276,8 @@ export interface User {
   roles?: string[]; // Legacy
   eventRole?: string; // New RBAC
   eventRoles?: string[]; // New RBAC
-  modality?: string;
+  modules?: string[];
+  registrationType?: string;
   purchasedItems?: string[];
   specialty?: string;
   occupation?: string;

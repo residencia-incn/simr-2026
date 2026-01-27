@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor, UserCog } from 'lucide-react';
+import { Search, Trash2, Key, Shield, AlertTriangle, Printer, Download, Brain, Stethoscope, Baby, Activity, Wifi, MapPin, Monitor, UserCog, Eye } from 'lucide-react';
 import { api } from '../../services/api';
 import { Button, FormField, Table, Modal, Badge } from '../ui';
 import { showSuccess, showError } from '../../utils/alerts';
 
 import { useModal, useSearch, useSortableData } from '../../hooks';
-import AttendeeDetailsModal from './AttendeeDetailsModal';
+import UserDetailModal from '../organization/UserDetailModal';
 
 import RoleModal from './RoleModal';
 import PermissionsModal from './PermissionsModal';
@@ -16,6 +16,7 @@ const UserManagement = () => {
     const [selectedUser, setSelectedUser] = useState(null);
     const [actionType, setActionType] = useState(null);
     const [ticketMap, setTicketMap] = useState({});
+    const [rolesConfig, setRolesConfig] = useState({});
 
     // Modal for Details
     const {
@@ -28,10 +29,11 @@ const UserManagement = () => {
     const loadUsers = async () => {
         setLoading(true);
         try {
-            // Cargar Usuarios y Configuración de Precios (para nombres de modalidades)
-            const [usersData, pricingData] = await Promise.all([
+            // Cargar Usuarios, Configuración de Precios (para nombres de modalidades) y Matriz de Roles
+            const [usersData, pricingData, rolesMatrix] = await Promise.all([
                 api.users.getAll(),
-                api.treasury.getPricing()
+                api.treasury.getPricing(),
+                api.system.getRolesMatrix()
             ]);
 
             // Crear mapa de Code -> Title
@@ -40,6 +42,7 @@ const UserManagement = () => {
                 pricingData.ticketTypes.forEach(t => map[t.id] = t.title);
             }
             setTicketMap(map);
+            setRolesConfig(rolesMatrix?.roles || {});
             setUsers(usersData);
         } catch (error) {
             console.error("Error loading users:", error);
@@ -94,19 +97,11 @@ const UserManagement = () => {
 
         try {
             if (actionType === 'delete') {
-                // Delete from Users (Account)
                 if (selectedUser.id) {
                     await api.users.delete(selectedUser.id);
                 }
 
-                // Delete from Attendees (Registration Record)
-                if (selectedUser.attendeeId) {
-                    await api.attendees.delete(selectedUser.attendeeId);
-                }
-
-                // NOTE: Treasury records are intentionally PRESERVED per requirements.
-
-                showSuccess(`Los registros de tesorería ("Contabilidad") se mantienen intactos.`, `Usuario ${selectedUser.name} eliminado`);
+                showSuccess(`Usuario ${selectedUser.name} eliminado correctamente.`);
                 loadUsers();
             } else if (actionType === 'reset') {
                 await api.users.resetPassword(selectedUser.id);
@@ -178,22 +173,45 @@ const UserManagement = () => {
         }
     };
 
+    // State for modal tab
+    const [initialDetailTab, setInitialDetailTab] = useState('general');
+
     const columns = [
         { header: 'Apellidos', key: 'lastName', sortable: true, className: 'font-medium text-gray-900', render: (item) => item.lastName || (item.name || '').split(' ').slice(0, 2).join(' ') },
         { header: 'Nombres', key: 'firstName', sortable: true, render: (item) => item.firstName || (item.name || '').split(' ').slice(2).join(' ') },
         { header: 'DNI', key: 'dni', sortable: true },
         { header: 'Ocupación', key: 'occupation' },
         {
+            header: 'Módulos',
+            key: 'modules',
+            className: 'text-center',
+            render: (user) => {
+                const count = (user.modules || []).length;
+                return count > 0 ? (
+                    <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded text-xs font-bold border border-indigo-100">
+                        {count} Módulos
+                    </span>
+                ) : (
+                    <span className="text-gray-400 text-xs">-</span>
+                );
+            }
+        },
+        {
             header: 'Rol',
-            key: 'eventRoles',
-            sortable: true,
             render: (user) => {
                 // Soporte para array eventRoles o string legado eventRole
-                const roles = user.eventRoles || (user.eventRole ? [user.eventRole] : ['asistente']);
+                const rawRoles = user.roles && user.roles.length > 0 ? user.roles : (user.eventRole ? [user.eventRole] : ['asistente']);
+
+                // Ordenar por prioridad (1 es mayor, 99 es menor)
+                const sortedRoles = [...rawRoles].sort((a, b) => {
+                    const prioA = rolesConfig[a]?.priority ?? 99;
+                    const prioB = rolesConfig[b]?.priority ?? 99;
+                    return prioA - prioB;
+                });
 
                 return (
                     <div className="flex flex-wrap gap-1">
-                        {roles.map((role, idx) => {
+                        {sortedRoles.map((role, idx) => {
                             let colorClass = 'bg-gray-100 text-gray-700';
                             let label = role;
 
@@ -211,13 +229,18 @@ const UserManagement = () => {
                                     label = 'Ponente';
                                     break;
                                 case 'asistente':
+                                case 'participante':
                                     colorClass = 'bg-green-100 text-green-700 border border-green-200';
                                     label = 'Asistente';
+                                    break;
+                                case 'admin':
+                                    colorClass = 'bg-slate-800 text-white border border-slate-600';
+                                    label = 'Admin';
                                     break;
                             }
 
                             return (
-                                <span key={idx} className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${colorClass}`}>
+                                <span key={idx} className={`px-2 py-0.5 rounded-full text-[11px] font-medium ${colorClass} uppercase`}>
                                     {label}
                                 </span>
                             );
@@ -256,7 +279,7 @@ const UserManagement = () => {
             key: 'ticketType', // Changed key to reflect source of truth
             className: 'text-left w-40',
             render: (user) => {
-                const modName = ticketMap[user.ticketType] || user.modality || (user.ticketType ? 'Desconocido' : 'Presencial');
+                const modName = user.modalityName || user.modality || (user.ticketType ? ticketMap[user.ticketType] : 'Presencial');
 
                 let Icon = MapPin;
                 let colorClass = 'text-green-700 bg-green-50 border-green-200';
@@ -278,7 +301,12 @@ const UserManagement = () => {
                 );
             }
         },
-        { header: 'Fecha Reg.', key: 'date', sortable: true }
+        {
+            header: 'Fecha Reg.',
+            key: 'registrationDate',
+            sortable: true,
+            render: (user) => user.registrationDate ? new Date(user.registrationDate).toLocaleDateString('es-PE') : '-'
+        }
     ];
 
     return (
@@ -294,10 +322,13 @@ const UserManagement = () => {
                 <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto items-center">
                     <div className="relative w-64">
                         <FormField
+                            id="user-search-input"
+                            name="search"
                             placeholder="Buscar usuario..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             className="mb-0"
+                            autoComplete="off"
                         />
                         <Search className="absolute right-3 top-3 text-gray-400" size={18} />
                     </div>
@@ -307,10 +338,10 @@ const UserManagement = () => {
                         onChange={(e) => setFilterRole(e.target.value)}
                         options={[
                             { value: "All", label: "Todos los Roles" },
-                            { value: "asistente", label: "Asistentes" },
+                            { value: "asistente", label: "Participantes" },
                             { value: "ponente", label: "Ponentes" },
                             { value: "jurado", label: "Jurados" },
-                            { value: "organizador", label: "Comité" },
+                            { value: "organizador", label: "Organizadores" },
                             { value: "admin", label: "Administradores" }
                         ]}
                         className="mb-0 min-w-[180px]"
@@ -324,24 +355,28 @@ const UserManagement = () => {
                     data={currentItems}
                     onSort={requestSort}
                     sortConfig={{ key: sortedUsers.sortKey, direction: sortedUsers.sortDirection }}
-                    onRowClick={openDetails}
+                    onRowClick={(user) => { setInitialDetailTab('general'); openDetails(user); }}
                     actions={(user) => (
                         <div className="flex gap-2">
+                            {/* BOTÓN OJO: Ver Detalles de Perfil */}
                             <button
-                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('event_role'); }}
-                                className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
-                                title="Roles"
+                                onClick={(e) => { e.stopPropagation(); setInitialDetailTab('general'); openDetails(user); }}
+                                className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                title="Ver Perfil Completo"
                             >
-                                <UserCog size={18} />
+                                <Eye size={18} />
                             </button>
 
+                            {/* BOTÓN ESCUDO: Gestión de Acceso */}
                             <button
-                                onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('permissions'); }}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Módulos de Acceso"
+                                onClick={(e) => { e.stopPropagation(); setInitialDetailTab('seguridad'); openDetails(user); }}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                title="Gestión de Acceso y Roles"
                             >
                                 <Shield size={18} />
                             </button>
+
+                            {/* BOTÓN LLAVE: Reset Rápido (Opcional, también está en modal) */}
                             <button
                                 onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('reset'); }}
                                 className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
@@ -349,6 +384,7 @@ const UserManagement = () => {
                             >
                                 <Key size={18} />
                             </button>
+
                             <button
                                 onClick={(e) => { e.stopPropagation(); setSelectedUser(user); setActionType('delete'); }}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -402,25 +438,14 @@ const UserManagement = () => {
                 )}
             </div>
 
-            <RoleModal
-                isOpen={actionType === 'event_role'}
-                onClose={() => { setSelectedUser(null); setActionType(null); }}
-                user={selectedUser}
-                onSave={handleUpdateEventRole}
-            />
-
-            <PermissionsModal
-                isOpen={actionType === 'permissions'}
-                onClose={() => { setSelectedUser(null); setActionType(null); }}
-                user={selectedUser}
-                onSave={handleUpdatePermissions}
-            />
-
-            <AttendeeDetailsModal
-                isOpen={isDetailsOpen}
-                onClose={closeDetails}
-                attendee={detailsAttendee}
-            />
+            {isDetailsOpen && (
+                <UserDetailModal
+                    userId={detailsAttendee?.id}
+                    onClose={closeDetails}
+                    onUserUpdated={loadUsers}
+                    initialTab={initialDetailTab}
+                />
+            )}
 
             {/* Confirmation Modal */}
             {selectedUser && (actionType === 'delete' || actionType === 'reset') && (

@@ -6,10 +6,9 @@ import LoadingSpinner from '../components/ui/LoadingSpinner';
 import Button from '../components/ui/Button';
 import { useApi } from '../hooks/useApi';
 import { api } from '../services/api';
-import { showSuccess, showError } from '../utils/alerts';
+import { showSuccess, showError, showConfirm, showDeleteConfirm } from '../utils/alerts';
 
 const AdmissionDashboard = () => {
-    const [activeTab, setActiveTab] = useState('list'); // 'list' | 'verification'
     const {
         data: attendees,
         loading: loadingAttendees,
@@ -22,31 +21,6 @@ const AdmissionDashboard = () => {
         reload: reloadPending
     } = useApi(api.registrations.getAll);
 
-    const handleApproveRegistration = async (reg) => {
-        if (confirm(`¿Confirmar inscripción de ${reg.name}?`)) {
-            try {
-                await api.registrations.approve(reg);
-                showSuccess('La inscripción ha sido aprobada correctamente.', 'Inscripción aprobada');
-                reloadAll();
-            } catch (error) {
-                console.error("Error approving registration:", error);
-                const errorMessage = error.message || 'Error desconocido al procesar la inscripción';
-                showError(`No se pudo procesar la inscripción: ${errorMessage}`, 'Error al procesar');
-            }
-        }
-    };
-
-    const handleRejectRegistration = async (id) => {
-        if (confirm('¿Rechazar esta inscripción?')) {
-            try {
-                await api.registrations.remove(id);
-                reloadAll();
-            } catch (error) {
-                console.error("Error rejecting", error);
-            }
-        }
-    };
-
     const reloadAll = () => {
         reloadAttendees();
         reloadPending();
@@ -54,42 +28,19 @@ const AdmissionDashboard = () => {
 
     const isLoading = loadingAttendees || loadingPending;
 
-    if (isLoading && !attendees && !pendingRegistrations) {
+    if (isLoading && !attendees) {
         return (
             <div className="flex justify-center items-center h-64">
                 <LoadingSpinner size="lg" message="Cargando panel de admisión..." />
             </div>
         );
     }
-
     return (
         <div className="animate-fadeIn space-y-8">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div>
                     <h2 className="text-2xl font-bold text-gray-900">Panel de Admisión</h2>
-                    <p className="text-gray-600">Gestión de asistencia y validación de inscripciones.</p>
-                </div>
-
-                <div className="flex p-1 bg-gray-100 rounded-lg">
-                    <button
-                        onClick={() => setActiveTab('list')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'list' ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                        <Users size={16} />
-                        Lista de Asistentes
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('verification')}
-                        className={`px-4 py-2 text-sm font-medium rounded-md transition-all flex items-center gap-2 ${activeTab === 'verification' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`}
-                    >
-                        <CheckSquare size={16} />
-                        Por Aprobar
-                        {pendingRegistrations && pendingRegistrations.length > 0 && (
-                            <span className="bg-orange-500 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                                {pendingRegistrations.length}
-                            </span>
-                        )}
-                    </button>
+                    <p className="text-gray-600">Gestión de asistencia y consulta de inscripciones confirmadas.</p>
                 </div>
             </div>
 
@@ -120,24 +71,11 @@ const AdmissionDashboard = () => {
                 </div>
             </div>
 
-            {/* Content Content */}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px]">
-                {activeTab === 'list' && (
-                    <div className="p-1">
-                        <AttendeeList attendees={attendees || []} />
-                    </div>
-                )}
-
-                {activeTab === 'verification' && (
-                    <div className="p-6">
-                        <h3 className="text-lg font-bold text-gray-900 mb-4">Solicitudes de Inscripción</h3>
-                        <VerificationList
-                            pendingRegistrations={pendingRegistrations || []}
-                            onApprove={handleApproveRegistration}
-                            onReject={handleRejectRegistration}
-                        />
-                    </div>
-                )}
+            {/* Content Content - Full width list */}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200 min-h-[500px] overflow-hidden">
+                <div className="p-1">
+                    <AttendeeList attendees={attendees || []} />
+                </div>
             </div>
         </div>
     );

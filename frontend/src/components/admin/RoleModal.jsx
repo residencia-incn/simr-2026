@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, User, Users, Scale, Presentation } from 'lucide-react';
-import { EVENT_ROLES, EVENT_ROLE_LABELS } from '../../data/mockData';
+import { EVENT_ROLES, EVENT_ROLE_LABELS } from '../../constants';
 
 /**
  * Modal para gestionar el ROL del evento de un usuario

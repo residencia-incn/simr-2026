@@ -16,7 +16,7 @@ const Table = ({
         return (
             <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
                 <Archive className="mx-auto mb-3 text-gray-300" size={48} />
-                <p className="text-gray-500 font-medium">{emptyMessage}</p>
+                <div className="text-gray-500 font-medium">{emptyMessage}</div>
             </div>
         );
     }

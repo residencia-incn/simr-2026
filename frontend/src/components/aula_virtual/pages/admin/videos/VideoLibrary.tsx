@@ -71,7 +71,7 @@ const VideoLibrary: React.FC = () => {
         } else {
             // Add new video
             const newVideo: Video = {
-                id: Date.now(), // Simple ID generation
+                id: `v_${Date.now()}`, // Standardized ID generation
                 title: data.title,
                 description: data.description,
                 courseName: data.courses[0] || 'Sin asignar',
@@ -335,7 +335,7 @@ const VideoLibrary: React.FC = () => {
                                             // Optional: simple toast or visual feedback could be added here
                                         }}>
                                             <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded border border-gray-200 group-hover/id:bg-blue-50 group-hover/id:text-blue-600 group-hover/id:border-blue-200 transition-colors">
-                                                #{video.id}
+                                                {video.id}
                                             </span>
                                             <span className="material-symbols-outlined text-[14px] text-gray-400 opacity-0 group-hover/id:opacity-100 transition-opacity">content_copy</span>
                                         </div>

@@ -1,0 +1,9 @@
+Users IDs: ['u_70707085', 'u_70939872', 'usr_708055252', 'test-verify-001', 'superadmin-001', 'usr_44332211', 'Spk_0deec0ed', 'Jur_1f50f447', 'Jur_a0a887cb']
+Transactions: 6
+TX ID: 4, UserID: u_70939872, Status: approved, UserExists: True
+TX ID: 5, UserID: u_70707085, Status: approved, UserExists: True
+TX ID: 6, UserID: usr_44332211, Status: approved, UserExists: True
+TX ID: 7, UserID: usr_708055252, Status: approved, UserExists: True
+TX ID: 1, UserID: None, Status: approved, UserExists: False
+TX ID: 8, UserID: test-verify-001, Status: approved, UserExists: True
+Joined rows: 5

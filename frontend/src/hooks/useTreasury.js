@@ -13,6 +13,7 @@ export const useTreasury = () => {
     const [config, setConfig] = useState(null);
     const [categories, setCategories] = useState({ income: [], expense: [] });
     const [fines, setFines] = useState([]);
+    const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
@@ -23,19 +24,33 @@ export const useTreasury = () => {
         setLoading(true);
         setError(null);
         try {
-            const [accs, txs, contrib, budget, cfg, cats, allFines] = await Promise.all([
-                api.treasury.getAccounts(),
+            const results = await Promise.all([
+                api.treasuryConfig.getAccounts(),
                 api.treasury.getTransactionsV2(),
-                api.treasury.getContributionPlan(),
+                api.organizerContributions.getMatrix(),
                 api.treasury.getBudgetPlan(),
-                api.treasury.getConfig(),
+                api.treasuryConfig.getSettings(),
                 api.treasury.getCategories(),
-                api.treasury.getFines()
+                api.organizerContributions.getConfig(),
+                api.organizerContributions.getStats()
             ]);
 
-            setAccounts(accs);
-            // Add type field to transactions based on monto
-            setAccounts(accs);
+            const [accs, txs, contribMatrix, budget, cfg, cats, accountingV2Config, statsData] = results;
+
+            // Normalize accounts: map backend fields to UI fields if necessary
+            // Backend BankAccount: { id, institution: { name, logo_url }, alias, holder_name, account_number, currency, saldo_actual (calculated?) }
+            // UI expects: { id, type: 'bank'|'wallet', nombre (alias), saldo_actual, ... }
+            const normalizedAccounts = accs.map(a => ({
+                ...a,
+                nombre: a.alias || a.holder_name,
+                institutionName: a.institution?.name,
+                institutionLogo: a.institution?.logo_url,
+                type: a.institution?.type,
+                saldo_actual: a.balance || 0,
+                balance: a.balance || 0
+            }));
+
+            setAccounts(normalizedAccounts);
 
             // Normalize transactions from Spanish (storage) to English (UI)
             const normalizeTransaction = (tx) => ({
@@ -51,12 +66,80 @@ export const useTreasury = () => {
             });
 
             const txsNormalized = txs.map(normalizeTransaction);
+
             setTransactions(txsNormalized);
-            setContributionPlan(contrib);
+            setContributionPlan(contribMatrix);
             setBudgetPlan(budget);
-            setConfig(cfg);
-            setCategories(cats);
-            setFines(allFines || []);
+
+            // --- MERGE & SYNTHESIZE CONFIG ---
+            // Backend V2 only returns start_month/end_month. Frontend 'ContributionsManager' needs 'months' array.
+            let synthesizedMonths = [];
+            if (accountingV2Config && accountingV2Config.start_month && accountingV2Config.end_month) {
+                // Parse manually to avoid JS Date timezone shifts (YYYY-MM-DD -> UTC -> Local can shift)
+                const [sY, sM] = accountingV2Config.start_month.split('-').map(Number);
+                const [eY, eM] = accountingV2Config.end_month.split('-').map(Number);
+
+                const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                const shortNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+                const deadlineDay = accountingV2Config.payment_deadline_day || 29;
+
+                let currY = sY;
+                let currM = sM; // 1-indexed
+                const endVal = eY * 12 + eM;
+
+                let safeCounter = 0;
+                while ((currY * 12 + currM) <= endVal && safeCounter < 24) {
+                    const mIndex = currM - 1; // 0-11
+
+                    // Generate deadline string safely: YYYY-MM-DD
+                    // Use last day of month if deadlineDay exceeds it (e.g., Feb 30 -> 28)
+                    const lastDay = new Date(currY, currM, 0).getDate();
+                    const day = Math.min(deadlineDay, lastDay);
+                    const deadlineStr = `${currY}-${String(currM).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+                    synthesizedMonths.push({
+                        id: shortNames[mIndex],
+                        label: monthNames[mIndex],
+                        deadline: deadlineStr
+                    });
+
+                    // Advance month
+                    currM++;
+                    if (currM > 12) {
+                        currM = 1;
+                        currY++;
+                    }
+                    safeCounter++;
+                }
+            }
+
+            // Merge legacy config with V2 config and the synthesized months
+            // Priority: V2 config > Legacy config
+            setConfig({
+                ...cfg,
+                accountingV2: accountingV2Config,
+                contribution: {
+                    ...(cfg?.contribution || {}),
+                    months: synthesizedMonths.length > 0 ? synthesizedMonths : (cfg?.contribution?.months || []),
+                    monthlyAmount: accountingV2Config?.monthly_fee || cfg?.contribution?.monthlyAmount || 0
+                }
+            });
+
+            setStats(statsData);
+
+            // Fines are now inside the matrix items, but we can set global fines if needed 
+            // for other legacy components. For now, empty as the matrix handles it.
+            setFines([]);
+
+            // Categorize categories for cleaner UI usage
+            const categorizedCats = {
+                income: Array.isArray(cats) ? cats.filter(c => c.type === 'income') : [],
+                expense: Array.isArray(cats) ? cats.filter(c => c.type === 'expense') : []
+            };
+            setCategories(categorizedCats);
+
+            // Fix: allFines was not defined. Using empty array as fines are handled in matrix now.
+            // setFines([]); // Already set above
         } catch (err) {
             console.error('Error loading treasury data:', err);
             setError(err.message);
@@ -140,43 +223,36 @@ export const useTreasury = () => {
      * Estado de aportes por organizador
      */
     const contributionStatus = useMemo(() => {
-        if (!contributionPlan.length || !config) return [];
+        // Now contributionPlan IS the matrix from backend
+        return contributionPlan.map(item => {
+            // Ensure contributions have a monthId for consistent mapping
+            const enhancedContributions = item.contributions.map(c => ({
+                ...c,
+                monthId: c.month // Assuming 'month' field exists and can be used as an ID
+            }));
 
-        const organizerMap = new Map();
-
-        contributionPlan.forEach(contrib => {
-            if (!organizerMap.has(contrib.organizador_id)) {
-                organizerMap.set(contrib.organizador_id, {
-                    organizador_id: contrib.organizador_id,
-                    organizador_nombre: contrib.organizador_nombre,
-                    total_esperado: 0,
-                    total_pagado: 0,
-                    meses: {}
-                });
-            }
-
-            const org = organizerMap.get(contrib.organizador_id);
-            org.total_esperado += contrib.monto_esperado;
-            if (contrib.estado === 'pagado') {
-                org.total_pagado += contrib.monto_esperado;
-            }
-            org.meses[contrib.mes] = contrib.estado;
+            return {
+                organizador_id: item.id,
+                organizador_nombre: item.name,
+                total_esperado: enhancedContributions.reduce((sum, c) => sum + parseFloat(c.amount || 0), 0) +
+                    item.penalties.reduce((sum, p) => sum + parseFloat(p.amount || 0), 0),
+                total_pagado: enhancedContributions.filter(c => c.status === 'PAID').reduce((sum, c) => sum + parseFloat(c.amount || 0), 0) +
+                    item.penalties.filter(p => p.status === 'PAID').reduce((sum, p) => sum + parseFloat(p.amount || 0), 0),
+                total_due: parseFloat(item.total_due || 0),
+                // Map by monthId for fast lookup
+                meses: enhancedContributions.reduce((acc, c) => ({ ...acc, [c.monthId]: c.status === 'PENDIENTE' ? 'PENDING' : c.status }), {}),
+                contributions: enhancedContributions.map(c => ({
+                    ...c,
+                    status: c.status === 'PENDIENTE' ? 'PENDING' : c.status
+                })),
+                penalties: item.penalties.map(p => ({
+                    ...p,
+                    status: p.status === 'PENDIENTE' ? 'PENDING' : p.status,
+                    amount: parseFloat(p.amount || 0)
+                }))
+            };
         });
-
-        // Add Fines to totals
-        fines.forEach(fine => {
-            if (organizerMap.has(fine.userId)) {
-                const org = organizerMap.get(fine.userId);
-                const amount = parseFloat(fine.monto || 0);
-                org.total_esperado += amount;
-                if (fine.estado === 'pagado') {
-                    org.total_pagado += amount;
-                }
-            }
-        });
-
-        return Array.from(organizerMap.values());
-    }, [contributionPlan, config, fines]);
+    }, [contributionPlan]);
 
     // ==========================================
     // ACCOUNT OPERATIONS
@@ -188,8 +264,20 @@ export const useTreasury = () => {
     const createAccount = useCallback(async (accountData) => {
         try {
             const newAccount = await api.treasury.addAccount(accountData);
-            setAccounts(prev => [...prev, newAccount]);
-            return newAccount;
+
+            // Normalize for UI
+            const normalizedAccount = {
+                ...newAccount,
+                nombre: newAccount.alias || newAccount.holder_name,
+                institutionName: newAccount.institution?.name,
+                institutionLogo: newAccount.institution?.logo_url,
+                type: newAccount.institution?.type,
+                saldo_actual: newAccount.balance || 0,
+                balance: newAccount.balance || 0
+            };
+
+            setAccounts(prev => [...prev, normalizedAccount]);
+            return normalizedAccount;
         } catch (err) {
             console.error('Error creating account:', err);
             throw err;
@@ -202,10 +290,22 @@ export const useTreasury = () => {
     const updateAccount = useCallback(async (accountId, updates) => {
         try {
             const updated = await api.treasury.updateAccount(accountId, updates);
+
+            // Normalize the updated account to match the state format
+            const normalizedUpdated = {
+                ...updated,
+                nombre: updated.alias || updated.holder_name,
+                institutionName: updated.institution?.name,
+                institutionLogo: updated.institution?.logo_url,
+                type: updated.institution?.type,
+                saldo_actual: updated.balance || 0,
+                balance: updated.balance || 0
+            };
+
             setAccounts(prev => prev.map(acc =>
-                acc.id === accountId ? updated : acc
+                acc.id === accountId ? normalizedUpdated : acc
             ));
-            return updated;
+            return normalizedUpdated;
         } catch (err) {
             console.error('Error updating account:', err);
             throw err;
@@ -295,27 +395,24 @@ export const useTreasury = () => {
     /**
      * Registrar aporte de organizador
      */
-    const recordContribution = useCallback(async (organizadorId, meses, accountId, totalAmount, comprobante = null, isValidationRequest = false) => {
+    const recordContribution = useCallback(async (organizadorId, mesesIds, accountId, totalAmount, voucher = null, isValidationRequest = false, penaltyIds = []) => {
         try {
-            if (!config) throw new Error('Treasury config not loaded');
+            const result = await api.organizerContributions.pay({
+                user_id: organizadorId,
+                contribution_ids: mesesIds,
+                penalty_ids: penaltyIds,
+                amount: totalAmount,
+                method: "TRANSFERENCIA",
+                voucher: voucher // Ahora pasamos el archivo real
+            });
 
-            const result = await api.treasury.recordContribution(
-                organizadorId,
-                meses,
-                accountId,
-                totalAmount,
-                comprobante,
-                isValidationRequest
-            );
-
-            // Re-cargar todo para asegurar sincronía perfecta
             await loadTreasuryData();
             return result;
         } catch (err) {
             console.error('Error recording contribution:', err);
             throw err;
         }
-    }, [config, loadTreasuryData]);
+    }, [loadTreasuryData]);
 
     /**
      * Validar/Aprobar aporte pendiente
@@ -334,16 +431,16 @@ export const useTreasury = () => {
     /**
      * Inicializar plan de aportes
      */
-    const initializeContributionPlan = useCallback(async () => {
+    const initializeContributionPlan = useCallback(async (year = 2026) => {
         try {
-            const plan = await api.treasury.initializeContributionPlan();
-            setContributionPlan(plan);
-            return plan;
+            const result = await api.organizerContributions.initializePlan(year);
+            await loadTreasuryData();
+            return result;
         } catch (err) {
             console.error('Error initializing contribution plan:', err);
             throw err;
         }
-    }, []);
+    }, [loadTreasuryData]);
 
     // ==========================================
     // BUDGET OPERATIONS
@@ -402,6 +499,7 @@ export const useTreasury = () => {
         totalExpenses,
         budgetExecution,
         contributionStatus,
+        stats,
 
         // Account Operations
         createAccount,

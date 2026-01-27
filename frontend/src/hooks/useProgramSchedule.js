@@ -1,11 +1,9 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import { INITIAL_SCHEDULE } from '../components/cronograma-integration/data/mockData';
+import Swal from 'sweetalert2';
 
 export const useProgramSchedule = () => {
-    const [scheduleData, setScheduleData] = useState(INITIAL_SCHEDULE);
-    const [rawProgram, setRawProgram] = useState({});
+    const [scheduleData, setScheduleData] = useState([]);
     const [days, setDays] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -13,80 +11,118 @@ export const useProgramSchedule = () => {
     const loadData = useCallback(async () => {
         setLoading(true);
         try {
-            const [daysData, progData] = await Promise.all([
-                api.program.getDays(),
-                api.program.getAll()
+            // 1. Fetch Config (Days) and Activities (Flat list)
+            const [configData, activitiesData] = await Promise.all([
+                api.program.getConfig(),       // { days: [...], blocks: [...] }
+                api.program.getActivities()    // [ { ... }, ... ]
             ]);
 
-            setDays(daysData);
-            setRawProgram(progData || {});
+            const daysList = configData.days || [];
+            setDays(daysList);
 
-            if (daysData && daysData.length > 0 && progData) {
-                const transformedSchedule = daysData.map((day, index) => {
+            // 2. Transform Flat Activities -> Nested Schedule Data
+            if (daysList.length > 0) {
+                const transformedSchedule = daysList.map((day, index) => {
                     const dayNumber = index + 1;
-                    const daySessionsRaw = progData[day.id] || [];
+                    const dayDateStr = day.date; // "YYYY-MM-DD"
 
-                    const sessions = daySessionsRaw.map(s => {
-                        let category = s.category || 'Conferencia';
-                        let categoryColor = s.categoryColor || 'blue';
+                    // Filter activities for this day
+                    const dayActivities = activitiesData.filter(a => {
+                        return a.startTime && a.startTime.startsWith(dayDateStr);
+                    });
 
-                        // Fallback logic for legacy data or if not explicitly set
-                        if (!s.category) {
-                            if (s.type === 'full') {
-                                category = 'Plenaria';
-                                categoryColor = 'indigo';
-                            } else {
-                                category = 'Conferencia Magistral';
-                                categoryColor = 'blue';
-                            }
+                    const sessions = dayActivities.map(s => {
+                        // Extract time HH:MM from ISO
+                        const startDate = new Date(s.startTime);
+                        const endDate = new Date(s.endTime);
+                        const start = startDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+                        const end = endDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
 
-                            if (s.title.toLowerCase().includes('taller')) { category = 'Taller'; categoryColor = 'orange'; }
-                            if (s.title.toLowerCase().includes('mesa')) { category = 'Mesa Redonda'; categoryColor = 'amber'; }
+                        // Map Speaker
+                        const speakers = [];
+                        if (s.speaker_id || s.speaker_name) {
+                            speakers.push({
+                                id: s.speaker_id || 'spk-unknown',
+                                name: s.speaker_name || 'Desconocido',
+                                role: 'Ponente',
+                                imageUrl: s.speaker_photo
+                            });
                         }
 
-                        // Special handling for General Activities
-                        const speakerName = s.speaker || (category === 'GENERAL' ? '' : 'Por confirmar');
-                        const speakers = speakerName ? [{
-                            id: s.id + '-spk',
-                            name: speakerName,
-                            role: 'Ponente',
-                            imageUrl: 'https://ui-avatars.com/api/?name=' + encodeURIComponent(speakerName) + '&background=random'
-                        }] : [];
+                        // Determine Color
+                        let catColor = 'blue';
+                        const type = s.type?.toLowerCase() || 'ponencia';
+                        if (type === 'general') catColor = 'slate';
+                        if (type === 'ceremonia') catColor = 'amber';
 
                         return {
                             id: s.id,
-                            timeStart: s.startTime || s.time.split(' - ')[0],
-                            timeEnd: s.endTime || s.time.split(' - ')[1] || '',
+                            timeStart: start, // "09:00"
+                            timeEnd: end,     // "10:00"
                             title: s.title,
-                            category: category,
-                            categoryColor: categoryColor,
+                            category: s.classification_label || (type === 'ponencia' ? 'Conferencia' : type.charAt(0).toUpperCase() + type.slice(1)),
+                            categoryColor: catColor,
                             speakers: speakers,
-                            location: s.room || 'Auditorio Principal',
-                            status: s.status || 'Publicado', // Read from storage or default
-                            scheduledAt: s.scheduledAt,      // Read from storage
+                            location: s.location?.name || 'Por definir',
+                            virtualLocation: s.location?.urlLink || '',
+                            status: s.status ? s.status.charAt(0).toUpperCase() + s.status.slice(1) : 'Borrador', // "Publicado", "Borrador"
                             description: s.description || '',
-                            linkedWorkId: s.linkedWorkId,
-                            linkedTalkId: s.linkedTalkId,
-                            virtualLocation: s.virtualRoom || ''
+                            rawStartTime: s.startTime,
+                            rawEndTime: s.endTime,
+                            blockId: s.block_id,
+                            locationId: s.location_id,
+                            linkedWorkId: s.external_paper_id
                         };
                     });
 
-                    // Sort sessions by start time
+                    // Sort by time
                     sessions.sort((a, b) => a.timeStart.localeCompare(b.timeStart));
 
                     return {
                         dayNumber: dayNumber,
                         date: day.date,
                         label: day.label || `Día ${dayNumber}`,
-                        dayId: day.id,
+                        dayId: day.date,
                         sessions: sessions
                     };
                 });
 
-                if (transformedSchedule.length > 0) {
-                    setScheduleData(transformedSchedule);
-                }
+                setScheduleData(transformedSchedule);
+
+                // NEW: Process Blocks for Drag & Drop
+                // We map blocks to the day they belong to, and attach sessions
+                const blocksByDay = transformedSchedule.map(dayData => {
+                    // Get config blocks for this day
+                    const dayConfigBlocks = configData.blocks.filter(b => b.date === dayData.date);
+
+                    // Attach sessions to blocks
+                    const blocksWithSessions = dayConfigBlocks.map(block => {
+                        const blockSessions = dayData.sessions.filter(s => s.blockId === block.id);
+                        return {
+                            ...block,
+                            activities: blockSessions
+                        };
+                    });
+
+                    // Sort blocks by time
+                    blocksWithSessions.sort((a, b) => a.startTime.localeCompare(b.startTime));
+
+                    return {
+                        dayNumber: dayData.dayNumber,
+                        blocks: blocksWithSessions
+                    };
+                });
+
+                // Save to state (Need to add a new state for this or Attach to scheduleData)
+                // Let's attach to scheduleData for simplicity
+                setScheduleData(prev => prev.map(d => {
+                    const blockInfo = blocksByDay.find(bd => bd.dayNumber === d.dayNumber);
+                    return { ...d, blocks: blockInfo ? blockInfo.blocks : [] };
+                }));
+            } else {
+                setScheduleData([]);
             }
+
         } catch (err) {
             console.error('Error loading program data', err);
             setError(err);
@@ -97,93 +133,204 @@ export const useProgramSchedule = () => {
 
     useEffect(() => {
         loadData();
-
-        // Listen for program days updates to refresh automatically
-        const handleRefresh = () => loadData();
-        window.addEventListener('program-days-updated', handleRefresh);
-        window.addEventListener('program-updated', handleRefresh);
-
-        return () => {
-            window.removeEventListener('program-days-updated', handleRefresh);
-            window.removeEventListener('program-updated', handleRefresh);
-        };
     }, [loadData]);
 
-    const saveChanges = async (newScheduleData) => {
-        // optimistically update state
-        setScheduleData(newScheduleData);
 
-        // Transform back to API format
-        const newProgram = {};
-        newScheduleData.forEach(daySchedule => {
-            const dayId = daySchedule.dayId;
-            if (!dayId) return;
+    // --- ACTIONS ---
 
-            newProgram[dayId] = daySchedule.sessions.map(s => {
-                // Map back to API structure
-                return {
-                    id: s.id,
-                    title: s.title,
-                    startTime: s.timeStart,
-                    endTime: s.timeEnd,
-                    time: `${s.timeStart} - ${s.timeEnd}`,
-                    type: s.category === 'Plenaria' ? 'full' : 'split',
-                    category: s.category,
-                    categoryColor: s.categoryColor || 'blue',
-                    description: s.description,
-                    room: s.location,
-                    virtualRoom: s.virtualLocation,
-                    speaker: s.speakers[0]?.name || '',
-                    linkedWorkId: s.linkedWorkId,
-                    linkedTalkId: s.linkedTalkId,
-                    status: s.status,          // Persist status
-                    scheduledAt: s.scheduledAt // Persist scheduledAt
-                };
-            });
-        });
-
+    const updateSession = async (dayNumber, updatedSession) => {
         try {
-            await api.program.save(newProgram);
-            setRawProgram(newProgram);
-        } catch (err) {
-            console.error('Error saving program', err);
-            setError(err);
-            // Revert state if needed, or just let the next load fix it
-            loadData();
+            const dayObj = days.find((d, i) => i + 1 === dayNumber);
+            if (!dayObj) return;
+
+            const datePart = dayObj.date; // "YYYY-MM-DD"
+            const startISO = `${datePart}T${updatedSession.timeStart}:00`;
+            const endISO = `${datePart}T${updatedSession.timeEnd}:00`;
+
+            const payload = {
+                title: updatedSession.title,
+                description: updatedSession.description,
+                startTime: startISO,
+                endTime: endISO,
+                status: updatedSession.status ? updatedSession.status.toLowerCase() : 'borrador',
+            };
+
+            const config = await api.program.getConfig();
+            const dayBlocks = config.blocks.filter(b => b.date === datePart);
+
+            // Logic for Update: If blockId provided but invalid for new time, or not provided, find best block
+            let targetBlockId = updatedSession.blockId;
+
+            if (targetBlockId) {
+                const explicitBlock = dayBlocks.find(b => b.id === targetBlockId);
+                if (explicitBlock) {
+                    const blockStart = explicitBlock.startTime.slice(0, 5);
+                    const blockEnd = explicitBlock.endTime.slice(0, 5);
+                    if (updatedSession.timeStart < blockStart || updatedSession.timeEnd > blockEnd) {
+                        targetBlockId = null; // Time changed outside block -> Auto-find new one
+                    }
+                }
+            }
+
+            if (!targetBlockId) {
+                const targetBlock = dayBlocks.find(b => {
+                    const bStart = b.startTime.slice(0, 5);
+                    const bEnd = b.endTime.slice(0, 5);
+                    return updatedSession.timeStart >= bStart && updatedSession.timeEnd <= bEnd;
+                });
+                if (targetBlock) {
+                    targetBlockId = targetBlock.id;
+                }
+                // If still null, backend might error or accept if validation is loose (backend validates strict block-time match)
+                // We'll let backend decide or warn if strictly creating
+            }
+
+            if (targetBlockId) payload.block_id = targetBlockId;
+            if (updatedSession.locationId) payload.location_id = updatedSession.locationId;
+            if (updatedSession.type) payload.type = updatedSession.type; // Pass type if present
+
+            if (updatedSession.speakers && updatedSession.speakers.length > 0) {
+                payload.speaker_id = updatedSession.speakers[0].id;
+            }
+            if (updatedSession.linkedWorkId) {
+                payload.external_paper_id = updatedSession.linkedWorkId;
+            }
+
+            await api.program.updateActivity(updatedSession.id, payload);
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'Actividad Actualizada',
+                timer: 1500,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+
+            await loadData();
+        } catch (e) {
+            console.error("Update failed", e);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al actualizar',
+                text: e.response?.data?.detail || e.message
+            });
         }
     };
 
-    const updateSession = (dayNumber, updatedSession) => {
-        const newSchedule = scheduleData.map(d => {
-            if (d.dayNumber !== dayNumber) return d;
-            return {
-                ...d,
-                sessions: d.sessions.map(s => s.id === updatedSession.id ? updatedSession : s)
+    const addSession = async (dayNumber, newSession) => {
+        try {
+            const dayObj = days.find((d, i) => i + 1 === dayNumber);
+            if (!dayObj) return;
+
+            const datePart = dayObj.date;
+            const startISO = `${datePart}T${newSession.timeStart}:00`;
+            const endISO = `${datePart}T${newSession.timeEnd}:00`;
+
+            // Auto-assign or Use Selected Block
+            let targetBlockId = newSession.blockId;
+            const config = await api.program.getConfig();
+            const dayBlocks = config.blocks.filter(b => b.date === datePart);
+
+            if (targetBlockId) {
+                // Verify validity
+                const explicitBlock = dayBlocks.find(b => b.id === targetBlockId);
+
+                // If explicit block doesn't match times anymore, try to find a better one auto-magically
+                if (explicitBlock) {
+                    const blockStart = explicitBlock.startTime.slice(0, 5);
+                    const blockEnd = explicitBlock.endTime.slice(0, 5);
+
+                    if (newSession.timeStart < blockStart || newSession.timeEnd > blockEnd) {
+                        console.warn("Time outside selected block, attempting auto-reassignment...");
+                        targetBlockId = null; // Reset to force auto-find
+                    }
+                } else {
+                    targetBlockId = null;
+                }
+            }
+
+            if (!targetBlockId) {
+                // Find block enclosing this time
+                const targetBlock = dayBlocks.find(b => {
+                    const bStart = b.startTime.slice(0, 5);
+                    const bEnd = b.endTime.slice(0, 5);
+                    return newSession.timeStart >= bStart && newSession.timeEnd <= bEnd;
+                });
+
+                if (!targetBlock) {
+                    await Swal.fire({
+                        icon: 'warning',
+                        title: 'Sin Bloque Horario',
+                        text: `No existe un Bloque Horario configurado que cubra este horario (${newSession.timeStart} - ${newSession.timeEnd}). Por favor crea el bloque primero en la configuración o ajusta el horario.`,
+                    });
+                    return;
+                }
+                targetBlockId = targetBlock.id;
+            }
+
+            const payload = {
+                title: newSession.title,
+                description: newSession.description,
+                startTime: startISO,
+                endTime: endISO,
+                status: newSession.status?.toLowerCase() || 'borrador',
+                type: newSession.type || 'ponencia',
+                block_id: targetBlockId,
+                location_id: newSession.locationId
             };
-        });
-        saveChanges(newSchedule);
+
+            if (newSession.speakers && newSession.speakers.length > 0) {
+                payload.speaker_id = newSession.speakers[0].id;
+            }
+            if (newSession.classification) {
+                payload.classification_label = newSession.classification;
+            }
+            if (newSession.linkedWorkId) {
+                payload.external_paper_id = newSession.linkedWorkId;
+            }
+
+            await api.program.createActivity(payload);
+
+            await Swal.fire({
+                icon: 'success',
+                title: 'Actividad Creada',
+                timer: 1500,
+                showConfirmButton: false,
+                toast: true,
+                position: 'top-end'
+            });
+
+            await loadData();
+        } catch (e) {
+            console.error("Create failed", e);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al crear',
+                text: e.response?.data?.detail || e.message
+            });
+        }
     };
 
-    const addSession = (dayNumber, newSession) => {
-        const newSchedule = scheduleData.map(d => {
-            if (d.dayNumber !== dayNumber) return d;
-            return {
-                ...d,
-                sessions: [...d.sessions, newSession].sort((a, b) => a.timeStart.localeCompare(b.timeStart))
-            };
-        });
-        saveChanges(newSchedule);
-    };
-
-    const deleteSession = (dayNumber, sessionId) => {
-        const newSchedule = scheduleData.map(d => {
-            if (d.dayNumber !== dayNumber) return d;
-            return {
-                ...d,
-                sessions: d.sessions.filter(s => s.id !== sessionId)
-            };
-        });
-        saveChanges(newSchedule);
+    const deleteSession = async (dayNumber, sessionId) => {
+        try {
+            await api.program.deleteActivity(sessionId);
+            await Swal.fire({
+                icon: 'success',
+                title: 'Eliminado',
+                text: 'La actividad ha sido eliminada correctamente.',
+                timer: 1500,
+                showConfirmButton: false
+            });
+            loadData();
+        } catch (e) {
+            console.error(e);
+            Swal.fire({
+                icon: 'error',
+                title: 'Error al eliminar',
+                text: e.message
+            });
+        }
     };
 
     return {

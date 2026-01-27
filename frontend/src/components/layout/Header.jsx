@@ -97,8 +97,8 @@ const Header = ({ currentView, onNavigate, activeRole, setActiveRole }) => {
             <div className="max-w-7xl mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
                 {/* Left Side: SIMR 2026 Logo */}
                 <div className="flex items-center gap-2">
-                    <div className="bg-blue-900 text-white font-bold p-1.5 rounded text-lg">INCN</div>
-                    <span className="font-bold text-gray-900 text-lg">SIMR 2026</span>
+                    <img src="/icono.svg" alt="Logo" className="h-8 w-auto" />
+                    <span className="font-bold text-gray-900 text-lg">{eventName}</span>
                 </div>
 
                 {/* Right Side: Notification, Cart, Tasks, and Profile */}
@@ -117,7 +117,7 @@ const Header = ({ currentView, onNavigate, activeRole, setActiveRole }) => {
                             <div className="text-right cursor-pointer" onClick={() => setIsRoleMenuOpen(!isRoleMenuOpen)}>
                                 <div className="text-xs text-gray-600 uppercase flex items-center justify-end gap-1">
                                     {ROLE_LABELS[activeRole] || activeRole}
-                                    {user.modules && user.modules.filter(m => m !== 'perfil_basico').length > 1 && <ChevronDown size={10} />}
+                                    {user.modules && user.modules.filter(m => m !== 'mi_perfil').length > 1 && <ChevronDown size={10} />}
                                 </div>
                                 <div className="flex items-center gap-2 justify-end">
                                     <span className="text-sm font-bold text-gray-900 leading-none">{user.name.split(" ")[0]}</span>
@@ -138,7 +138,7 @@ const Header = ({ currentView, onNavigate, activeRole, setActiveRole }) => {
                                     activeRole={activeRole}
                                     onRoleChange={(module) => setActiveRole(module)}
                                     onProfileClick={() => {
-                                        setActiveRole('perfil_basico');
+                                        setActiveRole('mi_perfil');
                                         if (onNavigate) onNavigate('profile');
                                     }}
                                     onLogout={handleLogout}

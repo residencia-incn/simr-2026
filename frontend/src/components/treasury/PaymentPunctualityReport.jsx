@@ -6,15 +6,14 @@ const PaymentPunctualityReport = ({ organizers = [], config }) => {
     const [searchTerm, setSearchTerm] = useState('');
     const [filterStatus, setFilterStatus] = useState('all'); // all, late, debt, ok
 
-    // Logic repeated from ContributionsManager - Consider refactoring to util in future
+    // Logic for individual status calculation
     const getOrganizerStatus = (organizer) => {
         if (!config?.contribution?.months) return { status: 'unknown' };
 
         const pendingMonths = config.contribution.months.filter(m => {
-            // Check status in organizer data
-            // organizer.meses is object { '2026-01': 'pagado', ... }
-            const status = organizer.meses?.[m.id] || 'pendiente';
-            return status !== 'pagado' && status !== 'validando';
+            // Normalized statuses from useTreasury: PAID, PENDING, IN_PROCESS
+            const status = organizer.meses?.[m.id] || 'PENDING';
+            return status === 'PENDING' || status === 'IN_PROCESS';
         });
 
         if (pendingMonths.length === 0) {
@@ -97,64 +96,73 @@ const PaymentPunctualityReport = ({ organizers = [], config }) => {
             </style>
 
             {/* Header Controls */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print">
-                <div className="flex gap-4 items-center">
-                    <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center no-print bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+                <div className="flex flex-wrap gap-4 items-center">
+                    <div className="relative group">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500 transition-colors" size={18} />
                         <input
                             type="text"
                             placeholder="Buscar organizador..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none w-64"
+                            className="pl-10 pr-4 py-2 bg-gray-50 border-gray-200 border rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none w-64 transition-all"
                         />
                     </div>
                     <select
                         value={filterStatus}
                         onChange={(e) => setFilterStatus(e.target.value)}
-                        className="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        className="px-4 py-2 bg-gray-50 border-gray-200 border rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white outline-none transition-all font-medium text-gray-700"
                     >
                         <option value="all">Todos los Estados</option>
                         <option value="late">Fuera de Fecha (Crítico)</option>
-                        <option value="debt">Con Deuda (Por Pagar)</option>
+                        <option value="debt">Con Deuda (A tiempo)</option>
                         <option value="ok">Al Día</option>
                     </select>
                 </div>
                 <div className="flex gap-2">
-                    <Button onClick={handlePrint} className="bg-gray-800 text-white">
-                        <Printer size={18} className="mr-2" />
-                        Imprimir Reporte
+                    <Button
+                        onClick={handlePrint}
+                        className="bg-slate-900 hover:bg-black text-white px-6 py-2.5 rounded-xl shadow-lg shadow-slate-200 flex items-center gap-2 transition-all transform active:scale-95"
+                    >
+                        <Printer size={18} />
+                        <span className="font-bold">Imprimir Reporte</span>
                     </Button>
                 </div>
             </div>
 
             {/* Stats Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 no-print">
-                <Card className="p-4 border-l-4 border-red-500 bg-red-50/50">
+                <Card className="p-6 border-2 border-red-100 bg-white hover:shadow-lg transition-all duration-300">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-sm font-medium text-red-600 mb-1">Deuda Total Acumulada</p>
-                            <h3 className="text-2xl font-bold text-red-700">S/ {stats.totalDebt.toFixed(2)}</h3>
+                            <p className="text-sm font-bold text-red-500 uppercase tracking-wider mb-2">Deuda Total Acumulada</p>
+                            <h3 className="text-3xl font-black text-gray-900">S/ {stats.totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</h3>
                         </div>
-                        <AlertCircle className="text-red-500" size={24} />
+                        <div className="p-3 bg-red-50 rounded-2xl text-red-500">
+                            <XCircle size={28} />
+                        </div>
                     </div>
                 </Card>
-                <Card className="p-4 border-l-4 border-orange-500 bg-orange-50/50">
+                <Card className="p-6 border-2 border-orange-100 bg-white hover:shadow-lg transition-all duration-300">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-sm font-medium text-orange-600 mb-1">Usuarios Fuera de Fecha</p>
-                            <h3 className="text-2xl font-bold text-orange-700">{stats.lateCount}</h3>
+                            <p className="text-sm font-bold text-orange-500 uppercase tracking-wider mb-2">Usuarios Fuera de Fecha</p>
+                            <h3 className="text-3xl font-black text-gray-900">{stats.lateCount}</h3>
                         </div>
-                        <XCircle className="text-orange-500" size={24} />
+                        <div className="p-3 bg-orange-50 rounded-2xl text-orange-500">
+                            <AlertCircle size={28} />
+                        </div>
                     </div>
                 </Card>
-                <Card className="p-4 border-l-4 border-green-500 bg-green-50/50">
+                <Card className="p-6 border-2 border-green-100 bg-white hover:shadow-lg transition-all duration-300">
                     <div className="flex justify-between items-start">
                         <div>
-                            <p className="text-sm font-medium text-green-600 mb-1">Usuarios Al Día</p>
-                            <h3 className="text-2xl font-bold text-green-700">{stats.okCount}</h3>
+                            <p className="text-sm font-bold text-green-500 uppercase tracking-wider mb-2">Usuarios Al Día</p>
+                            <h3 className="text-3xl font-black text-gray-900">{stats.okCount}</h3>
                         </div>
-                        <CheckCircle className="text-green-500" size={24} />
+                        <div className="p-3 bg-green-50 rounded-2xl text-green-500">
+                            <CheckCircle size={28} />
+                        </div>
                     </div>
                 </Card>
             </div>
@@ -196,18 +204,18 @@ const PaymentPunctualityReport = ({ organizers = [], config }) => {
                                     </td>
                                     <td className="px-6 py-4">
                                         {item.status === 'ok' && (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                                <CheckCircle size={12} className="mr-1" /> Al Día
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-green-50 text-green-700 border border-green-200">
+                                                <CheckCircle size={12} className="mr-1.5" /> Al Día
                                             </span>
                                         )}
                                         {item.status === 'debt' && (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                                <DollarSign size={12} className="mr-1" /> Por Pagar
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                                <DollarSign size={12} className="mr-1.5" /> Por Pagar
                                             </span>
                                         )}
                                         {item.status === 'late' && (
-                                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                                <XCircle size={12} className="mr-1" /> Fuera de Fecha
+                                            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-bold bg-red-50 text-red-700 border border-red-200">
+                                                <XCircle size={12} className="mr-1.5" /> Fuera de Fecha
                                             </span>
                                         )}
                                     </td>

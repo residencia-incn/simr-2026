@@ -20,7 +20,7 @@ import CourseCatalog from './pages/student/CourseCatalog';
 import CourseDashboard from './pages/student/CourseDashboard';
 import CoursePlayer from './pages/student/CoursePlayer';
 import LiveEvent from './pages/student/LiveEvent';
-import ExamRunner from './pages/student/ExamRunner';
+import StudentExamSection from './pages/student/StudentExamSection';
 import Certificates from './pages/student/Certificates';
 import NotesLibrary from './pages/student/NotesLibrary';
 
@@ -111,7 +111,7 @@ const App: React.FC = () => {
       case ViewState.STUDENT_LIVE:
         return <LiveEvent />;
       case ViewState.STUDENT_EXAM:
-        return <ExamRunner />;
+        return <StudentExamSection />;
       case ViewState.STUDENT_CERTIFICATES:
         return <Certificates />;
       case ViewState.STUDENT_NOTES:

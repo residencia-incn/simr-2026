@@ -65,7 +65,8 @@ const HeroCarousel = ({ navigate, user }) => {
 
                 if (config) {
                     setEventConfig(config);
-                    setShowCountdown(config.showHeroCountdown);
+                    // Handle both snake_case (backend) and camelCase depending on API response structure
+                    setShowCountdown(config.show_countdown !== undefined ? config.show_countdown : config.showHeroCountdown);
 
                     // Dynamic Date Formatter
                     const formatDateRange = (startDate, duration) => {
@@ -235,23 +236,27 @@ const HeroCarousel = ({ navigate, user }) => {
                                         <div className="bg-black/20 backdrop-blur-md rounded-2xl border border-white/10 shadow-lg py-2 px-6">
                                             {/* Fallback date if config not yet loaded */}
                                             {(() => {
-                                                const baseDate = eventConfig?.startDate;
+                                                // 1. Get the date string from any possible key. Prioritize 'start_date' (backend snake_case)
+                                                let rawDate = eventConfig?.start_date || eventConfig?.startDate || eventConfig?.eventDate;
+
+                                                // 2. Handle DD/MM/YYYY format conversion (e.g. "22/06/2026" -> "2026-06-22")
+                                                if (rawDate && typeof rawDate === 'string' && rawDate.includes('/') && rawDate.split('/').length === 3) {
+                                                    const [day, month, year] = rawDate.split('/');
+                                                    rawDate = `${year}-${month}-${day}`;
+                                                }
+
                                                 const openTime = eventConfig?.schedule?.[0]?.open?.replace(' a.m.', '').replace(' p.m.', '') || '08:00';
 
                                                 // Function to convert 12h to 24h format if needed
                                                 const formatTime = (timeStr) => {
-                                                    // Simple heuristic for "08:00", "08:00 AM", or "20:00"
-                                                    if (timeStr.includes(':')) return timeStr.trim();
+                                                    if (timeStr && timeStr.includes(':')) return timeStr.trim();
                                                     return '08:00';
                                                 };
 
-                                                // If date is "2026-10-22" make it "2026-10-22T08:00:00"
-                                                // Handle potential 12h formats from the new schedule UI just in case
-                                                const target = baseDate
-                                                    ? `${baseDate}T${formatTime(openTime)}:00`
-                                                    : '2026-10-22T08:00:00';
+                                                // 3. Construct Final ISO String
+                                                const targetIso = rawDate ? `${rawDate}T${formatTime(openTime)}:00` : '2026-11-15T08:00:00';
 
-                                                return <Countdown key={target} targetDate={target} darkMode={true} showLabel={false} />;
+                                                return <Countdown key={targetIso} targetDate={targetIso} darkMode={true} showLabel={false} />;
                                             })()}
                                         </div>
                                     </div>

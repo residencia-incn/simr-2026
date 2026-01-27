@@ -107,3 +107,66 @@
     @apply m-2;
   }
 }
+
+@media print {
+
+  /* 1. Ocultar todo lo que sea "ruido" de la UI web */
+  body * {
+    visibility: hidden;
+  }
+
+  /* 2. Ocultar elementos específicos de navegación si se escapan */
+  nav,
+  header,
+  footer,
+  .sidebar,
+  .toolbar,
+  .no-print {
+    display: none !important;
+  }
+
+  /* 3. Hacer visible SOLO el contenedor de impresión */
+  #printable-area,
+  #printable-area *,
+  #user-detail-print,
+  #user-detail-print * {
+    visibility: visible;
+  }
+
+  /* 4. Posicionar el reporte en la hoja (A4) */
+  #printable-area,
+  #user-detail-print {
+    display: block !important;
+    /* Force override of 'hidden' class */
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    margin: 0;
+    padding: 20px;
+    background: white;
+    color: black;
+  }
+
+  /* 5. Ajustes de Tabla para papel */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    font-size: 12px;
+    /* Letra legible para reportes */
+  }
+
+  th,
+  td {
+    border: 1px solid #ddd !important;
+    padding: 8px !important;
+    text-align: left;
+  }
+
+  th {
+    background-color: #f3f4f6 !important;
+    /* Gris suave para headers */
+    -webkit-print-color-adjust: exact;
+    /* Forzar impresión de fondo */
+  }
+}

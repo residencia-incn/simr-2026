@@ -7,7 +7,8 @@ const Button = ({ children, onClick, variant = 'primary', className = '', loadin
         secondary: "bg-white text-blue-900 border border-blue-200 hover:bg-blue-50 hover:shadow-sm hover:-translate-y-0.5",
         outline: "bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900",
         danger: "bg-red-50 text-red-600 hover:bg-red-100",
-        ghost: "text-gray-600 hover:bg-gray-100"
+        ghost: "text-gray-600 hover:bg-gray-100",
+        solid: "bg-slate-900 text-white hover:bg-slate-800 shadow-md"
     };
 
     const isDisabled = disabled || loading;

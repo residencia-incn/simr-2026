@@ -15,6 +15,7 @@ const FormField = ({
     rows = 3, // for textarea
     helpText,
     subLabel, // Extract to prevent DOM warning
+    children,
     ...props
 }) => {
     const baseInputStyles = `
@@ -27,6 +28,10 @@ const FormField = ({
     `;
 
     const renderInput = () => {
+        if (children) {
+            return children;
+        }
+
         if (type === 'select') {
             return (
                 <select

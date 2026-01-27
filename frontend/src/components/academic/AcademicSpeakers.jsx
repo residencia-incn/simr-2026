@@ -19,6 +19,7 @@ const AcademicSpeakers = () => {
     const [isAddTalkOpen, setIsAddTalkOpen] = useState(false);
     const [editingTalk, setEditingTalk] = useState(null);
     const [config, setConfig] = useState(null);
+    const [speakerLectures, setSpeakerLectures] = useState([]);
 
     // Load speakers and program data
     useEffect(() => {
@@ -47,6 +48,25 @@ const AcademicSpeakers = () => {
         };
         loadData();
     }, []);
+
+    // Load lectures when speaker selection changes
+    useEffect(() => {
+        if (!selectedSpeakerId) {
+            setSpeakerLectures([]);
+            return;
+        }
+
+        const loadLectures = async () => {
+            try {
+                const lectures = await api.academic.getSpeakerLectures(selectedSpeakerId);
+                setSpeakerLectures(lectures || []);
+            } catch (error) {
+                console.error("Error loading speaker lectures", error);
+                setSpeakerLectures([]);
+            }
+        };
+        loadLectures();
+    }, [selectedSpeakerId]);
 
     const refetch = () => {
         const loadData = async () => {
@@ -109,21 +129,22 @@ const AcademicSpeakers = () => {
     );
 
     const handleSaveTalk = async (talkData) => {
-        if (!selectedSpeaker) return;
+        if (!selectedSpeakerId) return;
 
         try {
-            const updatedSpeaker = {
-                ...selectedSpeaker,
-                talks: [...(selectedSpeaker.talks || []), talkData]
-            };
+            const newLecture = await api.academic.createSpeakerLecture(selectedSpeakerId, talkData);
+            setSpeakerLectures(prev => [...prev, newLecture]);
 
-            // Optimistic update
-            setSpeakers(prev => prev.map(s => s.id === selectedSpeaker.id ? updatedSpeaker : s));
-
-            await api.speakers.update(updatedSpeaker);
+            await Swal.fire({
+                title: '¡Guardado!',
+                text: 'La ponencia ha sido agregada exitosamente.',
+                icon: 'success',
+                timer: 1500,
+                showConfirmButton: false
+            });
         } catch (error) {
             console.error("Error saving talk:", error);
-            // Revert on error? For now simple log.
+            Swal.fire('Error', 'Hubo un problema al guardar la ponencia.', 'error');
         }
     };
 
@@ -154,9 +175,7 @@ const AcademicSpeakers = () => {
         return null;
     };
 
-    const handleDeleteTalk = async (talkIndex) => {
-        if (!selectedSpeaker) return;
-
+    const handleDeleteTalk = async (lectureId) => {
         const result = await Swal.fire({
             title: '¿Eliminar ponencia?',
             text: "Esta acción no se puede deshacer.",
@@ -171,18 +190,8 @@ const AcademicSpeakers = () => {
         if (!result.isConfirmed) return;
 
         try {
-            const updatedTalks = [...(selectedSpeaker.talks || [])];
-            updatedTalks.splice(talkIndex, 1);
-
-            const updatedSpeaker = {
-                ...selectedSpeaker,
-                talks: updatedTalks
-            };
-
-            // Optimistic update
-            setSpeakers(prev => prev.map(s => s.id === selectedSpeaker.id ? updatedSpeaker : s));
-
-            await api.speakers.update(updatedSpeaker);
+            await api.academic.deleteLecture(lectureId);
+            setSpeakerLectures(prev => prev.filter(l => l.id !== lectureId));
 
             await Swal.fire(
                 '¡Eliminado!',
@@ -192,7 +201,6 @@ const AcademicSpeakers = () => {
         } catch (error) {
             console.error("Error deleting talk:", error);
             Swal.fire('Error', 'Hubo un problema al eliminar la ponencia.', 'error');
-            refetch(); // Revert on error
         }
     };
 
@@ -286,7 +294,7 @@ const AcademicSpeakers = () => {
                                 className="!bg-white !text-red-600 !border-red-200 hover:!bg-red-50 shadow-sm flex items-center gap-2"
                                 onClick={async () => {
                                     // 1. Check for scheduled talks
-                                    const scheduledTalks = (selectedSpeaker.talks || []).filter(talk => getTalkSchedule(talk.id, talk.title));
+                                    const scheduledTalks = speakerLectures.filter(talk => getTalkSchedule(talk.id, talk.title));
 
                                     if (scheduledTalks.length > 0) {
                                         await Swal.fire({
@@ -304,7 +312,7 @@ const AcademicSpeakers = () => {
                                         title: '¿Quitar rol de Ponente?',
                                         html: `Se quitará a <b>${selectedSpeaker.name}</b> de la lista de ponentes.<br/><br/>
                                                <ul style="text-align: left; font-size: 0.9em; color: #555; list-style-type: disc; margin-left: 20px;">
-                                                   <li>Se eliminarán sus <b>${(selectedSpeaker.talks || []).length}</b> ponencias asignadas (no programadas).</li>
+                                                   <li>Se eliminarán sus <b>${speakerLectures.length}</b> ponencias asignadas (no programadas).</li>
                                                    <li>Su rol cambiará a "Asistente".</li>
                                                    <li>Sus accesos se restablecerán.</li>
                                                </ul>`,
@@ -323,7 +331,7 @@ const AcademicSpeakers = () => {
                                         // 1. Get default 'asistente' config to reset modules
                                         const roleDefaults = await api.system.getRoleDefaults();
                                         const asistenteDefaults = roleDefaults['asistente']?.modules || {
-                                            'perfil_basico': { enabled: true, locked: true },
+                                            'mi_perfil': { enabled: true, locked: true },
                                             'aula_virtual': { enabled: true, locked: false }
                                         };
 
@@ -332,8 +340,7 @@ const AcademicSpeakers = () => {
                                             ...selectedSpeaker,
                                             eventRoles: ['asistente'], // Reset to only asistente
                                             role: 'participant',
-                                            modules: asistenteDefaults,
-                                            talks: [] // Clear talks
+                                            modules: asistenteDefaults
                                         };
 
                                         await api.users.update(updatedUser);
@@ -366,7 +373,7 @@ const AcademicSpeakers = () => {
                             <div className="flex justify-between items-center mb-4">
                                 <h3 className="font-bold text-gray-800 flex items-center gap-2">
                                     <BookOpen size={18} className="text-purple-500" />
-                                    Ponencias Asignadas ({selectedSpeaker.talks?.length || 0})
+                                    Ponencias Asignadas ({speakerLectures.length})
                                 </h3>
                                 <Button
                                     size="xs"
@@ -377,17 +384,17 @@ const AcademicSpeakers = () => {
                                 </Button>
                             </div>
 
-                            {selectedSpeaker.talks && selectedSpeaker.talks.length > 0 ? (
+                            {speakerLectures && speakerLectures.length > 0 ? (
                                 <div className="space-y-2">
-                                    {selectedSpeaker.talks.map((talk, idx) => {
-                                        const schedule = getTalkSchedule(talk.id, talk.title);
+                                    {speakerLectures.map((lecture) => {
+                                        const schedule = getTalkSchedule(lecture.id, lecture.title);
                                         return (
-                                            <div key={idx} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex justify-between items-center group hover:border-purple-200 transition-all">
+                                            <div key={lecture.id} className="bg-white p-3 rounded-lg border border-gray-100 shadow-sm flex justify-between items-center group hover:border-purple-200 transition-all">
                                                 <div className="flex-1">
-                                                    <h4 className="font-medium text-gray-900 text-sm">{talk.title}</h4>
+                                                    <h4 className="font-medium text-gray-900 text-sm">{lecture.title}</h4>
                                                     <div className="flex items-center gap-2 mt-1">
                                                         <span className="text-xs text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full inline-block">
-                                                            {talk.specialty}
+                                                            {lecture.specialty}
                                                         </span>
                                                         {schedule && (
                                                             <span className="text-xs text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full flex items-center gap-1 font-medium">
@@ -401,7 +408,7 @@ const AcademicSpeakers = () => {
                                                 <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-4">
                                                     <button
                                                         onClick={() => {
-                                                            setEditingTalk({ ...talk, index: idx }); // Pass index to identify talk when editing
+                                                            setEditingTalk(lecture);
                                                             setIsAddTalkOpen(true);
                                                         }}
                                                         className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
@@ -411,7 +418,7 @@ const AcademicSpeakers = () => {
                                                     </button>
                                                     {!schedule && (
                                                         <button
-                                                            onClick={() => handleDeleteTalk(idx)}
+                                                            onClick={() => handleDeleteTalk(lecture.id)}
                                                             className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
                                                             title="Eliminar"
                                                         >
@@ -457,7 +464,7 @@ const AcademicSpeakers = () => {
                     setEditingTalk(null);
                 }}
                 onSave={handleSaveTalk}
-                specialties={['Neurocirugía', 'Neurología', 'Neuropsicología', 'Neurociencias', 'Neuroimagen', 'Neurogenética', 'Neuroinmunología']}
+                specialties={config?.allowed_specialties || []}
             />
         </div >
     );

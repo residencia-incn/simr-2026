@@ -13,6 +13,25 @@ const AgreementItem = ({
     readOnly = false,
     maxDepth = 3
 }) => {
+    const [localContent, setLocalContent] = React.useState(agreement.content || '');
+    const [isFocused, setIsFocused] = React.useState(false);
+    const textareaRef = React.useRef(null);
+
+    // Auto-resize textarea on content change
+    React.useEffect(() => {
+        if (textareaRef.current) {
+            textareaRef.current.style.height = 'auto'; // Reset height to recalculate
+            textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+        }
+    }, [localContent]);
+
+    // Sync with external changes only if not editing (avoids polling overwrite)
+    React.useEffect(() => {
+        if (!isFocused) {
+            setLocalContent(agreement.content || '');
+        }
+    }, [agreement.content, isFocused]);
+
     const canAddChildren = level < maxDepth;
     const numbering = getNumbering(level, index);
 
@@ -20,7 +39,18 @@ const AgreementItem = ({
     const indentClass = level === 1 ? '' : level === 2 ? 'ml-8' : 'ml-16';
 
     const handleTextChange = (e) => {
-        onUpdate(agreement.id, { text: e.target.value });
+        setLocalContent(e.target.value);
+    };
+
+    const handleBlur = () => {
+        setIsFocused(false);
+        if (localContent !== agreement.content) {
+            onUpdate(agreement.id, { content: localContent });
+        }
+    };
+
+    const handleFocus = () => {
+        setIsFocused(true);
     };
 
     const handleAddChild = () => {
@@ -40,7 +70,7 @@ const AgreementItem = ({
                     <span className="font-medium text-gray-700 min-w-[2rem] mt-0.5">
                         {numbering}
                     </span>
-                    <p className="text-gray-800 flex-1">{agreement.text}</p>
+                    <p className="text-gray-800 flex-1">{agreement.content}</p>
                 </div>
                 {agreement.children && agreement.children.length > 0 && (
                     <div className="mt-2">
@@ -74,12 +104,23 @@ const AgreementItem = ({
                 {/* Input */}
                 <div className="flex-1">
                     <div className="flex gap-2">
-                        <input
-                            type="text"
-                            value={agreement.text}
+                        <textarea
+                            ref={textareaRef}
+                            value={localContent}
                             onChange={handleTextChange}
-                            className="flex-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            onFocus={handleFocus}
+                            onBlur={handleBlur}
+                            rows={1}
+                            className={`flex-1 p-2 border rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors resize-none overflow-hidden ${isFocused ? 'bg-white' : 'bg-gray-50/50'}`}
                             placeholder={`Acuerdo ${numbering}`}
+                            style={{
+                                minHeight: '40px',
+                                height: 'auto'
+                            }}
+                            onInput={(e) => {
+                                e.target.style.height = 'auto';
+                                e.target.style.height = e.target.scrollHeight + 'px';
+                            }}
                         />
 
                         {/* Delete button */}

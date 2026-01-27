@@ -11,6 +11,8 @@ export { default as Modal } from './Modal';
 export { default as SectionHeader } from './SectionHeader';
 export { default as Table } from './Table';
 export { default as Toast } from './Toast';
+export { default as StatusBadge } from './StatusBadge';
 export { default as CustomQRCode } from './CustomQRCode';
 export { DatePicker } from './DatePicker';
 export { StyledDatePicker } from './StyledDatePicker';
+export { default as DropZone } from './DropZone';

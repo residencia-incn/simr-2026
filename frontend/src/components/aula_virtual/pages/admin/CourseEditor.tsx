@@ -4,14 +4,18 @@ import CategoryManagerModal from './CategoryManagerModal';
 import ContentSelectorModal from './ContentSelectorModal';
 import CourseContentPreview from './CourseContentPreview';
 import { useAulaVirtual } from '../../context/AulaVirtualContext';
-import { api } from '../../../../services/api';
-import { MOCK_USERS } from '../../../../data/mockUsers';
-import { mockExams } from '../../../../data/mockAulaVirtualData';
+import { api, canUserAccessCourse } from '../../../../services/api';
+import TabRules from './tabs/TabRules';
+import TabEnrolled from './tabs/TabEnrolled';
+
 
 interface CourseEditorProps {
   onBack?: () => void;
-  courseId?: number | null;
+  courseId?: number | string | null;
   onUnsavedChanges?: (hasChanges: boolean) => void;
+  allModalities?: any[];
+  allWorkshops?: any[];
+  allRoles?: any[];
 }
 
 const InstructorSelectionModal = ({ isOpen, onClose, onSelect }: any) => {
@@ -122,8 +126,8 @@ const InstructorSelectionModal = ({ isOpen, onClose, onSelect }: any) => {
   );
 };
 
-const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsavedChanges }) => {
-  const { getCourseById, addCourse, updateCourse } = useAulaVirtual();
+const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsavedChanges, allModalities = [], allWorkshops = [], allRoles = [] }) => {
+  const { getCourseById, addCourse, updateCourse, exams, getModulesByCourseId } = useAulaVirtual();
   const [activeTab, setActiveTab] = useState(0); // Información General por defecto
 
   // Course General Information State
@@ -153,13 +157,18 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
   const [materials, setMaterials] = useState<any[]>([]);
 
   // --- ACCESS CONFIG STATE (New) ---
+  // --- ACCESS CONFIG STATE (New) ---
   const [accessConfig, setAccessConfig] = useState<{
-    modalities: string[];
-    workshops: string[];
+    allowed_modality_ids: string[];
+    linked_workshop_id: string | number | null;
+    allowed_vip_roles?: string[];
   }>({
-    modalities: ['all'],
-    workshops: []
+    allowed_modality_ids: [],
+    linked_workshop_id: null,
+    allowed_vip_roles: []
   });
+
+  // Master lists (modalities, workshops) are now received via props (allModalities, allWorkshops)
 
   // --- FINAL EXAM STATE (New) ---
   const [includeFinalExam, setIncludeFinalExam] = useState(false);
@@ -240,7 +249,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
   // Load course data if editing
   useEffect(() => {
     if (courseId) {
-      const course = getCourseById(courseId);
+      const course = getCourseById(courseId as any);
       if (course) {
         const loadedSpecialty = (course as any).specialty || (course as any).category || 'Neurología Clínica';
         const loadedCategory = (course as any).category === loadedSpecialty ? 'Curso' : ((course as any).category || 'Curso');
@@ -253,10 +262,9 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
         setCourseDifficulty((course.difficulty as 'BASICO' | 'MEDIO' | 'AVANZADO') || 'MEDIO');
         setCourseCoverImage(course.coverImage || null);
 
-        // Load modules if they exist in the course data
-        if ((course as any).modules) {
-          setModules((course as any).modules);
-        }
+        // Load modules using the helper that supports both V1 (flat) and V2 (nested) structures
+        const courseModules = getModulesByCourseId(course.id as any);
+        setModules(courseModules);
 
         // Load materials if they exist
         if ((course as any).materials) {
@@ -274,25 +282,31 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
           coverImage: course.coverImage || null,
         });
 
-        // Load access config if exists
-        if ((course as any).accessConfig) {
-          const legacyConfig = (course as any).accessConfig;
+        // Load access config from new backend fields or legacy
+        const backendModalities = (course as any).allowed_modality_ids;
+        const backendWorkshop = (course as any).linked_workshop_id;
+
+        if (backendModalities || backendWorkshop !== undefined) {
           setAccessConfig({
-            modalities: legacyConfig.modalities || (legacyConfig.modality ? [legacyConfig.modality] : ['all']),
-            workshops: legacyConfig.workshops || []
+            allowed_modality_ids: backendModalities || [],
+            linked_workshop_id: backendWorkshop || null
+          });
+        } else if ((course as any).accessConfig) {
+          // Legacy fallback (attempt to map if possible, or just reset)
+          setAccessConfig({
+            allowed_modality_ids: [],
+            linked_workshop_id: null
           });
         }
 
         // Load Instructor Data
         if ((course as any).instructorId || (course as any).instructor) {
           const iId = (course as any).instructorId || (course as any).instructor?.id;
-          const instructorUser = MOCK_USERS.find(u => u.id === iId);
-          if (instructorUser) {
-            setInstructorId(iId);
-            setInstructorName(instructorUser.name);
-            setInstructorSpecialty(instructorUser.specialty || (instructorUser as any).occupation || '');
-            setInstructorInstitution((instructorUser as any).institution || '');
-          }
+          // Note: In real system, we'd fetch the instructor if not in state
+          setInstructorId(iId);
+          setInstructorName((course as any).instructorName || '');
+          setInstructorSpecialty((course as any).instructorSpecialty || '');
+          setInstructorInstitution((course as any).instructorInstitution || '');
           // Load persisted description if available
           if ((course as any).instructorDescription) {
             setInstructorDescription((course as any).instructorDescription);
@@ -558,49 +572,12 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
     const calculatedDuration = `${Math.max(4, calculatedTotalModules)} semanas`;
 
     // Calculate Qualified Students matching Access Configuration
-    const calculatedEnrolledStudents = MOCK_USERS.filter(u => {
-      if (u.isSuperAdmin) return false;
-
-      // Modality Check
-      let matchesModality = false;
-      const selectedModalities = accessConfig.modalities;
-      if (selectedModalities.includes('all')) {
-        matchesModality = true;
-      } else if (selectedModalities.length > 0) {
-        const userModality = u.modality || u.registrationType || '';
-        let normalizedUserModality = userModality;
-        if (u.registrationType === 'presencial_certificado') normalizedUserModality = 'Presencial + Certificado';
-        else if (u.registrationType === 'presencial') normalizedUserModality = 'Presencial (Sin Certificado)';
-        else if (u.registrationType === 'virtual_certificado') normalizedUserModality = 'Virtual + Certificado';
-        else if (u.registrationType === 'virtual') normalizedUserModality = 'Virtual (Sin Certificado)';
-        else if (u.amount === 0 && u.status === 'Confirmado' && !normalizedUserModality.includes('Presencial')) normalizedUserModality = 'Beca Completa';
-
-        matchesModality = selectedModalities.includes(normalizedUserModality);
-      }
-
-      // Workshop Check
-      let matchesWorkshop = false;
-      if (accessConfig.workshops.length > 0) {
-        const userItems = u.purchasedItems || [];
-        matchesWorkshop = accessConfig.workshops.some(wsId => userItems.includes(wsId));
-      }
-
-      if (selectedModalities.length === 0) return false; // Must select at least one modality (or 'all')
-      if (!matchesModality) return false;
-
-      // Workshop Check (Secondary, only if configured)
-      if (accessConfig.workshops.length > 0) {
-        // If workshops are selected in config, user MUST have one of them
-        if (!matchesWorkshop) return false;
-      }
-
-      return true;
-    }).length;
+    const calculatedEnrolledStudents = 0; // Temporarily 0 until real count logic implemented
 
     try {
       if (courseId) {
         // Update existing course
-        updateCourse(courseId, {
+        updateCourse(courseId as any, {
           title: courseTitle,
           longDescription: courseDescription,
           status: courseStatus,
@@ -608,9 +585,13 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
           category: courseCategory,
           difficulty: courseDifficulty,
           coverImage: courseCoverImage,
+
           modules: modules, // Save modules state
           materials: materials, // Save materials state
-          accessConfig: accessConfig, // Save access config
+          accessConfig: accessConfig, // Keep for legacy/frontend state
+          // Map to new Backend Fields
+          allowed_modality_ids: accessConfig.allowed_modality_ids,
+          linked_workshop_id: accessConfig.linked_workshop_id,
           instructorId: instructorId,
           instructorName: instructorName,
           instructorSpecialty: instructorSpecialty,
@@ -630,7 +611,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
       } else {
         // Create new course
         const newCourse = {
-          id: Date.now(), // Temporary ID generation
+          id: `Cu_${Date.now()}`, // Standardized Course ID format
           title: courseTitle,
           slug: courseTitle.toLowerCase().replace(/\s+/g, '-'),
           description: courseDescription.substring(0, 150) + '...',
@@ -663,6 +644,8 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
           modules: modules,
           materials: materials,
           accessConfig: accessConfig,
+          allowed_modality_ids: accessConfig.allowed_modality_ids,
+          linked_workshop_id: accessConfig.linked_workshop_id,
 
         } as any;
         addCourse(newCourse);
@@ -730,6 +713,11 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
                   }`}>
                   {courseStatus}
                 </span>
+                {courseId && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-600 border border-gray-200 font-mono">
+                    ID: {courseId}
+                  </span>
+                )}
               </div>
               <p className="text-text-muted text-sm">Organiza los módulos, lecciones y materiales del curso.</p>
             </div>
@@ -748,7 +736,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
 
         {/* Tabs */}
         <div className="border-b border-border-light flex gap-6 overflow-x-auto">
-          {['Información General', 'Plan de Estudios', 'Materiales', 'Estudiantes'].map((tab, i) => (
+          {['Información General', 'Plan de Estudios', 'Materiales', 'Configuración / Reglas', 'Inscritos / Estudiantes'].map((tab, i) => (
             <button
               key={i}
               onClick={() => setActiveTab(i)}
@@ -1147,7 +1135,7 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
             onPreview={() => setShowContentPreview(true)}
             includeFinalExam={includeFinalExam}
             setIncludeFinalExam={setIncludeFinalExam}
-            exams={mockExams}
+            exams={exams}
             finalExamId={finalExamId}
             setFinalExamId={setFinalExamId}
             finalExamCondition={finalExamCondition}
@@ -1160,7 +1148,16 @@ const CourseEditor: React.FC<CourseEditorProps> = ({ onBack, courseId, onUnsaved
         )}
         {activeTab === 2 && <MaterialsTab materials={materials} setMaterials={setMaterials} modules={modules} />}
         {activeTab === 3 && (
-          <StudentsTab accessConfig={accessConfig} setAccessConfig={setAccessConfig} />
+          <TabRules
+            formData={accessConfig}
+            setFormData={setAccessConfig}
+            allModalities={allModalities || []}
+            allWorkshops={allWorkshops || []}
+            allRoles={allRoles || []}
+          />
+        )}
+        {activeTab === 4 && (
+          <TabEnrolled courseId={courseId ?? null} />
         )}<div className="h-20"></div>
       </div>
 
@@ -1544,6 +1541,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
             // CRITICAL: We bridge the lesson to the video DB using videoId
             videoId: contentTypeToAdd === 'video' ? item.id : undefined,
             contentId: item.id, // Keep for reference or other types
+            content: item.id.toString(), // CRITICAL: Populate legacy field for StudentExamDashboard linkage
 
             title: item.title,
             type: contentTypeToAdd,
@@ -1553,7 +1551,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
             // UI Helpers
             icon: contentTypeToAdd === 'video' ? 'play_circle' : contentTypeToAdd === 'reading' ? 'article' : 'quiz',
             color: contentTypeToAdd === 'video' ? 'blue' : contentTypeToAdd === 'reading' ? 'purple' : 'teal',
-            meta: item.format || (item.questions ? `${item.questions} preguntas` : null),
+            meta: item.format || (item.questions ? `${Array.isArray(item.questions) ? item.questions.length : item.questions} preguntas` : null),
 
             // Store extra video metadata if available (optional, but good for preview)
             thumbnail: contentTypeToAdd === 'video' ? item.thumbnail : undefined,
@@ -1719,7 +1717,7 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
                   }`}>
                   {module.status}
                 </span>
-                <span className="text-xs text-text-muted">({module.items.length} lecciones)</span>
+                <span className="text-xs text-text-muted">({(module.items || module.lessons || []).length} lecciones)</span>
               </div>
               <div className="flex items-center gap-1">
                 <button
@@ -1746,8 +1744,8 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
             {/* Module Content */}
             {!module.isCollapsed && (
               <div className="p-2 bg-white flex flex-col gap-2 animate-in slide-in-from-top-2 duration-200">
-                {module.items.length > 0 ? (
-                  module.items.map((item: any, itemIndex: number) => (
+                {(module.items || module.lessons || []).length > 0 ? (
+                  (module.items || module.lessons || []).map((item: any, itemIndex: number) => (
                     <div
                       key={item.id}
                       draggable
@@ -1768,7 +1766,17 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
                           {item.isRequired && (
                             <span className="flex items-center gap-1 text-orange-600 font-medium bg-orange-50 px-1.5 py-0.5 rounded border border-orange-100"><span className="material-symbols-outlined text-[14px] fill-1">verified</span> Obligatorio</span>
                           )}
-                          {item.meta && (
+                          {((item.type === 'quiz' || item.type === 'QUIZ') && exams) ? (
+                            <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">
+                              {(() => {
+                                const exam = exams.find((e: any) => e.id === item.contentId);
+                                if (exam) return `${exam.questions?.length || 0} preguntas`;
+                                // Fallback to meta if it's already a clean string, or try to extract number if it's a mess
+                                if (typeof item.meta === 'string' && !item.meta.includes('[object')) return item.meta;
+                                return "0 preguntas";
+                              })()}
+                            </span>
+                          ) : item.meta && (
                             <span className="bg-gray-100 px-1.5 py-0.5 rounded border border-gray-200">{item.meta}</span>
                           )}
                         </div>
@@ -1969,7 +1977,11 @@ const StudyPlanTab: React.FC<StudyPlanTabProps> = ({
         type={contentTypeToAdd}
         onSelect={handleContentSelect}
         courseContext={courseTitle}
-        excludeVideoIds={modules.flatMap(m => m.items).filter(item => item.type === 'video').map(item => item.contentId || item.id)}
+        excludeVideoIds={modules.flatMap(m => m.items || m.lessons || []).filter((item: any) => item && item.type === 'video').map((item: any) => item.contentId || item.id)}
+        excludeQuizIds={[
+          ...modules.flatMap(m => m.items || m.lessons || []).filter((item: any) => item && (item.type === 'quiz' || item.type === 'QUIZ')).map((item: any) => item.contentId),
+          finalExamId
+        ].filter(Boolean)}
       />
 
     </div>
@@ -2267,32 +2279,45 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
   ]);
   const [workshopsInfos, setWorkshopsInfos] = useState<{ id: string; name: string }[]>([]);
 
-  // Load System Configuration
+  // State for Users (Live Data)
+  const [users, setUsers] = useState<any[]>([]);
+
+
+
+  // Combined Data Loading
   useEffect(() => {
-    const loadSystemConfig = async () => {
+    const loadData = async () => {
       try {
-        const pricing = await api.treasury.getPricing();
+        const [pricing, usersData] = await Promise.all([
+          api.treasury.getPricing(),
+          api.users.getAll()
+        ]);
 
-        // Map Ticket Types to Modalities
-        if (pricing && pricing.ticketTypes) {
-          const dynamicModalities = pricing.ticketTypes.map((t: any) => ({
-            value: t.title, // Use title as value to match existing logic/display
-            label: t.title
-          }));
-          setModalitiesInfos([{ value: 'all', label: 'Cualquier Modalidad' }, ...dynamicModalities]);
+        // 1. Process Pricing/Config
+        if (pricing) {
+          if (pricing.ticketTypes && Array.isArray(pricing.ticketTypes)) {
+            const dynamicModalities = pricing.ticketTypes.map((t: any) => ({
+              value: t.id, // Store ID
+              label: t.title,
+              id: t.id
+            }));
+            setModalitiesInfos([{ value: 'all', label: 'Cualquier Modalidad' }, ...dynamicModalities]);
+          }
+          if (pricing.workshops && Array.isArray(pricing.workshops)) {
+            setWorkshopsInfos(pricing.workshops);
+          }
         }
 
-        // Map Workshops
-        if (pricing && pricing.workshops) {
-          // Ensure we map correctly. api.js says workshops have {id, name, ...}
-          setWorkshopsInfos(pricing.workshops);
+        // 2. Process Users
+        if (usersData) {
+          setUsers(usersData);
         }
+
       } catch (error) {
-        console.error("Error loading system config:", error);
-        // Fallback or keep defaults if needed, but for now we start empty + 'all'
+        console.error("Error loading system data:", error);
       }
     };
-    loadSystemConfig();
+    loadData();
   }, []);
 
   // Constants (Mapped from State)
@@ -2300,17 +2325,19 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
   const WORKSHOPS = workshopsInfos;
 
   // Logic to filter users
-  // Logic to filter users
   const filteredStudents = useMemo(() => {
     // 1. Get potential users (Mocking: In real app this would be by enrolled course ID)
     // For now, we take all users from organization that have enrollment data
-    // 1. Get potential users (Mocking: In real app this would be by enrolled course ID)
-    // For now, we take all users from organization that have enrollment data
-    let users = MOCK_USERS.filter(u => !u.isSuperAdmin);
+    let potentialUsers = users.filter(u => !u.isSuperAdmin);
+
+    // DEBUG: Dump first user to see structure
+    if (potentialUsers.length > 0) {
+      console.log("DEBUG FIRST USER:", potentialUsers[0]);
+    }
 
     // 2. Apply Access Configuration Filters (The "Check")
     // Filter by Modality OR Workshop (User fits if they match ANY criteria)
-    users = users.filter(u => {
+    potentialUsers = potentialUsers.filter(u => {
       // --- Modality Check ---
       let matchesModality = false;
       const selectedModalities = accessConfig.modalities;
@@ -2318,16 +2345,8 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
       if (selectedModalities.includes('all')) {
         matchesModality = true;
       } else if (selectedModalities.length > 0) {
-        const userModality = u.modality || u.registrationType || '';
-        let normalizedUserModality = userModality;
-
-        if (u.registrationType === 'presencial_certificado') normalizedUserModality = 'Presencial + Certificado';
-        else if (u.registrationType === 'presencial') normalizedUserModality = 'Presencial (Sin Certificado)';
-        else if (u.registrationType === 'virtual_certificado') normalizedUserModality = 'Virtual + Certificado';
-        else if (u.registrationType === 'virtual') normalizedUserModality = 'Virtual (Sin Certificado)';
-        else if (u.amount === 0 && u.status === 'Confirmado' && !normalizedUserModality.includes('Presencial')) normalizedUserModality = 'Beca Completa';
-
-        matchesModality = selectedModalities.includes(normalizedUserModality);
+        // Direct ID Match
+        matchesModality = selectedModalities.includes(u.registrationType || '');
       }
 
       // --- Workshop Check ---
@@ -2350,25 +2369,39 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
     // 3. Apply Local List Filters (Search & Status)
     if (searchTerm) {
       const lowerTerm = searchTerm.toLowerCase();
-      users = users.filter(u =>
+      potentialUsers = potentialUsers.filter(u =>
         (u.firstName + ' ' + u.lastName).toLowerCase().includes(lowerTerm) ||
         u.email.toLowerCase().includes(lowerTerm)
       );
     }
 
-    return users.map(u => ({
+
+    const getModalityInfo = (u: any) => {
+      // Find label by ID from modalitiesInfos which is derived from pricing
+      const match = MODALITIES.find(m => m.value === u.registrationType);
+      const label = match ? match.label : (u.registrationType || 'Desconocido');
+
+      let style = 'gray';
+      if (label.includes('Presencial')) style = 'blue';
+      if (label.includes('Virtual')) style = 'purple';
+      if (u.amount === 0 && u.status === 'Confirmado' && !label.includes('Presencial')) return { name: 'Beca Completa', id: 'grant', style: 'green' };
+
+      return { name: label, id: u.registrationType || '-', style };
+    };
+
+    return potentialUsers.map(u => ({
       id: u.id,
-      name: `${u.firstName} ${u.lastName}`,
+      name: u.name ? u.name : `${u.firstName} ${u.lastName}`,
       email: u.email,
-      initials: (u.firstName[0] + u.lastName[0]).toUpperCase(),
-      color: 'blue', // Mock color
+      initials: (u.firstName ? u.firstName[0] : (u.name ? u.name[0] : 'U')) + (u.lastName ? u.lastName[0] : ''),
+      color: 'blue',
       enrolled: u.registrationDate || 'N/A',
-      progress: u.attendancePercentage || 0,
-      grade: u.grade || '-',
+      progress: u.attendancePercentage || 0, // Restore progress for stats
+      modalityInfo: getModalityInfo(u),
       status: u.attendancePercentage === 100 ? 'COMPLETADO' : 'ACTIVO'
     }));
 
-  }, [accessConfig, searchTerm]);
+  }, [users, accessConfig, searchTerm]);
 
   const toggleWorkshop = (id: string) => {
     setAccessConfig(prev => ({
@@ -2488,10 +2521,10 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-border-light">
+                <th className="px-4 py-3 text-left text-xs font-bold text-text-muted uppercase tracking-wider">ID</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Nombre del Estudiante</th>
                 <th className="px-4 py-3 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Inscripción</th>
-                <th className="px-4 py-3 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Progreso (%)</th>
-                <th className="px-4 py-3 text-center text-xs font-bold text-text-muted uppercase tracking-wider">Calificación<br />Promedio</th>
+                <th className="px-4 py-3 text-left text-xs font-bold text-text-muted uppercase tracking-wider">Modalidad</th>
                 <th className="px-4 py-3 text-center text-xs font-bold text-text-muted uppercase tracking-wider">Acc</th>
               </tr>
             </thead>
@@ -2499,6 +2532,7 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
               {currentItems.length > 0 ? (
                 currentItems.map((student, idx) => (
                   <tr key={idx} className="hover:bg-gray-50/50">
+                    <td className="px-4 py-4 text-xs font-mono text-text-muted">{student.id}</td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
                         <div className={`w-10 h-10 rounded-full bg-${student.color}-100 flex items-center justify-center text-${student.color}-700 font-bold text-sm shrink-0`}>
@@ -2512,18 +2546,16 @@ const StudentsTab: React.FC<StudentsTabProps> = ({ accessConfig, setAccessConfig
                     </td>
                     <td className="px-4 py-4 text-sm text-text-muted">{student.enrolled}</td>
                     <td className="px-4 py-4">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full ${student.progress === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
-                            style={{ width: `${student.progress}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-sm font-semibold text-text-main w-10 text-right">{student.progress}%</span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-${student.modalityInfo.style}-100 text-${student.modalityInfo.style}-800`}>
+                          {student.modalityInfo.name}
+                        </span>
+                        {student.modalityInfo.id !== '-' && (
+                          <span className="text-[10px] text-text-muted font-mono bg-gray-50 px-1 rounded border border-gray-100">
+                            {student.modalityInfo.id}
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-4 py-4 text-center">
-                      <span className="font-bold text-text-main">{student.grade}</span>
                     </td>
                     <td className="px-4 py-4 text-center">
                       <button className="p-1.5 text-text-muted hover:text-primary">

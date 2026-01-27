@@ -3,7 +3,9 @@ import { Search, Eye, X, Minimize2, Maximize2, MapPin, Mail, Download, Share2 } 
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import SectionHeader from '../components/ui/SectionHeader';
-import { INITIAL_POSTERS, SPECIALTIES } from '../data/mockData';
+const INITIAL_POSTERS = [];
+const SPECIALTIES = [];
+
 
 const PostersView = () => {
     const [searchTerm, setSearchTerm] = useState("");

@@ -1,0 +1,11 @@
+
+# 7. Precios (Mock para evitar 404)
+@router.get("/pricing")
+def get_pricing():
+    return {
+        "ticketTypes": [
+            {"id": "t_presencial", "title": "Presencial", "price": 100},
+            {"id": "t_virtual", "title": "Virtual", "price": 50}
+        ],
+        "workshops": []
+    }

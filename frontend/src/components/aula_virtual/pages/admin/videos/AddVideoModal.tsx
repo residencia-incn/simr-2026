@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAulaVirtual } from '../../../context/AulaVirtualContext';
+import Swal from 'sweetalert2';
 import SpeakerSelectorModal from './SpeakerSelectorModal';
 
 const CourseMultiSelect = ({ options, selectedValues, onChange, lockedValues = [] }: {
@@ -293,8 +294,21 @@ const AddVideoModal: React.FC<AddVideoModalProps> = ({ isOpen, onClose, onSave, 
     };
 
     const handleSave = () => {
-        // Validation logic here
-        if (!formData.title || formData.courses.length === 0) return; // Basic validation
+        // Validation logic
+        if (!formData.title) {
+            Swal.fire('Error', 'Por favor ingresa un título para el video', 'warning');
+            return;
+        }
+        if (formData.courses.length === 0) {
+            Swal.fire('Error', 'Por favor asocia el video al menos a un curso', 'warning');
+            return;
+        }
+        // Basic check for source
+        if (formData.sourceType === 'youtube' && !formData.sourceUrl) {
+            Swal.fire('Error', 'Por favor ingresa la URL del video', 'warning');
+            return;
+        }
+
         onSave(formData);
         onClose();
     };

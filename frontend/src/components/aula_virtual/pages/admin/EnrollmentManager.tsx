@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { MOCK_USERS } from '../../../../data/mockUsers';
-import { mockCourses } from '../../../../data/mockAulaVirtualData';
+// Removed static MOCK_USERS import
+
 import Swal from 'sweetalert2';
 import { api } from '../../../../services/api';
 
@@ -92,10 +92,14 @@ const EnrollmentManager: React.FC = () => {
                 });
 
                 // 3. Filter and Map Users
-                // Show ALL users from the system (System has 23 + SuperAdmin)
-                const aulaVirtualUsers = MOCK_USERS;
+                // FIXED: Fetch real system users from API instead of static mock file
+                const usersData = await api.users.getAll();
 
-                const mappedEnrollments: Enrollment[] = aulaVirtualUsers.map((user, index) => {
+                // Merge with static mock users if needed (optional, but API should be Source of Truth)
+                // For now, we trust api.users.getAll() returns everyone including new registers like "Fiore"
+                const aulaVirtualUsers = usersData;
+
+                const mappedEnrollments: Enrollment[] = aulaVirtualUsers.map((user: any, index: number) => {
                     // Map workshops
                     const userWorkshops = (user.purchasedItems || [])
                         .map((itemId: string) => WORKSHOP_MAPPING[itemId])
@@ -112,16 +116,21 @@ const EnrollmentManager: React.FC = () => {
                         const ticket = pricing.ticketTypes.find((t: any) => t.id === userTicketId);
                         if (ticket) normalizedModality = ticket.title;
                     } else if (user.registrationType) {
-                        // Fallback to legacy string matching if ID not found
-                        if (user.registrationType === 'presencial_certificado') normalizedModality = 'Presencial + Certificado';
-                        else if (user.registrationType === 'presencial') normalizedModality = 'Presencial (Sin Certificado)';
-                        else if (user.registrationType === 'virtual_certificado') normalizedModality = 'Virtual + Certificado';
-                        else if (user.registrationType === 'virtual') normalizedModality = 'Virtual (Sin Certificado)';
-                        // Check if registrationType matches a title directly (e.g. "Completa")
-                        else {
-                            const directMatch = pricing.ticketTypes.find((t: any) => t.title.toLowerCase() === user.registrationType.toLowerCase());
-                            if (directMatch) normalizedModality = directMatch.title;
-                            else normalizedModality = user.registrationType; // Keep as is if unknown
+                        // Check if registrationType is an ID
+                        const idMatch = pricing.ticketTypes.find((t: any) => t.id === user.registrationType);
+                        if (idMatch) {
+                            normalizedModality = idMatch.title;
+                        } else {
+                            // Legacy string matching
+                            if (user.registrationType === 'presencial_certificado') normalizedModality = 'Presencial + Certificado';
+                            else if (user.registrationType === 'presencial') normalizedModality = 'Presencial (Sin Certificado)';
+                            else if (user.registrationType === 'virtual_certificado') normalizedModality = 'Virtual + Certificado';
+                            else if (user.registrationType === 'virtual') normalizedModality = 'Virtual (Sin Certificado)';
+                            else {
+                                const directMatch = pricing.ticketTypes.find((t: any) => t.title.toLowerCase() === user.registrationType.toLowerCase());
+                                if (directMatch) normalizedModality = directMatch.title;
+                                else normalizedModality = user.registrationType;
+                            }
                         }
                     }
 
@@ -129,11 +138,11 @@ const EnrollmentManager: React.FC = () => {
                     if (user.amount === 0 && user.status === 'Confirmado' && !normalizedModality.includes('Presencial')) normalizedModality = 'Beca Completa';
 
                     return {
-                        id: index + 1,
+                        id: (index + 1), // Generate sequential ID for UI list
                         userId: user.id,
-                        userName: `${user.firstName} ${user.lastName}`,
+                        userName: user.name ? user.name : `${user.firstName} ${user.lastName}`,
                         userEmail: user.email,
-                        userAvatar: user.image || `https://ui-avatars.com/api/?name=${user.firstName}+${user.lastName}&background=random`,
+                        userAvatar: user.image || `https://ui-avatars.com/api/?name=${user.firstName || 'User'}+${user.lastName || ''}&background=random`,
                         courseId: 1,
                         courseName: user.specialty ? `Curso de ${user.specialty}` : 'Neurología Clínica Avanzada',
                         status: user.hasPaid ? 'active' : 'pending_payment',
@@ -373,7 +382,6 @@ const EnrollmentManager: React.FC = () => {
                                         onChange={(e) => setFilterCourse(e.target.value === 'all' ? 'all' : Number(e.target.value))}
                                     >
                                         <option value="all">Todos los Cursos</option>
-                                        {mockCourses.map(c => <option key={c.id} value={c.id}>{c.title}</option>)}
                                     </select>
 
                                     <select

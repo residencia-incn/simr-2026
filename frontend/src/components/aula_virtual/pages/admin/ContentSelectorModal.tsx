@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAulaVirtual } from '../../context/AulaVirtualContext'; // Import context
-import { mockReadings, mockExams } from '../../../../data/mockAulaVirtualData'; // Remove mockVideos
+
 
 interface ContentSelectorModalProps {
     isOpen: boolean;
@@ -9,10 +9,11 @@ interface ContentSelectorModalProps {
     onSelect: (item: any) => void;
     courseContext?: string; // For filtering by course
     excludeVideoIds?: number[]; // IDs to exclude from the list
+    excludeQuizIds?: (string | number)[]; // IDs to exclude from the list
 }
 
-const ContentSelectorModal: React.FC<ContentSelectorModalProps> = ({ isOpen, onClose, type, onSelect, courseContext, excludeVideoIds = [] }) => {
-    const { videos } = useAulaVirtual(); // Get real videos
+const ContentSelectorModal: React.FC<ContentSelectorModalProps> = ({ isOpen, onClose, type, onSelect, courseContext, excludeVideoIds = [], excludeQuizIds = [] }) => {
+    const { videos, exams, materials } = useAulaVirtual(); // Get real videos, exams and materials
     const [searchTerm, setSearchTerm] = useState('');
 
     if (!isOpen || !type) return null;
@@ -30,7 +31,6 @@ const ContentSelectorModal: React.FC<ContentSelectorModalProps> = ({ isOpen, onC
         switch (type) {
             case 'video':
                 // Filter by courseContext if available
-                // Filter by courseContext if available
                 let filteredVideos = videos;
                 if (courseContext) {
                     filteredVideos = videos.filter(v =>
@@ -40,11 +40,17 @@ const ContentSelectorModal: React.FC<ContentSelectorModalProps> = ({ isOpen, onC
                 }
                 // Filter out excluded IDs
                 if (excludeVideoIds.length > 0) {
-                    filteredVideos = filteredVideos.filter(v => !excludeVideoIds.includes(v.id));
+                    filteredVideos = filteredVideos.filter(v => !(excludeVideoIds as any).includes(v.id));
                 }
                 return filteredVideos;
-            case 'reading': return mockReadings;
-            case 'quiz': return mockExams;
+            case 'reading': return materials;
+            case 'quiz': {
+                let filteredExams = exams.filter((e: any) => e.status === 'PUBLICADO');
+                if (excludeQuizIds.length > 0) {
+                    filteredExams = filteredExams.filter((e: any) => !excludeQuizIds.includes(e.id));
+                }
+                return filteredExams;
+            }
             default: return [];
         }
     };
@@ -116,7 +122,7 @@ const ContentSelectorModal: React.FC<ContentSelectorModalProps> = ({ isOpen, onC
                                         <div className="flex items-center gap-3 mt-0.5 text-xs text-slate-500">
                                             {type === 'video' && <span>{item.duration} • Subido el {item.uploadedAt}</span>}
                                             {type === 'reading' && <span>{item.format} • {item.module}</span>}
-                                            {type === 'quiz' && <span>{item.questions} preguntas • {item.timeLimit}</span>}
+                                            {type === 'quiz' && <span>{item.questions?.length || 0} preguntas {item.timeLimit ? `• ${item.timeLimit}` : ''}</span>}
                                         </div>
                                     </div>
 

@@ -3,65 +3,97 @@ import { Save, Plus, Trash2, Edit, Check, X, AlertTriangle } from 'lucide-react'
 import Button from '../ui/Button';
 import Card from '../ui/Card';
 import { api } from '../../services/api';
+import { showError, showSuccess } from '../../utils/alerts';
 
 const AcademicRubricConfig = () => {
-    const [config, setConfig] = useState(null);
+    const [rubrics, setRubrics] = useState([]);
+    const [workTypes, setWorkTypes] = useState([]);
     const [loading, setLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
 
     // New Rubric State
     const [isAdding, setIsAdding] = useState(false);
-    const [newRubric, setNewRubric] = useState({ name: '', description: '', workTypes: [] });
+    const [newRubric, setNewRubric] = useState({ title: '', description: '', work_types: [], max_score: 20 });
 
     // Editing State
     const [editingId, setEditingId] = useState(null);
-    const [editForm, setEditForm] = useState({ name: '', description: '', workTypes: [] });
+    const [editForm, setEditForm] = useState({ title: '', description: '', work_types: [], max_score: 20 });
 
     // Delete Confirmation
     const [deleteConfirmation, setDeleteConfirmation] = useState(null);
 
     useEffect(() => {
-        loadConfig();
+        loadData();
     }, []);
 
-    const loadConfig = async () => {
+    const loadData = async () => {
         setLoading(true);
-        const data = await api.academic.getConfig();
-        if (!data.rubrics) data.rubrics = [];
-        setConfig(data);
-        setLoading(false);
+        try {
+            const [rubricsData, typesData] = await Promise.all([
+                api.academic.getRubrics(),
+                api.research.getTypes() // Assuming this returns list of type strings or objects
+            ]);
+            setRubrics(rubricsData || []);
+            // Handle types data format (assuming it might be list of strings or objects)
+            const types = Array.isArray(typesData) ? typesData.map(t => typeof t === 'object' ? t.name : t) : [];
+            setWorkTypes(types);
+        } catch (error) {
+            console.error("Error loading rubrics data", error);
+            showError("Error al cargar la configuración de rúbricas");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const handleSave = async (updatedConfig) => {
+    const handleAddRubric = async () => {
+        if (!newRubric.title.trim() || !newRubric.description.trim() || newRubric.work_types.length === 0) {
+            showError("Por favor complete todos los campos requeridos (incluyendo al menos un tipo de trabajo)");
+            return;
+        }
+
         setIsSaving(true);
-        const configToSave = updatedConfig || config;
-        await api.academic.saveConfig(configToSave);
-        setConfig(configToSave);
-        setIsSaving(false);
-        // show success check?
+        try {
+            const created = await api.academic.createRubric(newRubric);
+            setRubrics([...rubrics, created]);
+            setNewRubric({ title: '', description: '', work_types: [], max_score: 20 });
+            setIsAdding(false);
+            showSuccess("Rúbrica creada correctamente");
+        } catch (error) {
+            console.error("Error creating rubric", error);
+            showError("Error al crear la rúbrica");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const handleAddRubric = () => {
-        if (!newRubric.name.trim() || !newRubric.description.trim()) return;
-
-        const newRubrics = [...config.rubrics, {
-            id: `rub_${Date.now()}`,
-            name: newRubric.name,
-            description: newRubric.description,
-            active: true,
-            workTypes: newRubric.workTypes.length > 0 ? newRubric.workTypes : config.workTypes // Default to all if empty
-        }];
-
-        const updatedConfig = { ...config, rubrics: newRubrics };
-        handleSave(updatedConfig);
-        setNewRubric({ name: '', description: '', workTypes: [] });
-        setIsAdding(false);
+    const toggleWorkType = (type, isEdit = false) => {
+        if (isEdit) {
+            const current = editForm.work_types || [];
+            if (current.includes(type)) {
+                setEditForm({ ...editForm, work_types: current.filter(t => t !== type) });
+            } else {
+                setEditForm({ ...editForm, work_types: [...current, type] });
+            }
+        } else {
+            const current = newRubric.work_types || [];
+            if (current.includes(type)) {
+                setNewRubric({ ...newRubric, work_types: current.filter(t => t !== type) });
+            } else {
+                setNewRubric({ ...newRubric, work_types: [...current, type] });
+            }
+        }
     };
 
-    const handleDeleteRubric = (id) => {
-        const newRubrics = config.rubrics.filter(r => r.id !== id);
-        handleSave({ ...config, rubrics: newRubrics });
-        setDeleteConfirmation(null);
+    const handleDeleteRubric = async (id) => {
+        try {
+            await api.academic.deleteRubric(id);
+            setRubrics(rubrics.filter(r => r.id !== id));
+            setDeleteConfirmation(null);
+            showSuccess("Rúbrica eliminada");
+        } catch (error) {
+            console.error("Error deleting rubric", error);
+            showError("Error al eliminar la rúbrica");
+        }
     };
 
     const startEditing = (rubric) => {
@@ -69,29 +101,22 @@ const AcademicRubricConfig = () => {
         setEditForm({ ...rubric });
     };
 
-    const saveEdit = () => {
-        const newRubrics = config.rubrics.map(r =>
-            r.id === editingId ? { ...r, ...editForm } : r
-        );
-        handleSave({ ...config, rubrics: newRubrics });
-        setEditingId(null);
+    const saveEdit = async () => {
+        setIsSaving(true);
+        try {
+            const updated = await api.academic.updateRubric(editingId, editForm);
+            setRubrics(rubrics.map(r => r.id === editingId ? updated : r));
+            setEditingId(null);
+            showSuccess("Rúbrica actualizada");
+        } catch (error) {
+            console.error("Error updating rubric", error);
+            showError("Error al actualizar la rúbrica");
+        } finally {
+            setIsSaving(false);
+        }
     };
 
-    const toggleWorkType = (type, isNew = false) => {
-        const target = isNew ? newRubric : editForm;
-        const setTarget = isNew ? setNewRubric : setEditForm;
-
-        const currentTypes = target.workTypes || [];
-        const newTypes = currentTypes.includes(type)
-            ? currentTypes.filter(t => t !== type)
-            : [...currentTypes, type];
-
-        setTarget({ ...target, workTypes: newTypes });
-    };
-
-    if (loading) return <div className="p-8 text-center">Cargando configuración...</div>;
-
-    const availableWorkTypes = config.workTypes || [];
+    if (loading) return <div className="p-8 text-center">Cargando rúbricas...</div>;
 
     return (
         <div className="space-y-6 animate-fadeIn p-4">
@@ -110,14 +135,25 @@ const AcademicRubricConfig = () => {
                 <Card className="p-6 border-blue-200 bg-blue-50">
                     <h3 className="font-bold text-blue-900 mb-4">Agregar Nuevo Criterio</h3>
                     <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Criterio</label>
-                            <input
-                                className="w-full border rounded-md p-2"
-                                placeholder="Ej. Originalidad"
-                                value={newRubric.name}
-                                onChange={e => setNewRubric({ ...newRubric, name: e.target.value })}
-                            />
+                        <div className="grid grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre del Criterio</label>
+                                <input
+                                    className="w-full border rounded-md p-2"
+                                    placeholder="Ej. Originalidad"
+                                    value={newRubric.title}
+                                    onChange={e => setNewRubric({ ...newRubric, title: e.target.value })}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Puntaje Máximo</label>
+                                <input
+                                    type="number"
+                                    className="w-full border rounded-md p-2"
+                                    value={newRubric.max_score}
+                                    onChange={e => setNewRubric({ ...newRubric, max_score: parseInt(e.target.value) || 0 })}
+                                />
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (Tooltip para el jurado)</label>
@@ -130,25 +166,30 @@ const AcademicRubricConfig = () => {
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-2">Aplica a:</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Tipos de Trabajo (Seleccione uno o varios):</label>
                             <div className="flex flex-wrap gap-2">
-                                {availableWorkTypes.map(type => (
-                                    <button
-                                        key={type}
-                                        onClick={() => toggleWorkType(type, true)}
-                                        className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${(newRubric.workTypes || []).includes(type)
-                                                ? 'bg-blue-600 text-white border-blue-600'
-                                                : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400'
-                                            }`}
-                                    >
-                                        {type}
-                                    </button>
-                                ))}
+                                {workTypes.map(type => {
+                                    const isSelected = newRubric.work_types.includes(type);
+                                    return (
+                                        <button
+                                            key={type}
+                                            type="button"
+                                            onClick={() => toggleWorkType(type)}
+                                            className={`px-3 py-1.5 rounded-full border text-sm transition-all flex items-center gap-1.5 ${isSelected
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
+                                                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                                                }`}
+                                        >
+                                            {isSelected && <Check size={14} />}
+                                            {type}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                         <div className="flex justify-end pt-2">
                             <Button onClick={handleAddRubric} disabled={isSaving}>
-                                Guardar Criterio
+                                {isSaving ? 'Guardando...' : 'Guardar Criterio'}
                             </Button>
                         </div>
                     </div>
@@ -157,67 +198,94 @@ const AcademicRubricConfig = () => {
 
             {/* List */}
             <div className="space-y-4">
-                {config.rubrics.map(rubric => {
-                    if (editingId === rubric.id) {
-                        return (
-                            <Card key={rubric.id} className="p-6 border-2 border-blue-500 shadow-md">
+                {rubrics.length === 0 && (
+                    <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg border border-dashed">
+                        No hay rúbricas definidas.
+                    </div>
+                )}
+                {rubrics.map(rubric => {
+                    const isEditing = editingId === rubric.id;
+                    const rWorkTypes = rubric.work_types || [];
+
+                    return (
+                        <Card key={rubric.id} className={`p-4 transition-shadow ${isEditing ? 'border-2 border-blue-500 shadow-md' : 'hover:shadow-md'}`}>
+                            {isEditing ? (
                                 <div className="space-y-4">
-                                    <input
-                                        className="w-full border rounded-md p-2 font-bold"
-                                        value={editForm.name}
-                                        onChange={e => setEditForm({ ...editForm, name: e.target.value })}
-                                    />
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <input
+                                            className="w-full border rounded-md p-2 font-bold"
+                                            value={editForm.title}
+                                            onChange={e => setEditForm({ ...editForm, title: e.target.value })}
+                                            placeholder="Título"
+                                        />
+                                        <input
+                                            type="number"
+                                            className="w-full border rounded-md p-2"
+                                            value={editForm.max_score}
+                                            onChange={e => setEditForm({ ...editForm, max_score: parseInt(e.target.value) || 0 })}
+                                            placeholder="Max Score"
+                                        />
+                                    </div>
                                     <textarea
                                         className="w-full border rounded-md p-2"
                                         rows={2}
                                         value={editForm.description}
                                         onChange={e => setEditForm({ ...editForm, description: e.target.value })}
+                                        placeholder="Descripción"
                                     />
-                                    <div className="flex flex-wrap gap-2">
-                                        {availableWorkTypes.map(type => (
-                                            <button
-                                                key={type}
-                                                onClick={() => toggleWorkType(type, false)}
-                                                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${(editForm.workTypes || []).includes(type)
-                                                        ? 'bg-blue-600 text-white border-blue-600'
-                                                        : 'bg-white text-gray-600 border-gray-300'
-                                                    }`}
-                                            >
-                                                {type}
-                                            </button>
-                                        ))}
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-2">Tipos de Trabajo:</label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {workTypes.map(type => {
+                                                const isSelected = editForm.work_types?.includes(type);
+                                                return (
+                                                    <button
+                                                        key={type}
+                                                        type="button"
+                                                        onClick={() => toggleWorkType(type, true)}
+                                                        className={`px-3 py-1 rounded-full border text-xs transition-all flex items-center gap-1 ${isSelected
+                                                                ? 'bg-blue-600 text-white border-blue-600'
+                                                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400'
+                                                            }`}
+                                                    >
+                                                        {isSelected && <Check size={12} />}
+                                                        {type}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
                                     </div>
                                     <div className="flex justify-end gap-2">
                                         <Button variant="ghost" onClick={() => setEditingId(null)}><X size={18} /></Button>
-                                        <Button onClick={saveEdit}><Check size={18} /></Button>
+                                        <Button onClick={saveEdit} disabled={isSaving}><Check size={18} /></Button>
                                     </div>
                                 </div>
-                            </Card>
-                        );
-                    }
-
-                    return (
-                        <Card key={rubric.id} className="p-4 hover:shadow-md transition-shadow flex justify-between gap-4 group">
-                            <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-1">
-                                    <h3 className="font-bold text-gray-900">{rubric.name}</h3>
-                                    {!rubric.active && <span className="text-xs bg-gray-200 text-gray-500 px-2 py-0.5 rounded">Inactivo</span>}
+                            ) : (
+                                <div className="flex justify-between gap-4 group">
+                                    <div className="flex-1">
+                                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                                            <h3 className="font-bold text-gray-900 mr-2">{rubric.title}</h3>
+                                            <div className="flex flex-wrap gap-1">
+                                                {rWorkTypes.map(t => (
+                                                    <span key={t} className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded-full border border-blue-200">
+                                                        {t}
+                                                    </span>
+                                                ))}
+                                            </div>
+                                            <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full border border-green-200">Max: {rubric.max_score} pts</span>
+                                        </div>
+                                        <p className="text-sm text-gray-600">{rubric.description}</p>
+                                    </div>
+                                    <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button className="p-2 text-blue-600 hover:bg-blue-50 rounded" onClick={() => startEditing(rubric)}>
+                                            <Edit size={18} />
+                                        </button>
+                                        <button className="p-2 text-red-600 hover:bg-red-50 rounded" onClick={() => setDeleteConfirmation(rubric)}>
+                                            <Trash2 size={18} />
+                                        </button>
+                                    </div>
                                 </div>
-                                <p className="text-sm text-gray-600 mb-2">{rubric.description}</p>
-                                <div className="flex flex-wrap gap-1">
-                                    {rubric.workTypes?.map(t => (
-                                        <span key={t} className="text-[10px] bg-gray-100 text-gray-600 px-2 py-0.5 rounded border border-gray-200">{t}</span>
-                                    ))}
-                                </div>
-                            </div>
-                            <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button className="p-2 text-blue-600 hover:bg-blue-50 rounded" onClick={() => startEditing(rubric)}>
-                                    <Edit size={18} />
-                                </button>
-                                <button className="p-2 text-red-600 hover:bg-red-50 rounded" onClick={() => setDeleteConfirmation(rubric)}>
-                                    <Trash2 size={18} />
-                                </button>
-                            </div>
+                            )}
                         </Card>
                     );
                 })}
@@ -233,7 +301,7 @@ const AcademicRubricConfig = () => {
                             </div>
                             <h3 className="text-lg font-bold text-gray-900">¿Eliminar esta rúbrica?</h3>
                             <p className="text-sm text-gray-500">
-                                Está a punto de eliminar <strong>"{deleteConfirmation.name}"</strong>. Esta acción no se puede deshacer.
+                                Está a punto de eliminar <strong>"{deleteConfirmation.title}"</strong>. Esta acción no se puede deshacer.
                             </p>
                             <div className="flex gap-3 w-full pt-2">
                                 <button
