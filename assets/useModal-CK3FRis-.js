@@ -1,0 +1,1 @@
+import{r as o}from"./index-DT5lBi1O.js";const g=(a=!1)=>{const[n,t]=o.useState(a),[l,e]=o.useState(null);return{isOpen:n,data:l,open:(s=null)=>{e(s),t(!0)},close:()=>{t(!1),setTimeout(()=>e(null),300)},toggle:()=>{t(s=>!s)},updateData:e}};export{g as u};

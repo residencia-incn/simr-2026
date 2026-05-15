@@ -1,0 +1,1 @@
+import{j as a}from"./index-DT5lBi1O.js";const e=({children:r,className:s="",...o})=>a.jsx("div",{className:`bg-white rounded-xl shadow-sm border border-gray-100 p-6 ${s}`,...o,children:r});export{e as C};

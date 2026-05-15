@@ -1,0 +1,25 @@
+{
+  "name": "SIMR 2026 - XVII Simposio Internacional de Médicos Residentes",
+  "short_name": "SIMR 2026",
+  "description": "Plataforma oficial del XVII Simposio Internacional de Médicos Residentes del INCN. Acceso a cursos, webinars y posters.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0a0a",
+  "theme_color": "#c9a959",
+  "orientation": "any",
+  "categories": ["education", "medical", "productivity"],
+  "icons": [
+    {
+      "src": "/icono.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "/icono.svg",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
